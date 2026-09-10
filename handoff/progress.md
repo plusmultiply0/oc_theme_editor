@@ -21,6 +21,34 @@
 | D 盘复制目录检查 | 失败：路径不存在；原因未确认 |
 | 新产品单元/E2E/真实应用测试 | 未执行：本轮仅计划 |
 
+## 2026-09-10：P2 图片、配色与可读性引擎（T20–T27）
+
+- 任务 ID：T20（导入与校验）、T21（分析）、T22（取色）、T23（CSS 模板）、T24（参数范围）、T25（对比度目标）、T26（透明合成建模）、T27（覆盖范围边界）。
+- 完成状态：已完成，单元测试通过；**未对真实安装做任何写入或修改**。
+- 改动文件：
+  - 新增 `src/core/theme/validate.ts`（magic bytes 格式识别、SVG 拒绝、20MiB / 40MP 限制）
+  - 新增 `src/core/theme/palette.ts`（确定性量化取色，无随机种子；`isMostlyGray`）
+  - 新增 `src/core/theme/contrast.ts`（WCAG 相对亮度、`composite`、`effectiveBackground`、`CONTRAST_TARGETS`）
+  - 新增 `src/core/theme/color.ts`（`shift/lighten/darken/mix`、`ensureContrast`、`deriveStates`）
+  - 新增 `src/core/theme/css.ts`（token 模板渲染、`validateImageRef` 白名单）
+  - 新增 `src/core/theme/generate.ts`（`analyzeImage` / `deriveTokens` / `generateTheme`）
+  - 新增 `tests/unit/theme.test.ts`（27 项）
+  - 修改 `package.json`：新增依赖 `sharp ^0.35.4`；`package-lock.json` 同步
+- 测试命令与退出码：
+  - `npx tsc --noEmit` → 退出码 0
+  - `npx eslint .` → 退出码 0
+  - `npx vitest run tests/unit` → 退出码 0，2 文件 / 39 项全部通过（新增 27 项）
+- 证据位置：`tests/unit/theme.test.ts`；对比度实测值由 `generateTheme` 返回的 `contrast` 字段给出（`textOnPanel` / `primaryOnPanel` / `effectiveBackground`）。
+- 本轮修复的两个缺陷：
+  1. `palette.ts` 中 `saturation(m.color.color)` 解构 `undefined` 抛错，被吞成 `IMAGE_DECODE_FAILED`；改为 `saturation(m.color)`。
+  2. `color-scheme` 用 `spec.mode` 字面值渲染，auto 解析为 dark 时仍输出 `light`；新增 `RenderCssInput.resolvedMode` 并补测试锁死。
+- 已知问题 / 边界：
+  - `contrast.effectiveBackground` 以图片代表色作为采样点，是单点近似，不是全图逐像素最差值；P5 真实验收时若发现局部区域刺眼，需要改成按图像网格取最差对比度。
+  - 终端（`.xterm`）与代码语法高亮不在覆盖范围内，符合 T27 决策。
+  - sharp 为原生模块，便携包打包需按目标平台取二进制（P5 处理）。
+- 未执行：真实安装读写、GUI 启动、集成测试、E2E —— 均未在 P2 阶段运行。
+- 下一任务：P3（T30–T42）目标识别、变更白名单、备份、事务应用与恢复；仅对合成 fixture 开发，不触碰真实安装。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

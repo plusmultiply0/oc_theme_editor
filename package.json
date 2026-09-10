@@ -23,6 +23,7 @@
     "dist": "npm run build && electron-builder --win --dir"
   },
   "dependencies": {
+    "@electron/asar": "^4.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "sharp": "^0.35.4",

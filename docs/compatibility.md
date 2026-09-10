@@ -99,3 +99,28 @@ P0 已完成盘点与验证，**但存在必须由用户拍板的分叉**：
 2. F1（选图）在路线 A 下如何定位？可保留「从图片取色」，但图片只是配色来源，不进入主题文件。
 
 在用户明确前，不启动 P3（ASAR 事务与补丁）的开发，以免把工作押在可能被否掉的分支上。P1（工程骨架与类型契约）不受影响，可先行。
+
+---
+
+## 更新（2026-09-10）：G0 已决策，走路线 B
+
+用户选择：**保留壁纸，走 ASAR 补丁**。因此路线 A 降级为备用的「仅配色」输出，主路线为受限资源补丁。
+
+### T31 adapter 声明（首个兼容对象）
+
+声明位置：`src/adapters/opencode-desktop.ts`，注册表 `src/adapters/registry.ts`。
+
+| 项 | 值 |
+|---|---|
+| adapter id | `opencode-desktop-win-asar` |
+| 渠道 | `windows-local-user-install` |
+| 框架 | `electron-asar`（非此框架一律不套用归档补丁） |
+| 包名 | `@opencode-ai/desktop` |
+| 已验证版本 | 1.18.29（白名单外一律 unknown，只允许预览） |
+| 安装目录名 | `@opencode-aidesktop`（只扫明确登记位置） |
+| 资源布局 | `OpenCode.exe`、`resources/app.asar` |
+| 注入点 | `out/renderer/index.html` 的 `</head>` 锚点 |
+| 允许变更集合 | `out/renderer/index.html`、`out/renderer/oc-theme-custom.css`、`out/renderer/oc-theme-background.jpg` |
+| 指纹 | 运行时读取归档 SHA256，不硬编码 |
+
+未实现：真实的归档改写与事务提交（P3b）。当前代码只做只读识别与环境预检。

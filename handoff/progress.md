@@ -49,6 +49,33 @@
 - 未执行：真实安装读写、GUI 启动、集成测试、E2E —— 均未在 P2 阶段运行。
 - 下一任务：P3（T30–T42）目标识别、变更白名单、备份、事务应用与恢复；仅对合成 fixture 开发，不触碰真实安装。
 
+## 2026-09-10：P3a 目标识别与 adapter（T30–T33）
+
+- 任务 ID：T30（候选位置与路径安全）、T31（adapter 声明与识别）、T32（进程与权限检查）、T33（磁盘预检）。
+- 完成状态：已完成，单元 + 集成测试通过；**未对真实安装做任何写入**，也**未运行真实进程探针**。
+- 改动文件：
+  - 新增 `src/adapters/types.ts`、`src/adapters/opencode-desktop.ts`、`src/adapters/registry.ts`
+  - 新增 `src/core/patch/paths.ts`（canonicalize、包含性检查、归档条目名安全）
+  - 新增 `src/core/patch/asar.ts`（只读访问：指纹、条目列表、读取 package.json）
+  - 新增 `src/core/patch/discover.ts`（候选枚举、识别、scan 结果）
+  - 新增 `src/core/patch/precheck.ts`（进程探针、写探针、磁盘预检、运行数据根目录）
+  - 新增 `tests/fixtures/synthetic-install.ts`（合成安装 fixture，真实 ASAR 打包）
+  - 新增 `tests/unit/paths.test.ts`、`tests/integration/discover.test.ts`
+  - 修改 `docs/compatibility.md`：补 G0 决策结论与 T31 adapter 声明
+  - 修改 `package.json`：新增依赖 `@electron/asar ^4.3.0`（MIT，已在 node_modules 核实许可字段）
+- 测试命令与退出码：
+  - `npx tsc --noEmit` → 0
+  - `npx eslint .` → 0
+  - `npx vitest run tests/unit tests/integration` → 0，4 文件 / 72 项全部通过（新增 33 项）
+- 证据位置：`tests/integration/discover.test.ts`（合成 ASAR 上的识别与预检）；`docs/compatibility.md` 的 adapter 声明表。
+- 本轮修复：`getRawHeader` 实际返回 `{ headerString, header, ... }`，直接当根结点会导致条目列表为空；已在 `readAsar` 中兼容两种层级。
+- 已知问题 / 边界：
+  - 进程探针 `systemProcessProbe` 依赖 PowerShell `Get-CimInstance`，**尚未在真实环境运行过**；查询失败一律返回 `unknown` 并按「未退出」处理（保守拒绝）。
+  - 卸载登记表读取（`registryRoots`）同样未经真实环境验证，失败时静默返回空数组。
+  - 未验证版本判 `unknown` 而非 `unsupported`：认得出但没验证 ≠ 完全不认识，UI 需分别展示。
+- 未执行：真实安装的识别（未扫描用户机器）、任何写入操作、进程强制结束。
+- 下一任务：P3b（T34–T42）事务应用与恢复——锁、staged 校验、备份、同卷替换、事务日志、恢复入口与 13 类故障注入测试。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

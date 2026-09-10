@@ -1,0 +1,218 @@
+/* Local Snowfield theme. Original image unchanged; no application logic modified. */
+html, body, #root {
+  color-scheme: dark;
+  --background-base: rgba(40,46,64,.32) !important;
+  --background-weak: rgba(64,69,88,.45) !important;
+  --background-strong: rgba(49,55,74,.82) !important;
+  --background-stronger: #404558 !important;
+  --surface-base: rgba(64,69,88,.48) !important;
+  --surface-base-hover: rgba(120,126,159,.30) !important;
+  --surface-base-active: rgba(140,146,184,.34) !important;
+  --surface-inset-base: rgba(32,38,54,.72) !important;
+  --surface-raised-base: rgba(53,59,78,.94) !important;
+  --surface-raised-base-hover: #535b76 !important;
+  --surface-raised-base-active: #646b8a !important;
+  --surface-strong: #404558 !important;
+  --surface-raised-stronger-non-alpha: #535b76 !important;
+  --surface-interactive-hover: rgba(160,167,201,.24) !important;
+  --surface-interactive-weak: rgba(160,167,201,.16) !important;
+  --text-base: #f0f2fc !important;
+  --text-strong: #ffffff !important;
+  --text-weak: #d0d5e9 !important;
+  --text-weaker: #b6bdd8 !important;
+  --text-interactive-base: #c4d2ff !important;
+  --icon-base: #e0e5f6 !important;
+  --icon-weak: #bfc7e0 !important;
+  --icon-strong: #f0f2fc !important;
+  --border-base: rgba(171,177,208,.28) !important;
+  --border-hover: rgba(171,177,208,.52) !important;
+  --border-focus: #a0a7c9 !important;
+  --border-weak-base: rgba(171,177,208,.20) !important;
+  --border-strong-base: rgba(171,177,208,.38) !important;
+  --border-weaker-base: rgba(171,177,208,.12) !important;
+  --v2-background-bg-base: rgba(35,41,58,.30) !important;
+  --v2-background-bg-deep: rgba(27,33,49,.60) !important;
+  --v2-background-bg-layer-01: rgba(64,69,88,.44) !important;
+  --v2-background-bg-layer-02: rgba(64,69,88,.76) !important;
+  --v2-background-bg-layer-03: rgba(67,74,98,.94) !important;
+  --v2-background-bg-layer-04: #535b76 !important;
+  --v2-background-bg-button-neutral: #59627e !important;
+  --v2-background-bg-inverse: #e2e6f5 !important;
+  --v2-background-bg-contrast: #d5dbee !important;
+  --v2-background-bg-accent: #a0a7c9 !important;
+  --v2-text-text-base: #f0f2fc !important;
+  --v2-text-text-muted: #d0d5e9 !important;
+  --v2-text-text-faint: #b6bdd8 !important;
+  --v2-text-text-accent: #c4d2ff !important;
+  --v2-text-text-accent-hover: #e3e9ff !important;
+  --v2-text-text-code-accent: #c2d8ef !important;
+  --v2-text-text-inverse: #252b3b !important;
+  --v2-text-text-contrast: #252b3b !important;
+  --v2-icon-icon-base: #e0e5f6 !important;
+  --v2-icon-icon-muted: #bfc7e0 !important;
+  --v2-icon-icon-accent: #c4d2ff !important;
+  --v2-icon-icon-accent-hover: #e3e9ff !important;
+  --v2-icon-icon-inverse: #252b3b !important;
+  --v2-icon-icon-contrast: #252b3b !important;
+  --v2-border-border-muted: rgba(171,177,208,.20) !important;
+  --v2-border-border-base: rgba(171,177,208,.30) !important;
+  --v2-border-border-strong: rgba(171,177,208,.45) !important;
+  --v2-border-border-focus: #a0a7c9 !important;
+  --v2-overlay-simple-overlay-hover: rgba(171,177,208,.12) !important;
+  --v2-overlay-simple-overlay-pressed: rgba(171,177,208,.20) !important;
+  --v2-overlay-simple-overlay-scrim: rgba(20,25,39,.65) !important;
+  --v2-overlay-simple-tab-active-scrim: rgba(140,146,184,.20) !important;
+  --v2-overlay-simple-tab-hover-scrim: rgba(140,146,184,.12) !important;
+  --v2-overlay-simple-tab-scrim: transparent !important;
+}
+html { background: #404558 !important; }
+body {
+  background-color: #404558 !important;
+  background-image: linear-gradient(90deg,rgba(25,31,47,.72),rgba(31,37,55,.52) 46%,rgba(31,37,55,.43)),url('./snow-background.jpg') !important;
+  background-size: cover !important;
+  background-position: center,60% center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  color: #f0f2fc !important;
+}
+#root { background: transparent !important; }
+[data-slot="user-message-text"] {
+  background: rgba(64,69,88,.86) !important;
+  border: 1px solid rgba(171,177,208,.23);
+  color: #f0f2fc !important;
+}
+[data-slot="session-turn-assistant-content"] {
+  background: rgba(32,38,55,.52);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+[data-component="dock-prompt"], [data-component="prompt-input-v2"], [data-component="prompt-input"] {
+  background-color: rgba(45,52,72,.94) !important;
+  border-color: rgba(160,167,201,.38) !important;
+}
+[data-component="markdown-code"], [data-component="code"], .xterm {
+  background-color: rgba(27,33,48,.96) !important;
+}
+[data-component="dialog"], [data-component="dialog-v2"],
+[data-component="menu-v2-content"], [data-component="dropdown-menu-content"],
+[data-component="dropdown-menu-sub-content"], [data-component="context-menu-content"],
+[data-component="context-menu-sub-content"], [data-component="tooltip"],
+[data-component="tooltip-v2"], [data-component="session-tab-popover"] {
+  --background-base: #343c52 !important;
+  --v2-background-bg-base: #343c52 !important;
+  --v2-background-bg-layer-01: #40485f !important;
+  --v2-background-bg-layer-02: #4a536d !important;
+  background-color: #343c52 !important;
+  color: #f0f2fc !important;
+  border-color: rgba(171,177,208,.35) !important;
+}
+::selection { background: rgba(160,167,201,.46); color: white; }
+:focus-visible { outline-color: #bbc5ea; }
+/* Palette v2: carry sampled image colors through interactive UI states. */
+html, body, #root {
+  --snow-primary: #a0a7c9;
+  --snow-primary-hover: #abb1d0;
+  --snow-primary-pressed: #969dc1;
+  --snow-secondary: #787e9f;
+  --snow-primary-ink: #252b3b;
+  --button-primary-base: var(--snow-primary) !important;
+  --button-secondary-base: #404558 !important;
+  --button-secondary-hover: #535a74 !important;
+  --button-ghost-hover: rgba(160,167,201,.15) !important;
+  --button-ghost-hover2: rgba(160,167,201,.23) !important;
+  --surface-interactive-base: var(--snow-primary) !important;
+  --surface-interactive-hover: rgba(160,167,201,.28) !important;
+  --surface-interactive-weak: rgba(120,126,159,.22) !important;
+  --surface-interactive-weak-hover: rgba(120,126,159,.34) !important;
+  --surface-base-interactive-active: rgba(140,146,184,.35) !important;
+  --input-base: rgba(45,52,72,.94) !important;
+  --input-hover: rgba(64,69,88,.96) !important;
+  --input-active: #404558 !important;
+  --input-selected: rgba(120,126,159,.40) !important;
+  --input-focus: #404558 !important;
+  --input-disabled: rgba(64,69,88,.52) !important;
+  --text-interactive-base: #b6bdd8 !important;
+  --text-on-interactive-base: var(--snow-primary-ink) !important;
+  --text-on-interactive-weak: #d0d5e9 !important;
+  --icon-interactive-base: var(--snow-primary-hover) !important;
+  --icon-on-interactive-base: var(--snow-primary-ink) !important;
+  --icon-brand-base: var(--snow-primary) !important;
+  --icon-on-brand-base: var(--snow-primary-ink) !important;
+  --icon-hover: #e2e5f4 !important;
+  --icon-active: #abb1d0 !important;
+  --icon-selected: #abb1d0 !important;
+  --icon-focus: #abb1d0 !important;
+  --icon-disabled: #787e9f !important;
+  --icon-weak-base: #abb1d0 !important;
+  --icon-weak-hover: #d0d5e9 !important;
+  --icon-weak-selected: #abb1d0 !important;
+  --icon-strong-base: #e2e5f4 !important;
+  --icon-strong-hover: #f0f2fc !important;
+  --icon-strong-active: #d0d5e9 !important;
+  --icon-strong-focus: #e2e5f4 !important;
+  --border-selected: var(--snow-primary) !important;
+  --border-active: var(--snow-primary-pressed) !important;
+  --border-strong-selected: rgba(160,167,201,.70) !important;
+  --border-weak-selected: rgba(160,167,201,.48) !important;
+  --border-weaker-selected: rgba(160,167,201,.30) !important;
+  --border-interactive-base: #787e9f !important;
+  --border-interactive-hover: #abb1d0 !important;
+  --border-interactive-active: #969dc1 !important;
+  --border-interactive-selected: #a0a7c9 !important;
+  --border-interactive-focus: #abb1d0 !important;
+  --border-interactive-disabled: #59617b !important;
+  --v2-background-bg-contrast: var(--snow-primary) !important;
+  --v2-background-bg-accent: var(--snow-primary) !important;
+  --v2-background-bg-button-neutral: #535a74 !important;
+  --v2-text-text-accent: #b6bdd8 !important;
+  --v2-text-text-accent-hover: #d0d5e9 !important;
+  --v2-text-text-code-accent: #abb1d0 !important;
+  --v2-icon-icon-accent: var(--snow-primary-hover) !important;
+  --v2-icon-icon-accent-hover: #d0d5e9 !important;
+  --v2-border-border-focus: var(--snow-primary) !important;
+  --v2-overlay-simple-overlay-hover: rgba(160,167,201,.15) !important;
+  --v2-overlay-simple-overlay-pressed: rgba(150,157,193,.25) !important;
+  --v2-overlay-simple-tab-active-scrim: rgba(120,126,159,.32) !important;
+  --v2-overlay-simple-tab-hover-scrim: rgba(160,167,201,.17) !important;
+  --v2-overlay-simple-overlay-contrast-hover: rgba(171,177,208,.28) !important;
+  --v2-overlay-simple-overlay-contrast-pressed: rgba(120,126,159,.25) !important;
+  --v2-agent-build-solid: #abb1d0 !important;
+  --v2-agent-build-border: rgba(160,167,201,.48) !important;
+  --v2-agent-build-background: rgba(120,126,159,.22) !important;
+  --v2-agent-plan-solid: #bfc2dd !important;
+  --v2-agent-plan-border: rgba(140,146,184,.50) !important;
+  --v2-agent-plan-background: rgba(131,136,173,.22) !important;
+  --icon-agent-build-base: #abb1d0 !important;
+  --icon-agent-plan-base: #bfc2dd !important;
+  accent-color: var(--snow-primary);
+  caret-color: #abb1d0;
+  scrollbar-color: #787e9f rgba(40,46,64,.24);
+}
+/* Legacy primary buttons otherwise use white icons and gray hover colors. */
+[data-component="button"][data-variant="primary"] {
+  background-color: #a0a7c9 !important;
+  border-color: #abb1d0 !important;
+  color: #252b3b !important;
+}
+[data-component="button"][data-variant="primary"] [data-slot="icon-svg"] {
+  color: #252b3b !important;
+}
+[data-component="button"][data-variant="primary"]:hover:not(:disabled),
+[data-component="button"][data-variant="primary"]:focus-visible:not(:disabled) {
+  background-color: #abb1d0 !important;
+}
+[data-component="button"][data-variant="primary"]:active:not(:disabled) {
+  background-color: #969dc1 !important;
+}
+[data-component="button"][data-variant="primary"]:disabled {
+  background-color: #59617b !important;
+  border-color: #59617b !important;
+  color: #b6bdd8 !important;
+}
+[data-component="button"][data-variant="primary"]:disabled [data-slot="icon-svg"] {
+  color: #b6bdd8 !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  body { background-image: none !important; }
+  #root { background: #404558 !important; }
+}

@@ -1,0 +1,16 @@
+{
+  "text": "#000000",
+  "background": "#fff8f1",
+  "primary": "#cda7cf",
+  "hover": "#dfbedf",
+  "pressed": "#bc91c4",
+  "min_black_text_contrast_over_all_image_pixels_with_50_percent_mask": 5.994,
+  "button_contrasts": {
+    "#cda7cf": 10.024,
+    "#dfbedf": 12.569,
+    "#bc91c4": 7.986
+  },
+  "visual_ui_verified": false,
+  "terminal": "Existing terminal renderer theme retained",
+  "syntax": "Base text black; syntax and status distinctions retained"
+}

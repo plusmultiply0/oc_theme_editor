@@ -1,0 +1,248 @@
+/* Pastel wallpaper with black interface text. Original image bytes preserved. */
+html, body, #root {
+  color-scheme: light;
+  --background-base: rgba(255,248,241,.32) !important;
+  --background-weak: rgba(255,248,241,.45) !important;
+  --background-strong: rgba(251,239,228,.82) !important;
+  --background-stronger: #fbefe4 !important;
+  --surface-base: rgba(255,248,241,.48) !important;
+  --surface-base-hover: rgba(188,145,196,.30) !important;
+  --surface-base-active: rgba(205,167,207,.34) !important;
+  --surface-inset-base: rgba(255,248,241,.72) !important;
+  --surface-raised-base: rgba(255,248,241,.94) !important;
+  --surface-raised-base-hover: #eedfeb !important;
+  --surface-raised-base-active: #eedfeb !important;
+  --surface-strong: #fbefe4 !important;
+  --surface-raised-stronger-non-alpha: #eedfeb !important;
+  --surface-interactive-hover: rgba(205,167,207,.24) !important;
+  --surface-interactive-weak: rgba(205,167,207,.16) !important;
+  --text-base: #000000 !important;
+  --text-strong: #000000 !important;
+  --text-weak: #000000 !important;
+  --text-weaker: #000000 !important;
+  --text-interactive-base: #000000 !important;
+  --icon-base: #000000 !important;
+  --icon-weak: #000000 !important;
+  --icon-strong: #000000 !important;
+  --border-base: rgba(135,99,143,.28) !important;
+  --border-hover: rgba(135,99,143,.52) !important;
+  --border-focus: #cda7cf !important;
+  --border-weak-base: rgba(135,99,143,.20) !important;
+  --border-strong-base: rgba(135,99,143,.38) !important;
+  --border-weaker-base: rgba(135,99,143,.12) !important;
+  --v2-background-bg-base: rgba(255,248,241,.30) !important;
+  --v2-background-bg-deep: rgba(255,248,241,.60) !important;
+  --v2-background-bg-layer-01: rgba(255,248,241,.44) !important;
+  --v2-background-bg-layer-02: rgba(255,248,241,.76) !important;
+  --v2-background-bg-layer-03: rgba(251,239,228,.94) !important;
+  --v2-background-bg-layer-04: #eedfeb !important;
+  --v2-background-bg-button-neutral: #eedfeb !important;
+  --v2-background-bg-inverse: #000000 !important;
+  --v2-background-bg-contrast: #000000 !important;
+  --v2-background-bg-accent: #cda7cf !important;
+  --v2-text-text-base: #000000 !important;
+  --v2-text-text-muted: #000000 !important;
+  --v2-text-text-faint: #000000 !important;
+  --v2-text-text-accent: #000000 !important;
+  --v2-text-text-accent-hover: #000000 !important;
+  --v2-text-text-code-accent: #000000 !important;
+  --v2-text-text-inverse: #000000 !important;
+  --v2-text-text-contrast: #000000 !important;
+  --v2-icon-icon-base: #000000 !important;
+  --v2-icon-icon-muted: #000000 !important;
+  --v2-icon-icon-accent: #000000 !important;
+  --v2-icon-icon-accent-hover: #000000 !important;
+  --v2-icon-icon-inverse: #000000 !important;
+  --v2-icon-icon-contrast: #000000 !important;
+  --v2-border-border-muted: rgba(135,99,143,.20) !important;
+  --v2-border-border-base: rgba(135,99,143,.30) !important;
+  --v2-border-border-strong: rgba(135,99,143,.45) !important;
+  --v2-border-border-focus: #cda7cf !important;
+  --v2-overlay-simple-overlay-hover: rgba(135,99,143,.12) !important;
+  --v2-overlay-simple-overlay-pressed: rgba(135,99,143,.20) !important;
+  --v2-overlay-simple-overlay-scrim: rgba(89,67,80,.65) !important;
+  --v2-overlay-simple-tab-active-scrim: rgba(205,167,207,.20) !important;
+  --v2-overlay-simple-tab-hover-scrim: rgba(205,167,207,.12) !important;
+  --v2-overlay-simple-tab-scrim: transparent !important;
+}
+html { background: #fbefe4 !important; }
+body {
+  background-color: #fbefe4 !important;
+  background-image: linear-gradient(90deg,rgba(255,248,241,.54),rgba(255,248,241,.52) 46%,rgba(255,248,241,.50)),url('./pastel-background.png') !important;
+  background-size: cover !important;
+  background-position: center,center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  color: #000000 !important;
+}
+#root { background: transparent !important; }
+[data-slot="user-message-text"] {
+  background: rgba(255,248,241,.86) !important;
+  border: 1px solid rgba(135,99,143,.23);
+  color: #000000 !important;
+}
+[data-slot="session-turn-assistant-content"] {
+  background: rgba(255,248,241,.52);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+[data-component="dock-prompt"], [data-component="prompt-input-v2"], [data-component="prompt-input"] {
+  background-color: rgba(255,248,241,.94) !important;
+  border-color: rgba(205,167,207,.38) !important;
+}
+[data-component="markdown-code"], [data-component="code"] {
+  background-color: rgba(255,248,241,.96) !important;
+}
+[data-component="dialog"], [data-component="dialog-v2"],
+[data-component="menu-v2-content"], [data-component="dropdown-menu-content"],
+[data-component="dropdown-menu-sub-content"], [data-component="context-menu-content"],
+[data-component="context-menu-sub-content"], [data-component="tooltip"],
+[data-component="tooltip-v2"], [data-component="session-tab-popover"] {
+  --background-base: #fff8f1 !important;
+  --v2-background-bg-base: #fff8f1 !important;
+  --v2-background-bg-layer-01: #fbefe4 !important;
+  --v2-background-bg-layer-02: #f7eada !important;
+  background-color: #fff8f1 !important;
+  color: #000000 !important;
+  border-color: rgba(135,99,143,.35) !important;
+}
+::selection { background: rgba(205,167,207,.46); color: #000000; }
+:focus-visible { outline-color: #000000; }
+/* Lavender and peach interactive states sampled from the supplied artwork. */
+html, body, #root {
+  --pastel-primary: #cda7cf;
+  --pastel-primary-hover: #dfbedf;
+  --pastel-primary-pressed: #bc91c4;
+  --pastel-secondary: #87638f;
+  --pastel-primary-ink: #000000;
+  --button-primary-base: var(--pastel-primary) !important;
+  --button-secondary-base: #fbefe4 !important;
+  --button-secondary-hover: #eedfeb !important;
+  --button-ghost-hover: rgba(205,167,207,.15) !important;
+  --button-ghost-hover2: rgba(205,167,207,.23) !important;
+  --surface-interactive-base: var(--pastel-primary) !important;
+  --surface-interactive-hover: rgba(205,167,207,.28) !important;
+  --surface-interactive-weak: rgba(188,145,196,.22) !important;
+  --surface-interactive-weak-hover: rgba(188,145,196,.34) !important;
+  --surface-base-interactive-active: rgba(205,167,207,.35) !important;
+  --input-base: rgba(255,248,241,.94) !important;
+  --input-hover: rgba(255,248,241,.96) !important;
+  --input-active: #fbefe4 !important;
+  --input-selected: rgba(188,145,196,.40) !important;
+  --input-focus: #fbefe4 !important;
+  --input-disabled: rgba(255,248,241,.52) !important;
+  --text-interactive-base: #000000 !important;
+  --text-on-interactive-base: #000000 !important;
+  --text-on-interactive-weak: #000000 !important;
+  --icon-interactive-base: var(--pastel-primary-hover) !important;
+  --icon-on-interactive-base: var(--pastel-primary-ink) !important;
+  --icon-brand-base: var(--pastel-primary) !important;
+  --icon-on-brand-base: var(--pastel-primary-ink) !important;
+  --icon-hover: #000000 !important;
+  --icon-active: #dfbedf !important;
+  --icon-selected: #dfbedf !important;
+  --icon-focus: #dfbedf !important;
+  --icon-disabled: #87638f !important;
+  --icon-weak-base: #dfbedf !important;
+  --icon-weak-hover: #000000 !important;
+  --icon-weak-selected: #dfbedf !important;
+  --icon-strong-base: #000000 !important;
+  --icon-strong-hover: #000000 !important;
+  --icon-strong-active: #000000 !important;
+  --icon-strong-focus: #000000 !important;
+  --border-selected: var(--pastel-primary) !important;
+  --border-active: var(--pastel-primary-pressed) !important;
+  --border-strong-selected: rgba(205,167,207,.70) !important;
+  --border-weak-selected: rgba(205,167,207,.48) !important;
+  --border-weaker-selected: rgba(205,167,207,.30) !important;
+  --border-interactive-base: #87638f !important;
+  --border-interactive-hover: #dfbedf !important;
+  --border-interactive-active: #bc91c4 !important;
+  --border-interactive-selected: #cda7cf !important;
+  --border-interactive-focus: #dfbedf !important;
+  --border-interactive-disabled: #eedfeb !important;
+  --v2-background-bg-contrast: var(--pastel-primary) !important;
+  --v2-background-bg-accent: var(--pastel-primary) !important;
+  --v2-background-bg-button-neutral: #eedfeb !important;
+  --v2-text-text-accent: #000000 !important;
+  --v2-text-text-accent-hover: #000000 !important;
+  --v2-text-text-code-accent: #000000 !important;
+  --v2-icon-icon-accent: var(--pastel-primary-hover) !important;
+  --v2-icon-icon-accent-hover: #000000 !important;
+  --v2-border-border-focus: var(--pastel-primary) !important;
+  --v2-overlay-simple-overlay-hover: rgba(205,167,207,.15) !important;
+  --v2-overlay-simple-overlay-pressed: rgba(188,145,196,.25) !important;
+  --v2-overlay-simple-tab-active-scrim: rgba(188,145,196,.32) !important;
+  --v2-overlay-simple-tab-hover-scrim: rgba(205,167,207,.17) !important;
+  --v2-overlay-simple-overlay-contrast-hover: rgba(135,99,143,.28) !important;
+  --v2-overlay-simple-overlay-contrast-pressed: rgba(188,145,196,.25) !important;
+  --v2-agent-build-solid: #dfbedf !important;
+  --v2-agent-build-border: rgba(205,167,207,.48) !important;
+  --v2-agent-build-background: rgba(188,145,196,.22) !important;
+  --v2-agent-plan-solid: #52734b !important;
+  --v2-agent-plan-border: rgba(205,167,207,.50) !important;
+  --v2-agent-plan-background: rgba(155,184,145,.22) !important;
+  --icon-agent-build-base: #dfbedf !important;
+  --icon-agent-plan-base: #52734b !important;
+  accent-color: var(--pastel-primary);
+  caret-color: #dfbedf;
+  scrollbar-color: #87638f rgba(255,248,241,.24);
+}
+/* Legacy primary buttons otherwise use white icons and gray hover colors. */
+[data-component="button"][data-variant="primary"] {
+  background-color: #cda7cf !important;
+  border-color: #dfbedf !important;
+  color: #000000 !important;
+}
+[data-component="button"][data-variant="primary"] [data-slot="icon-svg"] {
+  color: #000000 !important;
+}
+[data-component="button"][data-variant="primary"]:hover:not(:disabled),
+[data-component="button"][data-variant="primary"]:focus-visible:not(:disabled) {
+  background-color: #dfbedf !important;
+}
+[data-component="button"][data-variant="primary"]:active:not(:disabled) {
+  background-color: #bc91c4 !important;
+}
+[data-component="button"][data-variant="primary"]:disabled {
+  background-color: #eedfeb !important;
+  border-color: #eedfeb !important;
+  color: #000000 !important;
+}
+[data-component="button"][data-variant="primary"]:disabled [data-slot="icon-svg"] {
+  color: #000000 !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  body { background-image: none !important; }
+  #root { background: #fbefe4 !important; }
+}
+
+/* Additional verified text tokens, including input placeholders and inverted labels. */
+html, body, #root {
+  --text-stronger: #000000 !important;
+  --text-link-base: #000000 !important;
+  --text-invert-base: #000000 !important;
+  --text-invert-strong: #000000 !important;
+  --text-invert-stronger: #000000 !important;
+  --text-invert-weak: #000000 !important;
+  --text-invert-weaker: #000000 !important;
+  --text-on-brand-base: #000000 !important;
+  --text-on-brand-strong: #000000 !important;
+  --text-on-brand-weak: #000000 !important;
+  --text-on-brand-weaker: #000000 !important;
+  --syntax-variable: #000000 !important;
+  --syntax-punctuation: #000000 !important;
+  --syntax-operator: #000000 !important;
+  --syntax-comment: #4d454f !important;
+  --syntax-keyword: #71376f !important;
+  --syntax-string: #376536 !important;
+  --syntax-constant: #754818 !important;
+  --syntax-primitive: #754818 !important;
+  --syntax-type: #354f81 !important;
+  --syntax-property: #71376f !important;
+  --syntax-object: #354f81 !important;
+  --syntax-regexp: #754818 !important;
+  caret-color: #000000;
+}
+input, textarea, [contenteditable="true"] { color: #000000 !important; }
+input::placeholder, textarea::placeholder { color: #000000 !important; opacity: 1; }

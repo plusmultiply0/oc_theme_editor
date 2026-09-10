@@ -1,0 +1,8 @@
+{
+  "sourceImage": "$OPENCODE_THEME_IMAGE",
+  "sourceSha256": "80fbd6a98935542dd2ac45bc98b2f9f1a8e40c47a76200ef29856f82742dad7b",
+  "extractedPalette": ["#996d45", "#d1a770", "#1c1b1a", "#daceac", "#f6e3c1", "#65584a", "#ab946d", "#463228"],
+  "roles": {"background":"#241d19", "panel":"#463228", "raised":"#65584a", "text":"#fff5e4", "muted":"#f0e0c4", "faint":"#eadcc4", "primary":"#d1a770", "hover":"#e4c28e", "pressed":"#c99a60", "onPrimary":"#241d19", "secondary":"#996d45", "planAccent":"#a3c8be"},
+  "contrast": {"normalButton":7.489, "hoverButton":9.809, "pressedButton":6.542, "faintOnLightestSolidPanel":5.096, "mainTextOnWhiteImageUnderMinWash":6.077, "mutedOnWhiteImageUnderMinWash":5.055, "faintOnWhiteImageUnderMinWash":4.857},
+  "note": "Calculated specified solid/composited pairs, including all-white image at 72% wash as a conservative background bound. Not a full native UI/state visual audit. Source image unchanged."
+}

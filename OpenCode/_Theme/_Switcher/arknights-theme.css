@@ -1,0 +1,218 @@
+/* Local Arknights warm-gold theme. Original image unchanged; no application logic modified. */
+html, body, #root {
+  color-scheme: dark;
+  --background-base: rgba(36,29,25,.32) !important;
+  --background-weak: rgba(70,50,40,.45) !important;
+  --background-strong: rgba(58,44,34,.82) !important;
+  --background-stronger: #463228 !important;
+  --surface-base: rgba(70,50,40,.48) !important;
+  --surface-base-hover: rgba(153,109,69,.30) !important;
+  --surface-base-active: rgba(171,148,109,.34) !important;
+  --surface-inset-base: rgba(28,27,26,.72) !important;
+  --surface-raised-base: rgba(66,51,40,.94) !important;
+  --surface-raised-base-hover: #65584a !important;
+  --surface-raised-base-active: #65584a !important;
+  --surface-strong: #463228 !important;
+  --surface-raised-stronger-non-alpha: #65584a !important;
+  --surface-interactive-hover: rgba(209,167,112,.24) !important;
+  --surface-interactive-weak: rgba(209,167,112,.16) !important;
+  --text-base: #fff5e4 !important;
+  --text-strong: #ffffff !important;
+  --text-weak: #f0e0c4 !important;
+  --text-weaker: #eadcc4 !important;
+  --text-interactive-base: #f6e3c1 !important;
+  --icon-base: #f6e3c1 !important;
+  --icon-weak: #e4d3b4 !important;
+  --icon-strong: #fff5e4 !important;
+  --border-base: rgba(218,206,172,.28) !important;
+  --border-hover: rgba(218,206,172,.52) !important;
+  --border-focus: #d1a770 !important;
+  --border-weak-base: rgba(218,206,172,.20) !important;
+  --border-strong-base: rgba(218,206,172,.38) !important;
+  --border-weaker-base: rgba(218,206,172,.12) !important;
+  --v2-background-bg-base: rgba(36,29,25,.30) !important;
+  --v2-background-bg-deep: rgba(28,27,26,.60) !important;
+  --v2-background-bg-layer-01: rgba(70,50,40,.44) !important;
+  --v2-background-bg-layer-02: rgba(70,50,40,.76) !important;
+  --v2-background-bg-layer-03: rgba(80,66,56,.94) !important;
+  --v2-background-bg-layer-04: #65584a !important;
+  --v2-background-bg-button-neutral: #65584a !important;
+  --v2-background-bg-inverse: #f6e3c1 !important;
+  --v2-background-bg-contrast: #f6e3c1 !important;
+  --v2-background-bg-accent: #d1a770 !important;
+  --v2-text-text-base: #fff5e4 !important;
+  --v2-text-text-muted: #f0e0c4 !important;
+  --v2-text-text-faint: #eadcc4 !important;
+  --v2-text-text-accent: #f6e3c1 !important;
+  --v2-text-text-accent-hover: #fff3db !important;
+  --v2-text-text-code-accent: #daceac !important;
+  --v2-text-text-inverse: #241d19 !important;
+  --v2-text-text-contrast: #241d19 !important;
+  --v2-icon-icon-base: #f6e3c1 !important;
+  --v2-icon-icon-muted: #e4d3b4 !important;
+  --v2-icon-icon-accent: #f6e3c1 !important;
+  --v2-icon-icon-accent-hover: #fff3db !important;
+  --v2-icon-icon-inverse: #241d19 !important;
+  --v2-icon-icon-contrast: #241d19 !important;
+  --v2-border-border-muted: rgba(218,206,172,.20) !important;
+  --v2-border-border-base: rgba(218,206,172,.30) !important;
+  --v2-border-border-strong: rgba(218,206,172,.45) !important;
+  --v2-border-border-focus: #d1a770 !important;
+  --v2-overlay-simple-overlay-hover: rgba(218,206,172,.12) !important;
+  --v2-overlay-simple-overlay-pressed: rgba(218,206,172,.20) !important;
+  --v2-overlay-simple-overlay-scrim: rgba(24,21,18,.65) !important;
+  --v2-overlay-simple-tab-active-scrim: rgba(171,148,109,.20) !important;
+  --v2-overlay-simple-tab-hover-scrim: rgba(171,148,109,.12) !important;
+  --v2-overlay-simple-tab-scrim: transparent !important;
+}
+html { background: #463228 !important; }
+body {
+  background-color: #463228 !important;
+  background-image: linear-gradient(90deg,rgba(28,27,26,.76),rgba(36,29,25,.74) 46%,rgba(36,29,25,.72)),url('./snow-background.jpg') !important;
+  background-size: cover !important;
+  background-position: center,center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  color: #fff5e4 !important;
+}
+#root { background: transparent !important; }
+[data-slot="user-message-text"] {
+  background: rgba(70,50,40,.86) !important;
+  border: 1px solid rgba(218,206,172,.23);
+  color: #fff5e4 !important;
+}
+[data-slot="session-turn-assistant-content"] {
+  background: rgba(28,27,26,.52);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+[data-component="dock-prompt"], [data-component="prompt-input-v2"], [data-component="prompt-input"] {
+  background-color: rgba(50,40,32,.94) !important;
+  border-color: rgba(209,167,112,.38) !important;
+}
+[data-component="markdown-code"], [data-component="code"], .xterm {
+  background-color: rgba(24,23,22,.96) !important;
+}
+[data-component="dialog"], [data-component="dialog-v2"],
+[data-component="menu-v2-content"], [data-component="dropdown-menu-content"],
+[data-component="dropdown-menu-sub-content"], [data-component="context-menu-content"],
+[data-component="context-menu-sub-content"], [data-component="tooltip"],
+[data-component="tooltip-v2"], [data-component="session-tab-popover"] {
+  --background-base: #322820 !important;
+  --v2-background-bg-base: #322820 !important;
+  --v2-background-bg-layer-01: #46372b !important;
+  --v2-background-bg-layer-02: #564431 !important;
+  background-color: #322820 !important;
+  color: #fff5e4 !important;
+  border-color: rgba(218,206,172,.35) !important;
+}
+::selection { background: rgba(209,167,112,.46); color: white; }
+:focus-visible { outline-color: #f6e3c1; }
+/* Image-derived warm palette: carry sampled image colors through interactive UI states. */
+html, body, #root {
+  --ark-primary: #d1a770;
+  --ark-primary-hover: #e4c28e;
+  --ark-primary-pressed: #c99a60;
+  --ark-secondary: #996d45;
+  --ark-primary-ink: #241d19;
+  --button-primary-base: var(--ark-primary) !important;
+  --button-secondary-base: #463228 !important;
+  --button-secondary-hover: #65584a !important;
+  --button-ghost-hover: rgba(209,167,112,.15) !important;
+  --button-ghost-hover2: rgba(209,167,112,.23) !important;
+  --surface-interactive-base: var(--ark-primary) !important;
+  --surface-interactive-hover: rgba(209,167,112,.28) !important;
+  --surface-interactive-weak: rgba(153,109,69,.22) !important;
+  --surface-interactive-weak-hover: rgba(153,109,69,.34) !important;
+  --surface-base-interactive-active: rgba(171,148,109,.35) !important;
+  --input-base: rgba(50,40,32,.94) !important;
+  --input-hover: rgba(70,50,40,.96) !important;
+  --input-active: #463228 !important;
+  --input-selected: rgba(153,109,69,.40) !important;
+  --input-focus: #463228 !important;
+  --input-disabled: rgba(70,50,40,.52) !important;
+  --text-interactive-base: #eadcc4 !important;
+  --text-on-interactive-base: var(--ark-primary-ink) !important;
+  --text-on-interactive-weak: #f0e0c4 !important;
+  --icon-interactive-base: var(--ark-primary-hover) !important;
+  --icon-on-interactive-base: var(--ark-primary-ink) !important;
+  --icon-brand-base: var(--ark-primary) !important;
+  --icon-on-brand-base: var(--ark-primary-ink) !important;
+  --icon-hover: #f6e3c1 !important;
+  --icon-active: #e4c28e !important;
+  --icon-selected: #e4c28e !important;
+  --icon-focus: #e4c28e !important;
+  --icon-disabled: #996d45 !important;
+  --icon-weak-base: #e4c28e !important;
+  --icon-weak-hover: #f0e0c4 !important;
+  --icon-weak-selected: #e4c28e !important;
+  --icon-strong-base: #f6e3c1 !important;
+  --icon-strong-hover: #fff5e4 !important;
+  --icon-strong-active: #f0e0c4 !important;
+  --icon-strong-focus: #f6e3c1 !important;
+  --border-selected: var(--ark-primary) !important;
+  --border-active: var(--ark-primary-pressed) !important;
+  --border-strong-selected: rgba(209,167,112,.70) !important;
+  --border-weak-selected: rgba(209,167,112,.48) !important;
+  --border-weaker-selected: rgba(209,167,112,.30) !important;
+  --border-interactive-base: #996d45 !important;
+  --border-interactive-hover: #e4c28e !important;
+  --border-interactive-active: #c99a60 !important;
+  --border-interactive-selected: #d1a770 !important;
+  --border-interactive-focus: #e4c28e !important;
+  --border-interactive-disabled: #65584a !important;
+  --v2-background-bg-contrast: var(--ark-primary) !important;
+  --v2-background-bg-accent: var(--ark-primary) !important;
+  --v2-background-bg-button-neutral: #65584a !important;
+  --v2-text-text-accent: #eadcc4 !important;
+  --v2-text-text-accent-hover: #f0e0c4 !important;
+  --v2-text-text-code-accent: #e4c28e !important;
+  --v2-icon-icon-accent: var(--ark-primary-hover) !important;
+  --v2-icon-icon-accent-hover: #f0e0c4 !important;
+  --v2-border-border-focus: var(--ark-primary) !important;
+  --v2-overlay-simple-overlay-hover: rgba(209,167,112,.15) !important;
+  --v2-overlay-simple-overlay-pressed: rgba(201,154,96,.25) !important;
+  --v2-overlay-simple-tab-active-scrim: rgba(153,109,69,.32) !important;
+  --v2-overlay-simple-tab-hover-scrim: rgba(209,167,112,.17) !important;
+  --v2-overlay-simple-overlay-contrast-hover: rgba(218,206,172,.28) !important;
+  --v2-overlay-simple-overlay-contrast-pressed: rgba(153,109,69,.25) !important;
+  --v2-agent-build-solid: #e4c28e !important;
+  --v2-agent-build-border: rgba(209,167,112,.48) !important;
+  --v2-agent-build-background: rgba(153,109,69,.22) !important;
+  --v2-agent-plan-solid: #a3c8be !important;
+  --v2-agent-plan-border: rgba(171,148,109,.50) !important;
+  --v2-agent-plan-background: rgba(95,139,128,.22) !important;
+  --icon-agent-build-base: #e4c28e !important;
+  --icon-agent-plan-base: #a3c8be !important;
+  accent-color: var(--ark-primary);
+  caret-color: #e4c28e;
+  scrollbar-color: #996d45 rgba(36,29,25,.24);
+}
+/* Legacy primary buttons otherwise use white icons and gray hover colors. */
+[data-component="button"][data-variant="primary"] {
+  background-color: #d1a770 !important;
+  border-color: #e4c28e !important;
+  color: #241d19 !important;
+}
+[data-component="button"][data-variant="primary"] [data-slot="icon-svg"] {
+  color: #241d19 !important;
+}
+[data-component="button"][data-variant="primary"]:hover:not(:disabled),
+[data-component="button"][data-variant="primary"]:focus-visible:not(:disabled) {
+  background-color: #e4c28e !important;
+}
+[data-component="button"][data-variant="primary"]:active:not(:disabled) {
+  background-color: #c99a60 !important;
+}
+[data-component="button"][data-variant="primary"]:disabled {
+  background-color: #65584a !important;
+  border-color: #65584a !important;
+  color: #e4d3b4 !important;
+}
+[data-component="button"][data-variant="primary"]:disabled [data-slot="icon-svg"] {
+  color: #e4d3b4 !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  body { background-image: none !important; }
+  #root { background: #463228 !important; }
+}

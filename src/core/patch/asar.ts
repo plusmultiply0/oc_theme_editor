@@ -5,6 +5,7 @@
  * 使用已纳入依赖的 @electron/asar（MIT），不依赖任何作者本机脚本。
  */
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import { getRawHeader, extractFile, uncache } from '@electron/asar';
 import { fail, ok, type Result } from '../../shared/errors';
@@ -93,10 +94,18 @@ export function listAsarFiles(header: Record<string, unknown>, prefix = ''): str
   return out;
 }
 
+/**
+ * 归档内路径一律按平台分隔符传给 asar：
+ * Windows 上它用 path.dirname/basename 逐级查找，正斜杠会被当成单个文件名。
+ */
+export function toArchivePath(entry: string): string {
+  return entry.split('/').join(path.sep);
+}
+
 /** 读取归档内单个文件；不存在或读取失败都返回失败，不返回空 Buffer 冒充成功 */
 export async function readAsarFile(snapshot: AsarSnapshot, entry: string): Promise<Result<Buffer>> {
   try {
-    const buf = extractFile(snapshot.archivePath, entry);
+    const buf = extractFile(snapshot.archivePath, toArchivePath(entry));
     if (!buf) {
       return fail('TARGET_NOT_FOUND', `归档内缺少条目 ${entry}`, '该安装可能已被修改。');
     }

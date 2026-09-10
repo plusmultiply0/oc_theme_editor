@@ -76,6 +76,35 @@
 - 未执行：真实安装的识别（未扫描用户机器）、任何写入操作、进程强制结束。
 - 下一任务：P3b（T34–T42）事务应用与恢复——锁、staged 校验、备份、同卷替换、事务日志、恢复入口与 13 类故障注入测试。
 
+## 2026-09-10：P3b 事务应用与恢复（T34–T42）
+
+- 任务 ID：T34 锁、T35 准备区与白名单、T36 备份语义、T37 提交前复核、T38 同卷替换、T39 提交后复核、T40 启动恢复扫描、T41 两个恢复入口、T42 幂等与 no-op。
+- 完成状态：已完成，20 项集成测试（含 13 类故障注入）全部通过；**未对真实安装做任何写入**。
+- 改动文件：
+  - 新增 `src/core/patch/layout.ts`（运行数据布局）、`lock.ts`（实例独占锁）、`backup.ts`、`stage.ts`、`commit.ts`、`txlog.ts`、`recovery.ts`、`restore.ts`、`apply.ts`
+  - 修改 `src/shared/schema.ts`：`OperationManifest` 增加可选 `kind` / `themeHash` / `backupKind`
+  - 修改 `tests/fixtures/synthetic-install.ts`：支持 `unpack` 选项以构造 unpacked 条目
+  - 新增 `tests/integration/transaction.test.ts`（20 项）
+  - 修改 `vitest.config.ts`：集成测试含解压/重打包，`testTimeout` 提到 30s
+  - 修改 `eslint.config.mjs`：`no-unused-vars` 开启 `ignoreRestSiblings`
+  - 修改 `docs/architecture.md`：补事务与恢复模型
+- 测试命令与退出码：
+  - `npx tsc --noEmit` → 0
+  - `npx eslint .` → 0
+  - `npx vitest run` → 0，5 文件 / 92 项全部通过（新增 20 项）
+- **本轮最关键的取证**：只读探测真实归档发现 **47 个 unpacked 条目**（原生模块，实体在 `resources/app.asar.unpacked/`）。直接用 `createPackage` 重打包会把它们塞回归档导致应用启动即崩；改为从原始 header 收集 unpacked 集合、用 `createPackageFromStreams` 逐条目重建，并在打包后复核集合一致，不一致即 stage 失败。
+- 本轮修复的缺陷：
+  1. `createPackageFromStreams` 的 `stream.stat` 必须是原始 `fs.Stats`，多包一层 `{type, stat}` 会导致 `storeFileEntry` 收到 undefined 抛 `Cannot convert undefined to a BigInt`。
+  2. Windows 上 `extractFile` 用 `path.dirname/basename` 逐级查找，归档内路径必须转成平台分隔符，否则带 `/` 的路径查不到。
+  3. 锁在同进程内被误判为残留锁而放行（pid 是自己就清理）→ 新增进程内持有集合，同进程二次操作同样报 `TRANSACTION_IN_PROGRESS`。
+- 已知问题 / 边界：
+  - `systemProcessProbe` 仍未在真实环境运行过；测试统一注入 `idle` 探针，绕过了 PowerShell 调用。
+  - 「文件占用」场景未单独注入：Windows 文件锁难以在合成环境稳定复现，当前只验证了提交中断路径；P5 真实验收时需补。
+  - 备份只做整档复制（150MB 级），恢复粒度是整档而非单文件；`previous` 只保留最近 3 份。
+  - 全流程耗时主要在解压 + 重打包，真实安装（152MB / 6994 条目）的耗时未实测。
+- 未执行：真实安装的应用/恢复、GUI 联调、便携包。
+- 下一任务：P4（T50–T56）桌面界面与真实联调。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

@@ -125,6 +125,8 @@ export const OperationStatusSchema = z.enum([
   'needs_recovery',
 ]);
 
+export const OperationKindSchema = z.enum(['apply', 'restore-previous', 'restore-original']);
+
 export const OperationManifestSchema = z.object({
   schema: z.literal(SCHEMA_VERSION),
   operationId: z.string().min(1),
@@ -140,6 +142,12 @@ export const OperationManifestSchema = z.object({
   createdAt: z.string().min(1),
   /** 前序操作，恢复是新的前向操作，不改写历史（7.2） */
   previousOperationId: z.string().optional(),
+  /** 操作类型；恢复是新操作而不是撤销历史（T41） */
+  kind: OperationKindSchema.optional(),
+  /** 主题内容指纹，用于重复应用的 no-op 判定（T42） */
+  themeHash: z.string().optional(),
+  /** 本次使用的备份来源，恢复时用于校验 */
+  backupKind: z.enum(['original', 'previous', 'pre-restore']).optional(),
 });
 
 /** IPC 事件：带 operationId、phase、message；只在可计量时给百分比（T15） */
@@ -162,5 +170,6 @@ export type TargetInfo = z.infer<typeof TargetInfoSchema>;
 export type ContrastEntry = z.infer<typeof ContrastEntrySchema>;
 export type ContrastReport = z.infer<typeof ContrastReportSchema>;
 export type OperationStatus = z.infer<typeof OperationStatusSchema>;
+export type OperationKind = z.infer<typeof OperationKindSchema>;
 export type OperationManifest = z.infer<typeof OperationManifestSchema>;
 export type OperationEvent = z.infer<typeof OperationEventSchema>;

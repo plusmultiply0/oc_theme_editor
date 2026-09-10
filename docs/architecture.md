@@ -102,3 +102,52 @@ tests/unit/  tests/integration/  tests/e2e/  tests/fixtures/
 - 路线 A/B 的最终取舍待用户决策（见 `docs/compatibility.md` 的 G0 节）。
 - 依赖清单、版本、锁文件：P1 确定。
 - ASAR 写入与替换的 Windows 语义验证：P3 在合成 fixture 中完成。
+
+---
+
+## 事务与恢复模型（P3b 落地）
+
+代码位置：`src/core/patch/`（`lock.ts` / `layout.ts` / `backup.ts` / `stage.ts` / `commit.ts` / `txlog.ts` / `recovery.ts` / `restore.ts` / `apply.ts`）。
+
+### 状态机
+
+```text
+inspected → staged → backed_up → committing → applied
+                │         │            │
+                └─────────┴────────────┴──→ failed          （提交前，安装未变）
+                                            needs_recovery  （提交后无法自证，等人处理）
+```
+
+恢复是一次新的前向操作，状态标记为 `restore-previous` / `restore-original`，不改写历史记录。
+
+### 提交顺序与补偿
+
+1. 复核目标 hash（防准备期被升级/被其他进程改动）
+2. staged 文件写到**目标同目录**的临时文件（同卷，保证 rename 是同卷移动）
+3. `rename` 覆盖目标 —— 同卷 rename 不会写出半截文件
+4. 复核目标 hash，等于预期才标 `applied`
+
+第 3 步之前失败 → 删除临时文件，安装原封不动。
+第 3 步之后失败 → 按磁盘事实判定，**绝不盲目回滚**，落 `needs_recovery` 由用户决定。
+
+### 关键取证：unpacked 条目必须保留
+
+本机只读探测发现目标归档有 **47 个 unpacked 条目**（`@lydell/node-pty-win32-x64`、`@msgpackr-extract`、`@parcel/watcher-win32-x64`、`msgpackr-extract` 的原生模块），实体在 `resources/app.asar.unpacked/`。
+
+因此重打包**不能**用 `createPackage` 一把梭：那会把原生模块塞回归档，导致应用启动即崩。
+`stage.ts` 的做法是从原始 header 收集 unpacked 集合，再用 `createPackageFromStreams` 逐条目重建，
+打包后复核 unpacked 集合与原归档完全一致，否则整个 stage 判失败。
+
+### 备份语义
+
+- `original`：工具首次接管时的状态。若首次接管就发现目标已含本工具注入的条目，
+  标记 `pristine=false`，并**禁用「恢复原版」**——不能把已经被改过的状态冒充出厂原版。
+- `previous`：上一次成功应用前的状态，用于「恢复上一主题」，只保留最近 3 份。
+- `pre-restore`：执行恢复前的现场备份，保证恢复失败也不会更糟。
+
+所有备份复制后重新算 SHA256 校验，不符即删坏备份并报错，不留假备份。
+
+### 并发保护
+
+锁文件用 `wx` 独占创建 + 进程内持有集合。同进程内二次操作同样被拒：
+只靠「pid 是自己就当残留锁清理」会把并发保护整个绕过。

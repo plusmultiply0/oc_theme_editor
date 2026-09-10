@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createPackage } from '@electron/asar';
+import { createPackageWithOptions } from '@electron/asar';
 
 export interface SyntheticInstallOptions {
   pkgName?: string;
@@ -16,6 +16,8 @@ export interface SyntheticInstallOptions {
   /** 归档内额外文件，键为归档内相对路径 */
   files?: Record<string, string>;
   withExe?: boolean;
+  /** 需要保留为 unpacked 条目的 glob，用于验证重打包不破坏原生模块标记 */
+  unpack?: string;
 }
 
 export interface SyntheticInstall {
@@ -51,7 +53,9 @@ export async function makeSyntheticInstall(
   const resources = path.join(root, 'resources');
   fs.mkdirSync(resources, { recursive: true });
   const archivePath = path.join(resources, 'app.asar');
-  await createPackage(srcDir, archivePath);
+  await createPackageWithOptions(srcDir, archivePath, {
+    ...(opts.unpack ? { unpack: opts.unpack } : {}),
+  });
 
   const exePath = path.join(root, 'OpenCode.exe');
   if (opts.withExe !== false) write(exePath, 'MZ-placeholder');

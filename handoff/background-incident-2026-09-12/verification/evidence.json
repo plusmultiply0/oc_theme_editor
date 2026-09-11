@@ -1,0 +1,155 @@
+{
+  "scope": "Isolated fixture, not the live OpenCode DOM. Official CSS + installed custom CSS and image; simplified shell. Official runtime :root insertion simulated with resolved native token values. No target business JS, storage or network.",
+  "project": "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher",
+  "archive": "C:\\Users\\ylzho\\AppData\\Local\\Programs\\@opencode-aidesktop\\resources\\app.asar",
+  "archiveHash": "4c697b25348617d11bd46fdb38df3f420bc63bc453377b7ca3f8253bc417e969",
+  "image": {
+    "bytes": 4947909,
+    "sha256": "80fbd6a98935542dd2ac45bc98b2f9f1a8e40c47a76200ef29856f82742dad7b",
+    "width": 4106,
+    "height": 2310,
+    "fullDecode": true,
+    "browserDecode": [
+      4106,
+      2310
+    ]
+  },
+  "htmlIncludesCustomCss": true,
+  "officialSources": {
+    "jsEntry": "assets/main-5jvEfisE.js",
+    "ensureThemeStyleElement": {
+      "line": 39398,
+      "text": "function ensureThemeStyleElement() {\n  const existing = document.getElementById(THEME_STYLE_ID);\n  if (existing) return existing;\n  const element2 = document.createElement(\"style\");\n  element2.id = THEME_STYLE_ID;\n  document.head.appendChild(element2);\n  return element2;\n}\nfunction getSystemMode() {\n  if (typeof window !== \"object\") return \"light\";\n  return window.matchMedia(\"(prefers-color-scheme: dark)\").matches ? \"dark\" : \"light\";\n}\n"
+    },
+    "applyThemeCss": {
+      "line": 39410,
+      "text": "function applyThemeCss(theme, themeId, mode) {\n  const isDark = mode === \"dark\";\n  const variant = isDark ? theme.dark : theme.light;\n  const tokens = resolveThemeVariant(variant, isDark);\n  const css = themeToCss(tokens);\n  const v22 = themeV2ToCss(resolveThemeVariantV2(variant, isDark));\n  if (themeId !== \"oc-2\") {\n    write$1(isDark ? STORAGE_KEYS.THEME_CSS_DARK : STORAGE_KEYS.THEME_CSS_LIGHT, `${css}\n  ${v22}`);\n  }\n  const fullCss = `:root {\n  color-scheme: ${mode};\n  --text-mix-blend-mode: ${isDark ? \"plus-lighter\" : \"multiply\"};\n  ${css}\n  ${v22}\n}`;\n  document.getElementById(\"oc-theme-preload\")?.remove();\n  ensureThemeStyleElement().textContent = fullCss;\n  document.documentElement.dataset.theme = themeId;\n  document.documentElement.dataset.colorScheme = mode;\n  document.documentElement.style.backgroundColor = isDark ? \"#080808\" : \"#fafafa\";\n  const meta = document.querySelector('meta[name=\"theme-color\"]');\n  if (meta) meta.setAttribute(\"content\", isDark ? \"#080808\" : \"#fafafa\");\n}\nfunction cacheThemeVariants(theme, themeId) {\n  if (themeId === \"oc-2\") return;\n  for (const mode of [\"light\", \"dark\"]) {\n    const isDark = mode === \"dark\";\n    const variant = isDark ? theme.dark : theme.light;\n    const tokens = resolveThemeV"
+    },
+    "shell": {
+      "line": 107208,
+      "text": "<div class=\"relative bg-v2-background-bg-deep flex-1 min-h-0 min-w-0 flex flex-col select-none [&amp;_input]:select-text [&amp;_textarea]:select-text [&amp;_[contenteditable]]:select-text\"style=\"padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px)\"><main class=\"flex-1 min-h-0 min-w-0 overflow-x-hidden flex flex-col items-start contain-strict\">`);\nfunction NewLayout(props) {\n  const platform2 = usePlatform();\n  const [state2, setState2] = createStore({\n    debugTools: true\n  });\n  createEffect(() => setV2Toas"
+    }
+  },
+  "states": {
+    "01-static-custom": {
+      "tokens": {
+        "--background-base": "rgba(215, 214, 214, 0.31)",
+        "--background-stronger": "#d7d6d6",
+        "--v2-background-bg-deep": "rgba(224, 223, 223, 0.6)"
+      },
+      "surfaces": {
+        "shell": "rgba(224, 223, 223, 0.6)",
+        "base": "rgba(215, 214, 214, 0.31)",
+        "stronger": "rgb(215, 214, 214)"
+      },
+      "image": "url(\"https://theme-fixture.invalid/oc-theme-background.jpg\")",
+      "imageZ": "-2",
+      "isolation": "isolate",
+      "backgroundVisiblePixelFraction": {
+        "sidebar": 0.9394,
+        "session": 0
+      }
+    },
+    "02-runtime-overrides": {
+      "tokens": {
+        "--background-base": "#f8f8f8",
+        "--background-stronger": "#fcfcfc",
+        "--v2-background-bg-deep": "#fafafa"
+      },
+      "surfaces": {
+        "shell": "rgb(250, 250, 250)",
+        "base": "rgb(248, 248, 248)",
+        "stronger": "rgb(252, 252, 252)"
+      },
+      "image": "url(\"https://theme-fixture.invalid/oc-theme-background.jpg\")",
+      "imageZ": "-2",
+      "isolation": "isolate",
+      "backgroundVisiblePixelFraction": {
+        "sidebar": 0,
+        "session": 0
+      }
+    },
+    "03-specificity-only": {
+      "tokens": {
+        "--background-base": "rgba(215, 214, 214, 0.31)",
+        "--background-stronger": "#d7d6d6",
+        "--v2-background-bg-deep": "rgba(224, 223, 223, 0.6)"
+      },
+      "surfaces": {
+        "shell": "rgba(224, 223, 223, 0.6)",
+        "base": "rgba(215, 214, 214, 0.31)",
+        "stronger": "rgb(215, 214, 214)"
+      },
+      "image": "url(\"https://theme-fixture.invalid/oc-theme-background.jpg\")",
+      "imageZ": "-2",
+      "isolation": "isolate",
+      "backgroundVisiblePixelFraction": {
+        "sidebar": 0.9394,
+        "session": 0
+      }
+    },
+    "04-surface-fix": {
+      "tokens": {
+        "--background-base": "rgba(215, 214, 214, 0.31)",
+        "--background-stronger": "rgba(215, 214, 214, 0.31)",
+        "--v2-background-bg-deep": "rgba(224, 223, 223, 0.6)"
+      },
+      "surfaces": {
+        "shell": "rgba(0, 0, 0, 0)",
+        "base": "rgba(215, 214, 214, 0.31)",
+        "stronger": "rgba(215, 214, 214, 0.31)"
+      },
+      "image": "url(\"https://theme-fixture.invalid/oc-theme-background.jpg\")",
+      "imageZ": "-2",
+      "isolation": "isolate",
+      "backgroundVisiblePixelFraction": {
+        "sidebar": 0.9976,
+        "session": 0.986
+      }
+    },
+    "05-runtime-reinserted": {
+      "tokens": {
+        "--background-base": "rgba(215, 214, 214, 0.31)",
+        "--background-stronger": "rgba(215, 214, 214, 0.31)",
+        "--v2-background-bg-deep": "rgba(224, 223, 223, 0.6)"
+      },
+      "surfaces": {
+        "shell": "rgba(0, 0, 0, 0)",
+        "base": "rgba(215, 214, 214, 0.31)",
+        "stronger": "rgba(215, 214, 214, 0.31)"
+      },
+      "image": "url(\"https://theme-fixture.invalid/oc-theme-background.jpg\")",
+      "imageZ": "-2",
+      "isolation": "isolate",
+      "backgroundVisiblePixelFraction": {
+        "sidebar": 0.9976,
+        "session": 0.986
+      }
+    }
+  },
+  "assertions": {
+    "runtimeHidesImage": true,
+    "specificityRestoresSidebar": true,
+    "specificityAloneLeavesSessionOpaque": true,
+    "surfaceFixRestoresBoth": true,
+    "survivesRuntimeReinsert": true,
+    "archiveNotModified": true
+  },
+  "injectionPasses": [
+    {
+      "pass": 1,
+      "unchanged": false,
+      "bytes": 1267
+    },
+    {
+      "pass": 2,
+      "unchanged": true,
+      "bytes": 1267
+    },
+    {
+      "pass": 3,
+      "unchanged": true,
+      "bytes": 1267
+    }
+  ]
+}

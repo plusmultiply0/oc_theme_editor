@@ -75,7 +75,7 @@ npx electron-builder --win --dir
 ### 5.1 只读预检（已完成）
 
 ```
-目标：C:\Users\ylzho\AppData\Local\Programs\@opencode-aidesktop  版本 1.18.29  supported
+目标：%LOCALAPPDATA%\Programs\@opencode-aidesktop  版本 1.18.29  supported
 归档：resources\app.asar（145.3 MB）
 进程：idle　可写：true
 磁盘：可用 5641 MB，需要 500 MB

@@ -1,0 +1,22 @@
+{
+  "library": "@electron/asar 4.3.0 (installed copy)",
+  "sameCwdContents": true,
+  "differentStreamContents": true,
+  "files": [
+    {
+      "rel": "a.js",
+      "offset": "0",
+      "expected": "module.exports = 'AAA';\n",
+      "actual": "module.exports = 'AAA';\n",
+      "same": true
+    },
+    {
+      "rel": "b.js",
+      "offset": "0",
+      "expected": "module.exports = 'BBB';\n",
+      "actual": "module.exports = 'AAA';\n",
+      "same": false
+    }
+  ],
+  "bugReproduced": true
+}

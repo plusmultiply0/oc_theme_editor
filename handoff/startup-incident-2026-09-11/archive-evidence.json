@@ -1,0 +1,1031 @@
+{
+  "createdAt": "2026-09-11T11:17:46.764Z",
+  "transaction": "op-20260911T110935948Z-k8dfu2",
+  "expectedAfterHash": "eea58d3ab23733da12d9a9c0ebf8b807ee58f2b0dcadc2f2c2539a9473c28fe2",
+  "reports": [
+    {
+      "file": "C:\\Users\\ylzho\\AppData\\Local\\Programs\\@opencode-aidesktop\\resources\\app.asar",
+      "hash": "eea58d3ab23733da12d9a9c0ebf8b807ee58f2b0dcadc2f2c2539a9473c28fe2",
+      "size": 162248021,
+      "count": 6996,
+      "dataStart": 1815552,
+      "errors": [],
+      "main": {
+        "size": 164443,
+        "actualSize": 164443,
+        "sha": "5c2ebba25ba31b49d83dfc817637e144592344b52e7865e09ba0aa04345e9d74",
+        "unpacked": false,
+        "offset": "97160615"
+      },
+      "jsonfile": {
+        "size": 2014,
+        "actualSize": 2014,
+        "sha": "d4cb94f4ba89422af9e697d19eacd70e0b33d611a6af7ca2f8412264673d248d",
+        "unpacked": false,
+        "offset": "54805507",
+        "syntax": "SyntaxError: Unexpected end of input"
+      },
+      "pkg": {
+        "name": "@opencode-ai/desktop",
+        "version": "1.18.29",
+        "main": "./out/main/index.js"
+      }
+    },
+    {
+      "file": "C:\\Users\\ylzho\\AppData\\Local\\OpenCodeThemeSwitcher\\instances\\a67a928b01029b5c\\backups\\previous\\previous-2026-09-11T02-15-40-576Z.asar",
+      "hash": "1c53ca2472698a9e5ea1162ccb917a98b4e3f8d99ddd427b488dd063ddee6fc2",
+      "size": 152395856,
+      "count": 6994,
+      "dataStart": 1815360,
+      "errors": [
+        {
+          "rel": "node_modules/@lydell/node-pty-win32-x64/prebuilds/win32-x64/conpty/OpenConsole.exe",
+          "unpacked": true,
+          "error": "header integrity mismatch",
+          "expected": "7f68c840226505004215c0b82d4e502c24b5bc3f4b93c4baaaa19bd679c0def8",
+          "sha": "98a17871907d43978fcfaf7febb085ffa480e4c208b75cd6a09968a407597538"
+        }
+      ],
+      "main": {
+        "size": 164443,
+        "actualSize": 164443,
+        "sha": "5c2ebba25ba31b49d83dfc817637e144592344b52e7865e09ba0aa04345e9d74",
+        "unpacked": false,
+        "offset": "97269301"
+      },
+      "jsonfile": {
+        "size": 2014,
+        "actualSize": 2014,
+        "sha": "ec5a9f1f45014486f1df4a8c11a5b078671e9936c0651e035b67cb5e763954e8",
+        "unpacked": false,
+        "offset": "54855301",
+        "syntax": "pass (parse only, no execution)"
+      },
+      "pkg": {
+        "name": "@opencode-ai/desktop",
+        "version": "1.18.29",
+        "main": "./out/main/index.js"
+      }
+    },
+    {
+      "file": "C:\\Users\\ylzho\\AppData\\Local\\OpenCodeThemeSwitcher\\instances\\a67a928b01029b5c\\backups\\previous\\previous-2026-09-11T11-10-09-850Z.asar",
+      "hash": "aeab66d4a2681f8c56b046e867bd060ab1e45a02b77625b89accc069ded92657",
+      "size": 150584833,
+      "count": 6996,
+      "dataStart": 1815416,
+      "errors": [
+        {
+          "rel": "node_modules/ajv/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1f9033ee5a6515e7d76938b7072941862d1ed228a6879cc7fe10cdeb75107989",
+          "sha": "c5fd7a1142f859e6d9216647c8dccdb51f2f1af17e7a6a9622ad0257af62ef84"
+        },
+        {
+          "rel": "node_modules/ansi-regex/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "c92312790eb1f246b7c4c1fe9c1247b15441bbca3c6cb64d167beefc45302753",
+          "sha": "705ea426fac3c94d1290359e7d5a9d5dc53762c6ddee16f4852ba6aca47442cc"
+        },
+        {
+          "rel": "node_modules/ansi-regex/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/ansi-regex/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "8b2dc166f2b74d5098bad38bdd3dd2f4d4775c626199872f5e36dbb48c40931d",
+          "sha": "f385f436c8ad37de906ac508729ce7c9e0198d3313d639e3168169a7d3fcdfac"
+        },
+        {
+          "rel": "node_modules/ansi-styles/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d3f197d370760ddd8753c1355b4bdb585a787f1baa92bb8ed217f170c138b594",
+          "sha": "92efdc3e5203d02d1710ff60dea3965066f97a77c0feaaa919b2693c989b7ec1"
+        },
+        {
+          "rel": "node_modules/ansi-styles/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/ansi-styles/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d405f010681d53f77691015e98461f8484b2afe6a9edfdd2ddb27b1e8a8e883d",
+          "sha": "0c0d2eb8063e3016116e6d9e38ae9983803c8676bac4093e3697ac34e61f8be7"
+        },
+        {
+          "rel": "node_modules/argparse/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "688bace28e14392b3a1c4137eb56bc48b684dbf5cb56278ed7056cd2ece07990",
+          "sha": "800e809f5cdb0a7dec1834e1d2c0a165b1b63c2d6d7b2a97034b8c668de24a8f"
+        },
+        {
+          "rel": "node_modules/builder-util-runtime/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9f249743b25861f34d64878df8db522f0365d7e621b53b1982bb8bcab4172f78",
+          "sha": "a5aefd7643b47da51c78d230068d71035cac7f660cbeaf2af5ab8953bc79b31d"
+        },
+        {
+          "rel": "node_modules/debug/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "ea8e33d63fe5f3a4c36609b6c3df8e2ef1f8b8ba2fc3a2e1e53cb27291f384af",
+          "sha": "85f3f142cda5b1a1ed18f4a5181a6c6b31b07a6d35da48dacc507586924c7ccd"
+        },
+        {
+          "rel": "node_modules/detect-libc/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "ee88e5b954fdf3a8480b1d01ef767d68d8ca2c6da269f58c5cf1c5550e9aa2a7",
+          "sha": "14eb612003e36897f20862653e538f26afa41f9662c4dd641e75618207b8851e"
+        },
+        {
+          "rel": "node_modules/emoji-regex/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "c56978800e47f095cfbfe96712b5e78d150d1f62e32bb4943675213fce481ef0",
+          "sha": "a7ba8ae1976f26629989ee4c046e4352cfef0efd34b2401137eddd216d5d9ae2"
+        },
+        {
+          "rel": "node_modules/emoji-regex/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "7bec29b9ca68f2c4becc60e866c2f9342ecdc89fab39841a818ccd9eda15c148",
+          "sha": "954b041cb1ab3ef240de49741bbb7993219b6fccddceffd1b1d30bb7677cb1da"
+        },
+        {
+          "rel": "node_modules/env-paths/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "84351667051b005f9856319267407b06affad12888355462c7c8740f22ca3999",
+          "sha": "52d9fa02d2c9c01a9a1505103cb79ed3cefda2d043f31dc43890fb42bc0125bb"
+        },
+        {
+          "rel": "node_modules/env-paths/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/env-paths/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "b92833e5851ec53bd4cd8093f6099d0c6e6818c4374ec1d09aa25d4f9ba91ec4",
+          "sha": "adcc53a719cba20c66b74c17d18ddcc5ca3763349cc6e05fda0cfccdbc54bfb0"
+        },
+        {
+          "rel": "node_modules/escape-string-regexp/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d7170b45e3faf26da2fcb2b4a2fac19af142b44d2ec5ae7760700896749a5886",
+          "sha": "af2065ad2f2d2b91946c2121e21618daa3f4b18787af9226f8c953ca54cca2f5"
+        },
+        {
+          "rel": "node_modules/escape-string-regexp/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "63763f28aefa6c49e6e6599e44b7c9aa5afd6518ae04bcfa534ff3759ad428e8",
+          "sha": "21237f4129659c5be858c22cb859f626fb331e6983cc54412436a90919c01b20"
+        },
+        {
+          "rel": "node_modules/fast-deep-equal/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "a5c63940db0260739be9e2ac67f3aac268df4db5770420ee4e34e493152f97d2",
+          "sha": "8364d2abc7912ad54eba3447f9da67767652c15bd65c0f7b7f35646bb4556758"
+        },
+        {
+          "rel": "node_modules/fast-uri/benchmark/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "463a034d344b042e495841b770ca69a812693087ee2053d7c18cc8497e020b58",
+          "sha": "7e88fa1a8044e61f8784ba64266d4d097b878867cf3b9d82fa13ea6f2022e310"
+        },
+        {
+          "rel": "node_modules/fast-uri/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "e82d3e55d954483e4927f9740bc3113a24d19ef5a73c7962d8a93c499fc982ff",
+          "sha": "f5f641da3dfef3405e01a0fb21dd546bb86dc7fb553f6b26a541265eb22def55"
+        },
+        {
+          "rel": "node_modules/fast-uri/lib/schemes.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "c2c61d3fd0bc63a587100928a399e75be8c420d210c439d75f7346da4aa4f3c3",
+          "sha": "0f9497f8e43c9b002d79c8a916709daa4ae8a6462735b1b5dc6ad587a28a5064"
+        },
+        {
+          "rel": "node_modules/fast-uri/lib/utils.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "610a6cfa7b1c9d5689443b3a3d14af4c24afed51ef5852495ae1489ae455a9f4",
+          "sha": "3394986f9670b821493943faafe5d83ccc15109aba908f1b5dd017e27b0d0ea7"
+        },
+        {
+          "rel": "node_modules/fast-uri/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "e634f3848a2c6c7e1cdc28b119b16e072e10dada8a3ca3f175a2372d0dd83360",
+          "sha": "02fbed4d0d483c2598fe54079b53a82f1f7e79953c05e6d47b5b5d3df0db66c4"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/copy/copy.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "3cd1bee730d6bf6dab71f7c1d3429d0f3f43634833d92ea4f3f3347eeeee5258",
+          "sha": "b1ef00cadd368ea903c9a86927e40636cd832d8fa64344637c96e0e223faf876"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/copy/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "06f95d3bdf12008047c254fdd977e43ca451c1470ab7ef0fefbb48b7dbb39008",
+          "sha": "f94ad0b8c5f5131a682be2d0427189c260e49fa748fb6f6bcc1f78678354e5d2"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/empty/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "3d3f32ea252f7a6bf4c4f455b6ceb3fc901e637b5dbf7646c54b7da5d15b7e74",
+          "sha": "1096edcb5ec0ed015b36914beff0826f6cd5d7ce2645ee9dee60c0b272e57856"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/ensure/file.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "a55ad2781fce21f8318603b68b8bdc9595e696ae840022fe006be21ad58412ff",
+          "sha": "a104ff42c9aefd0e34556b9df2e4b5c9cd15315b0b0f70b07938901428b3c608"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/ensure/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "6c8e1d92d85d04c25c1a076b1270e26dfaa36583ba95d6d5b7874f3b1700cead",
+          "sha": "77ccb9b4d1eab607ce7ba8d3d5bed59b0cb9cc4748d02aa896a2413b71dbfe60"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/ensure/link.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "61ea4823cfb1abd1c3f3bbc51ed284d4d7a73f9d074efccee06cd4d64eaebfb6",
+          "sha": "339ce737e858367c65f79c0960bc6d1d617638aae07d396ac8ae5c8670b500c3"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/ensure/symlink-paths.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "57278b32f19b80339e5147ba8fb5858f370260c67520d562717535497499ee15",
+          "sha": "5595b764059fb90ce4a13f5cdf43988da97e636521d3c599ce5260681d75bdfc"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/ensure/symlink-type.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9cc0b6884cf394e8bebd149fae5ce82124ec8d19552c570b9873f46ad2b9856d",
+          "sha": "17abe9590176305dd04316b2ac5c972dcf54cea32d279f955fbcf25098743dc8"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/ensure/symlink.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "428bef8f6e9f46ac23f6fa8b9a60f7c6328564e663f33547fb338a1f42421b32",
+          "sha": "8b1fa73e5b5554380b710ccfbb4fe23764e53f0e5ce046689741310a82a19e21"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/fs/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "e0d5f5add7a30f62529d6a303a86f3b035779d632a78fffb6809f759d1876a04",
+          "sha": "620b6e703880fd6718c354c5359a5c37a2379054c037269dbcf7afd2503e4a6f"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "5abad787457210ef7904c10faab0a06c644ee87ff9ec3987a979818553c7a969",
+          "sha": "4967e903b3dc290f2b401b81bfcad8b2d94fd68c1bf4563df63ac082af0e1dae"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/json/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "984c3badc1522a11a7ea91df9f4f31b4e4faf7d18f489d496d06449d361c3fd1",
+          "sha": "c5ac6a8005308e5bb36619fed225c987872300d356fa95d0d56878029ebbdc45"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/json/jsonfile.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "857ad5cc1569d6455e53ed4be618d836257a0fce5d4db3bcda49c5510ea4b26a",
+          "sha": "a986ad3c13166f3bf8f30b18140bfc8ea1754760ab3802aa7c8c3780d54f07ba"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/json/output-json-sync.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "f8388235c1188eb35cdb7790829009207931f983933fedd7812ae2138f9124e3",
+          "sha": "a68fde22ad1a194755de03e90861805248f883342e05bd685258e76a90e7a6ab"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/json/output-json.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "95d5328ff48a993a442dd537e362f5bc19ec60cd205683d3f401cc561d59615f",
+          "sha": "b738aaf8ff9aae265b0512cb2554e1f8ce8605d21dc6230189a9be6980079fc8"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/mkdirs/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "0ff78960fae45d37ae3241243b11b02c271294937b7c356752ec986ab56d5b7b",
+          "sha": "adcd576e2e3868b94adb1bad6d1e3cf2312ffdfa71e49a57fe6247e116e75ecf"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/move/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "6ccdbb83772d9b80cecbbcc04ecf8b6fc0529e8daed1c395e27b6a83d5708ee6",
+          "sha": "274f9fd31ac65cdc7dd9a6c568fb1163c2b043f6d5fcad30d5177961e9e3e240"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/move/move.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9df4b4df8f35eb01cc171c8c086124862f2173c7d37d890730fdb5137c2161a3",
+          "sha": "5487cd460cb8af3e0b2ed0055d61185e56bea35d08c01972b7f1a87e0433aabe"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/remove/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "dff95c5640a0b4b769290126940a7683e0e6d29ec591df63b7296712f81d9c56",
+          "sha": "ad79431e3d1cae731565d3e7403f619aee21f3b276d3541fe794ec7fd59ab0da"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/remove/rimraf.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "f8870393fdab0eaef548c4924df02d15c7bcdaf4424c3b9e42b96cbde3f27895",
+          "sha": "931cd85d1564a59db583841196cf2773940e7eee30830514b448d2d4919cc534"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/util/stat.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "98e5fc36b4dba1843e3db169490ef7f19b5db146d35b597a45d86c7ce8b52b6f",
+          "sha": "fe33d6c739866764c937e8aaeb518bbda7a36b0f3c006855b26c5bdd846081c3"
+        },
+        {
+          "rel": "node_modules/fs-extra/lib/util/utimes.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "35541d309c85b8b6f0dab9dbc5f93d7f7a3db30fa41718655a9cb4bb5932fc93",
+          "sha": "4a049bcd580984957b8690fb05f7a6bf5c7e59bfc78d6817882945c35f3a44d4"
+        },
+        {
+          "rel": "node_modules/fs-extra/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "3679b74c0b422a1fb5f710ab375b488ccbac0d38f32f5b1474021cf1827d287a",
+          "sha": "8625f8d6674f3dacbdd5ed9fc553d9583234a6403ef90b1612f786b8fad17711"
+        },
+        {
+          "rel": "node_modules/graceful-fs/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "5747d4ba6b17165c6ecac30ab3a331715f41c7ad546e1f1574dab1bdcb116181",
+          "sha": "5f558a45ee1f8ea431e950ab3864f842b9de5325e30a31ba1bd68f6f768457ed"
+        },
+        {
+          "rel": "node_modules/is-fullwidth-code-point/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "7db24c9c5d58273ba32eee1bec3dfebd393fdeddd0b5879ef01dc595476e6979",
+          "sha": "4012c17bfd4e065a9dc306de5b1a6eb12fb6543ce7c6e4edae9acc72853658cc"
+        },
+        {
+          "rel": "node_modules/is-fullwidth-code-point/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/is-fullwidth-code-point/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "5b48496ca129073ed44a677b777ea3b91366c8bc228bc75fe858749a78ac1a32",
+          "sha": "e29de0a6c0b1348a5ca022468243514027568312fb767f205967b4e608cb7680"
+        },
+        {
+          "rel": "node_modules/js-yaml/bin/js-yaml.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "b3e6a451bd8bc5cba3a12851396d15fc109faf0a5a018d96b5535fe1fcfedb54",
+          "sha": "6d7749dfd8019095970f4366cd09ec3abef9deaa3f870709dffecb027e58902d"
+        },
+        {
+          "rel": "node_modules/js-yaml/dist/js-yaml.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d4370eaa1b657d25595f0b426de5372de8f001661415ceac8ba043c1c06de7d2",
+          "sha": "283c7386b83e9155de96c51519a4b318bad3b5aaf2ddf3d240d5938193b8187f"
+        },
+        {
+          "rel": "node_modules/js-yaml/dist/js-yaml.min.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "32391560601990bb6e0daabd8106a35a6a539de088532413931a70a4cb4f4769",
+          "sha": "0de3dec92d20eab9e0b46a5d928cd45ec025d73e348ddf458dbfb01da00cb473"
+        },
+        {
+          "rel": "node_modules/js-yaml/dist/js-yaml.mjs",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "cea276c7e15f409a1adbe5d177aba7824398a474f7cf702bd57962c7d570636f",
+          "sha": "efbc45850bf15f0c8ee3434983f512be656002d7507dc292c7ade4449b5d57fa"
+        },
+        {
+          "rel": "node_modules/js-yaml/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "e85d524fcd45466669dfc37618284e0c53ccaaf3f4bef1e23cd25ec6c43120bc",
+          "sha": "7d1ebc0d9929b9124997b439d1a1fd9aff8feb6bb0a1b59e977ea638944f34ba"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/common.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "72216ccee36a52ece3f21f2d58a679c14c1483201ef6cbbfc4a1aa9cb6d34c9c",
+          "sha": "9211491f8e0058a419a4664e36bb4ec6509655aabe6bd537eddf941fdf34e734"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/dumper.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "695c80b3c310ef3f6fbd232bbcd3f82464917a008c24f1e05b560f35c20116a0",
+          "sha": "1a0c7fc01df0e950caf526c2a96b1e9fbac1dbc5dc125e83657f7b723a505ca3"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/exception.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9ef16628112beacc7497c3f3d0ab001c66c2db501f9e21fad4c30e7cd21d1d10",
+          "sha": "3dcd70e20270a93b8769204174a1949a133a41afbc8f1a74a9c6ab73fd60a179"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/loader.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "88a97ccd655f8eb9d81af9b51ab9ddafbab9dc545337e772ba922ab062f8b72d",
+          "sha": "5056164fe1cb8acfc42172cfebaf4805ffe6f6c9eb7ebd53b4ffcdbf6be289c0"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/schema/core.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "201ffb119aad04c9397df088452e00910becab9a43a3b3a392370878646c06ad",
+          "sha": "d736e58b5a947a5b86056bf4b881c8002314b6534ab1a697a67cc47e1b2dc2a0"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/schema/default.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1c4c9573b4c05ce47391c6bcba10401385d8d6a4d596c1c0fd1d6ea664f97ea2",
+          "sha": "aa09d88b4be7c51d8b6cb0b533c51ae17f534deed476c576b8d4cd3ce1bf165a"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/schema/failsafe.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "8e109fccabab5c066b66113f5d68bb74372f48bf589de39e44ed26432a98a27a",
+          "sha": "96d4b5b129b966f49d8028fc752a54cb9ca0c80cc4d076240766b946a2b329c5"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/schema/json.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "b08f46efd2c45c46c6d3eaf9b05489356d80391c5f7d5094fb8ec7713e796281",
+          "sha": "aa53e414f077035b4d477d19095ac01e60d9df73af716a188fd2772314041f92"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/schema.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "dd26a9e56d934099eb53e04f242ed1962660e4e64697c300ff5c4bc1a83165da",
+          "sha": "be14297ea2917dcb9ee11a7deb5b3a871f57ad978e5368c62407c83cd4dd18bf"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/snippet.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "c9180c66091356e16a750c07cbc21ee477d6d07e7c39b6a8622e5882cf85326d",
+          "sha": "1658b8ec688ebdd2e2dffc93fffc9cba0e9a93ad2a9a1d39b08ed5a1df5afade"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/binary.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9dd6a70eb318a123fdc11a36d613419d79535b6ecf105bd865de3a5cbbb60e7c",
+          "sha": "245745c866e306704407d6738e1a77776ce41e79e4cc3b2f418ae475bd00c3c9"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/bool.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "cc0d255ac6c55064421c19bbea312dcb9e22aee49fa9f8461723d9fbf7a0f8b3",
+          "sha": "634b7821ceb0877b5320a17b3b0fc3fb60ac3092b86c9d069722f18e2421c1db"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/float.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "42b4d238e5d00267fe126996b912f34506d273c39725524d662626bb9e2d4e7e",
+          "sha": "2d762d35ad3e06d96f512fb5ece8f7172e2543bb19c551f64c5e4005a66bbca2"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/int.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9d428a6e6de891a52b2b5ebd2bf09f9d1f9506514aaf35c6428f0111ecf86fdb",
+          "sha": "0dac842d32923113f2a6a153a280f6120f6ccc2da9024ba01fd4d99065d29fcf"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/map.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "6dd30a02cabaccf71c230464537bda5785093da80cd3319ed3a6481206e2ec7d",
+          "sha": "b9bf146012164a0a59ea8c5f6576052706d330a1e41ab8092e11a67d6b9ccf2c"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/merge.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "4cd0343e63f3c3d7cea620cf122e3dd8f8d1c4c4105d384e8d82d35ae154d1e2",
+          "sha": "bf34d9da7bb1158c5bdd8ae4474d11645c824440f68de79813c384cd77c4791b"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/null.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "5eea804da258ba10fa736199ed0cef9d89dbb01eac1c1bd3609a79a132d1885e",
+          "sha": "8f3abf27966dfc51e80ea72b363ca74b6d3bca0b15695f61e93bfee2858531f1"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/omap.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "8a865841abeb5f12a30f39f095967b6ac05ef6240e78872573fb23e8c9b5c47f",
+          "sha": "a4fa54ca0343665eb199503d772a4fe4aab792e4e08bee682e70c0d4a5ada043"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/pairs.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "f9eb5d2dc3cdbf7dd802e0a62b5aa2d09eedeb0509b71a247ebdad223315d6a5",
+          "sha": "faebb6d8a9d1b0cd755f92113e49464711d87060f17d1e807695924866f89a4a"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/seq.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "3a38b7f3242737c2e21462c42a8da1682325686cb2b30dc3630e515cf9c45522",
+          "sha": "f3d76a1db2a6772a51ac32059dcc18b6666ae9c5a60a649467b5853a2fbaf425"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/set.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "fa5b815c6334def52dae5b58193d3798f8e53558f6c7f48a643898e996333dd7",
+          "sha": "60d13edc50b58b037a6ef561d2f751c601826e455c011acf48c830baa1412107"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/str.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1f8725eac2dc7bed4b91610f21796ed3c057cee44b81a1ae8cc9beb9cd6c63ff",
+          "sha": "41e56af5fad426839bfe41c9a3f489de6efec71447490124a69f8f4785c46ab9"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type/timestamp.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "54e2070e0319d7fa3becd426dd5bfdb822b9602bd4a3c366976cbaa2278bdb5c",
+          "sha": "9e4f77c8d504a3a8319108343d6d6b2b6ed95ba6e96f4fe9b204208d04cfd691"
+        },
+        {
+          "rel": "node_modules/js-yaml/lib/type.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "a595092ee9fb6901769201ff7e5a485ee5f501bd1519d209af93b37dd2314a32",
+          "sha": "11d7ff8e46ecc9ef8b5334aa491973ee95a5f43841afa27e14a0594cca464170"
+        },
+        {
+          "rel": "node_modules/js-yaml/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "3eeb05aa0ceb4c3686e44c9b5d9b88f914b099ba9a7426b36947e65c6373d9a5",
+          "sha": "6b1fac9926b2a11471fd451cfb2ced69b09337e6c77d4174670839183c5a5e84"
+        },
+        {
+          "rel": "node_modules/json-schema-traverse/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "156fb24af02845c190701360d06dfda35ef04282e34a734289ea9535ad9819ae",
+          "sha": "c15049794f847b95bd0a31cea8f8e5fc4d760cab482b3aaa91597e44091ab262"
+        },
+        {
+          "rel": "node_modules/jsonfile/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "9f1f688b8dcf497badda859b9ab1ef28af8428a006271c68483fc830ca4a21d4",
+          "sha": "d4cb94f4ba89422af9e697d19eacd70e0b33d611a6af7ca2f8412264673d248d"
+        },
+        {
+          "rel": "node_modules/jsonfile/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "aac2f2acd4b615bb62d186a62457d06b76740cd0ed3a1cbf0fc711bd03efd403",
+          "sha": "19b7f70104b503224fc101fc465fb40765b077aa1f996f2d008463689a4fe4e6"
+        },
+        {
+          "rel": "node_modules/lazy-val/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "a5096f95098452cf6fe5c8ac9be8f13f59ab7c9f605ba5ef92c91b2c505744f0",
+          "sha": "a6f4140d0187f32d95545835aca38684e18d0fcfbecb51709b0aaa54decd3c0b"
+        },
+        {
+          "rel": "node_modules/mime-db/HISTORY.md",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1e820a4ab3b25cc858eed9d2629ddb39bfd48bab307bedec769308c258199aa6",
+          "sha": "b4d657cb041ea848d7535d9c32c19d93d9067f6485681f0f66fc591c0dce00b6"
+        },
+        {
+          "rel": "node_modules/mime-db/db.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "85c8e1ba609079947c8df83c092900ab0226e1d7b60e5e7105fb7dd701833263",
+          "sha": "96b8a5746867c832ab56743c05e46e73c9facb04879677df0b356f20496cb6cd"
+        },
+        {
+          "rel": "node_modules/mime-db/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d03e37b915a050af548d543f4e45ff5de06ec767c19e745f18c431d9dc26b5bf",
+          "sha": "aa9c21e4fdac046a7d79e4e8f11240218087bddde877ef934897b1154e23a4bb"
+        },
+        {
+          "rel": "node_modules/minimist/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "252881f6a068a3e70386706d88a694b5e8e9e053b6d9f309fd9a329e651bbf81",
+          "sha": "3154549dd6d41d1e074108fbd587e0078c54ce85d9d51c167a43c78cb178f76c"
+        },
+        {
+          "rel": "node_modules/mkdirp/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "8856bdf1f9b0f5d6b79fc8af4c5d23ca25a41c8cbce465d4b2f5a2852eab1859",
+          "sha": "dcdb2fd365d28ffadcd5de98859b6a544e9cd455077f921346c78a83c5493596"
+        },
+        {
+          "rel": "node_modules/ms/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1a6b4d9739790c0b94ab96c8cc0507e281c164c311ff4fbf5e57fb8d26290b40",
+          "sha": "f983ec581f1dd5a47b7f12b58f97c0b44c4e0cce56cbecc40140031aeef99bdf"
+        },
+        {
+          "rel": "node_modules/path-exists/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "379a30047a60f8d7b3bbbc2fa1fa0362f53e11ab7e63859fedfa7f2e25a99601",
+          "sha": "8c78dc9f3fa0ee26e03be54c33540829a60403bc0dd4022db8a1a7943be9556e"
+        },
+        {
+          "rel": "node_modules/path-exists/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/path-exists/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "5e258d1a0d185ae469fec34de2af18913421b94181ef61238efcfe0b00d1b2c3",
+          "sha": "47332593f1fa409a06774041bcebd78735775233ea18c81c350352784d4328d7"
+        },
+        {
+          "rel": "node_modules/require-from-string/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "c0002f7d4c7d7e2a885cf0f97226344902417c3a0980f2beca41962d2bc1f6d8",
+          "sha": "bbd907e5490c34cc6b814f56cd2180edb03bc594b88cdf1e112ed94d0d6218a3"
+        },
+        {
+          "rel": "node_modules/sax/lib/sax.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1cdc1270d987cb0f6ee66dd8efb01c50511aa14d17b6163bbbffb21df8cf1c06",
+          "sha": "a3a6780b66c90f3e74810b5968b07e274ae3bbe2a9a1e2333f0d0576c0bbf3c4"
+        },
+        {
+          "rel": "node_modules/sax/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d7e5ff764b48b9532d1b9a8b481b8d54336e6309e362571e993645b790bea657",
+          "sha": "9b4399b4c25baed0913166f12319491050d51f22a1b47250906b354bd198b19b"
+        },
+        {
+          "rel": "node_modules/semver/bin/semver.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "a3ed56435cbd4b3f07a80c4a343edd86d787f89bf2cee0105bdf68cb653ba2a0",
+          "sha": "bd6c871026985937dc945011fc54b74b47f5998154216d7b8d40d5ed782e4402"
+        },
+        {
+          "rel": "node_modules/semver/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "aa906c5bf8a2fa68683cae07d18553ae2538ed0d5a567911980b2ef25ee8b9ba",
+          "sha": "b6ac2d2503d8e8bf7d07782ce8b88b7009d9be31e972f34fd9cdba4b90a22df4"
+        },
+        {
+          "rel": "node_modules/semver/range.bnf",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "ed628fdaff64be366d07f6cc4559eae4de109826f743ea7f5e1588c370bca49a",
+          "sha": "28eac42c8704388617f259e3f4d27c1ccca206913f343e6d088dfbb0124a011e"
+        },
+        {
+          "rel": "node_modules/string-width/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "ed69ea4f757130e46dc48a0cc31beb6257e61a31c70936d82b8a3f02ffd64df5",
+          "sha": "16421893c66e7c45a68251f0708caaa8d49d74e9570ae574371d21356e9d30a6"
+        },
+        {
+          "rel": "node_modules/string-width/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/string-width/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "6457a02418f004fe5d3fbbb19c7cbcc1450a8b887ff9a471dc6985ac83a48d36",
+          "sha": "cb1c27cf5182c2d4598e0002892fb507805e85baa3a16d2df663459bb9f4fa71"
+        },
+        {
+          "rel": "node_modules/strip-ansi/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "bf37cd692bf030c2ec270945bc26aa8b19ad379fa5916f12304758f709ab0978",
+          "sha": "c5bb23b3ca69e97ddefdb76724b1a7936ac18b5e47c3fe3c5391969d6e6d06f8"
+        },
+        {
+          "rel": "node_modules/strip-ansi/license",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+          "sha": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3"
+        },
+        {
+          "rel": "node_modules/strip-ansi/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "0130850b9da0584f54cc20d3dab6365c807e9436ac78e016d5009efa99bd0530",
+          "sha": "9d349d7427bbed978337ab72c0a1024d90f78567621ebd4291334ab6c6e42400"
+        },
+        {
+          "rel": "node_modules/type-fest/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "a674cfb9da871e044b5287394b5245d6d2f26d5f0d6e5f7dc375fcbb20bc9cfb",
+          "sha": "bad6765aa64a768b2a805ac94967bf45d13014edc8875165956a16cff34eea5c"
+        },
+        {
+          "rel": "node_modules/universalify/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "d3411ff41b782d91b9cf61daf5a36fa9f2a0383da19be846aa4463f00226e929",
+          "sha": "83b02adb3872f6c482db4e57c300fa39b5cad65e317fc2f70b9de7d305c035a1"
+        },
+        {
+          "rel": "node_modules/universalify/package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "337f8f6023a515e5736486d37a7e29f955fea1c69bcafdc565a2bdd08f6a869e",
+          "sha": "5b39e9c6305a5ba27c76caf4817244dd1a308b68c7559dfe15471173466cf06e"
+        },
+        {
+          "rel": "out/main/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "2aad31212a24770a44292c6bbb7eaa6c835863090ec9017cb1e2883ec0d67740",
+          "sha": "5c2ebba25ba31b49d83dfc817637e144592344b52e7865e09ba0aa04345e9d74"
+        },
+        {
+          "rel": "out/preload/index.js",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "1980722276220454c22e8dd8e35b2c30d9cf800b9f2d48807f45258cbbe05c80",
+          "sha": "12d2b8f86ccb2197429ef9332d140bbeacdf97e9920c136f301dc6cc2aeba4a4"
+        },
+        {
+          "rel": "out/renderer/index.html",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "cbc692fa98655df0958b50288977213248e63d8027ea807d96f94b38e3544157",
+          "sha": "27aea7803ce859ada945cb50378e43d8cec551394b45a79b2689a6edbd14a74d"
+        },
+        {
+          "rel": "package.json",
+          "unpacked": false,
+          "error": "header integrity mismatch",
+          "expected": "4bc9b359f8a203fc9dea8e0c378dc7f9cb970852248aa7c74f830f90de66084f",
+          "sha": "aad63fbb0ce701f55c1bddbf4d9cd9421a989e6bc6e181dc83b2e9b1d905099a"
+        }
+      ],
+      "main": {
+        "size": 164443,
+        "actualSize": 164443,
+        "sha": "5c2ebba25ba31b49d83dfc817637e144592344b52e7865e09ba0aa04345e9d74",
+        "unpacked": false,
+        "offset": "97159016"
+      },
+      "jsonfile": {
+        "size": 2014,
+        "actualSize": 2014,
+        "sha": "d4cb94f4ba89422af9e697d19eacd70e0b33d611a6af7ca2f8412264673d248d",
+        "unpacked": false,
+        "offset": "53281426",
+        "syntax": "SyntaxError: Unexpected end of input"
+      },
+      "pkg": {
+        "name": "@opencode-ai/desktop",
+        "version": "1.18.29",
+        "main": "./out/main/index.js"
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "against": "C:\\Users\\ylzho\\AppData\\Local\\OpenCodeThemeSwitcher\\instances\\a67a928b01029b5c\\backups\\previous\\previous-2026-09-11T02-15-40-576Z.asar",
+      "changedCount": 5,
+      "removed": [],
+      "diffs": [
+        {
+          "rel": "node_modules/jsonfile/index.js",
+          "before": {
+            "size": 2014,
+            "actualSize": 2014,
+            "sha": "ec5a9f1f45014486f1df4a8c11a5b078671e9936c0651e035b67cb5e763954e8",
+            "unpacked": false,
+            "offset": "54855301",
+            "syntax": "pass (parse only, no execution)"
+          },
+          "after": {
+            "size": 2014,
+            "actualSize": 2014,
+            "sha": "d4cb94f4ba89422af9e697d19eacd70e0b33d611a6af7ca2f8412264673d248d",
+            "unpacked": false,
+            "offset": "54805507",
+            "syntax": "SyntaxError: Unexpected end of input"
+          }
+        },
+        {
+          "rel": "node_modules/semver/range.bnf",
+          "before": {
+            "size": 702,
+            "actualSize": 702,
+            "sha": "15d0baf9b7b98e6d862c0cb9e822d2533d2bc23e136bb75314d802ca1fcb0392",
+            "unpacked": false,
+            "offset": "57320720"
+          },
+          "after": {
+            "size": 702,
+            "actualSize": 702,
+            "sha": "28eac42c8704388617f259e3f4d27c1ccca206913f343e6d088dfbb0124a011e",
+            "unpacked": false,
+            "offset": "57243856"
+          }
+        },
+        {
+          "rel": "out/renderer/index.html",
+          "before": {
+            "size": 1264,
+            "actualSize": 1264,
+            "sha": "fb41f69cbfad5f794b809c9176180b5e8413d93642692d6c934fe665364df7be",
+            "unpacked": false,
+            "offset": "141943027"
+          },
+          "after": {
+            "size": 1267,
+            "actualSize": 1267,
+            "sha": "b0b97cf811e7ec3d0cb148b94dd4e1e4aa3775e18d02c38afd00fff2842a77f6",
+            "unpacked": false,
+            "offset": "139205364"
+          }
+        },
+        {
+          "rel": "out/renderer/oc-theme-background.jpg",
+          "after": {
+            "size": 11723994,
+            "actualSize": 11723994,
+            "sha": "e28d5d3506e18135b1a66f3cf0ce4da7db5ce9c7ce48b10f7af26a5ae02f6851",
+            "unpacked": false,
+            "offset": "139206631"
+          }
+        },
+        {
+          "rel": "out/renderer/oc-theme-custom.css",
+          "after": {
+            "size": 9393,
+            "actualSize": 9393,
+            "sha": "6895207e30e744854df9a5c9745d79bc84e1b91e11720b353569bd30f4eaa9e6",
+            "unpacked": false,
+            "offset": "150930625"
+          }
+        }
+      ]
+    },
+    {
+      "against": "C:\\Users\\ylzho\\AppData\\Local\\OpenCodeThemeSwitcher\\instances\\a67a928b01029b5c\\backups\\previous\\previous-2026-09-11T11-10-09-850Z.asar",
+      "changedCount": 3,
+      "removed": [],
+      "diffs": [
+        {
+          "rel": "out/renderer/index.html",
+          "before": {
+            "size": 1350,
+            "actualSize": 1350,
+            "sha": "27aea7803ce859ada945cb50378e43d8cec551394b45a79b2689a6edbd14a74d",
+            "unpacked": false,
+            "offset": "139203765"
+          },
+          "after": {
+            "size": 1267,
+            "actualSize": 1267,
+            "sha": "b0b97cf811e7ec3d0cb148b94dd4e1e4aa3775e18d02c38afd00fff2842a77f6",
+            "unpacked": false,
+            "offset": "139205364"
+          }
+        },
+        {
+          "rel": "out/renderer/oc-theme-background.jpg",
+          "before": {
+            "size": 68950,
+            "actualSize": 68950,
+            "sha": "ce2ee01e62c09def6156061ed1dc81685170b6c022e78547e5fd40564eac65b2",
+            "unpacked": false,
+            "offset": "139205115"
+          },
+          "after": {
+            "size": 11723994,
+            "actualSize": 11723994,
+            "sha": "e28d5d3506e18135b1a66f3cf0ce4da7db5ce9c7ce48b10f7af26a5ae02f6851",
+            "unpacked": false,
+            "offset": "139206631"
+          }
+        },
+        {
+          "rel": "out/renderer/oc-theme-custom.css",
+          "before": {
+            "size": 2901,
+            "actualSize": 2901,
+            "sha": "fe3a6dd25e98f4f8840dbc8ab52e2eadc5cac8bbf6e5f1088a43ff8d6c34e0fb",
+            "unpacked": false,
+            "offset": "139274065"
+          },
+          "after": {
+            "size": 9393,
+            "actualSize": 9393,
+            "sha": "6895207e30e744854df9a5c9745d79bc84e1b91e11720b353569bd30f4eaa9e6",
+            "unpacked": false,
+            "offset": "150930625"
+          }
+        }
+      ]
+    }
+  ]
+}

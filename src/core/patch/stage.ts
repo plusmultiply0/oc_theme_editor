@@ -19,8 +19,9 @@ import path from 'node:path';
 import { fail, ok, type Result } from '../../shared/errors';
 import type { TargetAdapter } from '../../adapters/types';
 import { readAsar, readAsarText } from './asar';
-import { extractArchive, writeArchiveFromStreams, type ArchiveStreamEntry } from './archive-io';
-import { physicalFs, physicalFsp, physicalSha256File } from './physical-fs';
+import { extractArchive } from './archive-io';
+import { packArchiveInWorker } from './pack';
+import { physicalFsp, physicalSha256File } from './physical-fs';
 import { isSafeArchiveEntry, safeJoin } from './paths';
 import { analyzeThemeLayers, stripLinks } from './legacy-theme';
 
@@ -268,13 +269,42 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
     return fail('STAGE_FAILED', 'HTML 入口未被修改，注入可能失败', '已中止，安装未被修改。');
   }
 
-  // 按原始 unpacked 集合重建归档，避免原生模块被塞回包内
+  // 按原始 unpacked 集合重建归档。
+  // F1：打包必须在专用工作进程里做（cwd=解包根目录），不能在主进程里做——
+  // 依赖库对 ≤2MB 文件会按「归档内逻辑路径」直接 readFileSync（相对 cwd），
+  // 主进程 cwd 是开发项目时会把另一份同名文件的内容 hash 误用到目标安装上，
+  // 导致两个不同文件被当成同一条、共享 offset（真机 jsonfile 被截断，OpenCode 无法启动）。
   const stagedArchive = path.join(input.workDir, 'staged.asar');
-  try {
-    const streams = await buildStreams(appDir, unpackedOriginal);
-    await writeArchiveFromStreams(stagedArchive, streams);
-  } catch (e) {
-    return fail('STAGE_FAILED', '归档重建失败', '安装未被修改；请重试。', String(e));
+  const plan: { path: string; unpacked: boolean }[] = [];
+  {
+    const collect = async (current: string, prefix: string): Promise<void> => {
+      const entries = await physicalFsp.readdir(current, { withFileTypes: true });
+      entries.sort((a, b) => (a.name < b.name ? -1 : 1));
+      for (const e of entries) {
+        const rel = prefix ? `${prefix}/${e.name}` : e.name;
+        const abs = path.join(current, e.name);
+        if (e.isDirectory()) {
+          plan.push({ path: rel, unpacked: false });
+          await collect(abs, rel);
+          continue;
+        }
+        if (!e.isFile()) continue;
+        plan.push({ path: rel, unpacked: unpackedOriginal.has(rel) });
+      }
+    };
+    await collect(appDir, '');
+  }
+  const packed = await packArchiveInWorker(
+    { appDir, stagedArchive, files: plan },
+    { timeoutMs: 15 * 60 * 1000 },
+  );
+  if (!packed.success) {
+    return fail(
+      packed.error.code as 'STAGE_FAILED',
+      packed.error.message,
+      packed.error.recoveryHint,
+      packed.error.detail,
+    );
   }
 
   const verify = await readAsar(stagedArchive);
@@ -323,42 +353,6 @@ function listPaths(header: Record<string, unknown>): string[] {
   };
   rec(header, '');
   return out;
-}
-
-/** 按目录内容构造 asar 流；unpacked 标记来自原始归档 */
-async function buildStreams(appDir: string, unpacked: Set<string>): Promise<ArchiveStreamEntry[]> {
-  // stat 必须是原始 fs.Stats：asar 内部直接取 stat.size / stat.mode
-  const streams: ArchiveStreamEntry[] = [];
-
-  const rec = async (current: string, prefix: string) => {
-    const entries = await physicalFsp.readdir(current, { withFileTypes: true });
-    entries.sort((a, b) => (a.name < b.name ? -1 : 1));
-    for (const e of entries) {
-      const rel = prefix ? `${prefix}/${e.name}` : e.name;
-      const abs = path.join(current, e.name);
-      if (e.isDirectory()) {
-        streams.push({
-          path: rel,
-          type: 'directory',
-          unpacked: false,
-          stat: physicalFs.statSync(abs),
-        });
-        await rec(abs, rel);
-        continue;
-      }
-      if (!e.isFile()) continue;
-      streams.push({
-        path: rel,
-        type: 'file',
-        unpacked: unpacked.has(rel),
-        stat: physicalFs.statSync(abs),
-        streamGenerator: () => physicalFs.createReadStream(abs),
-      });
-    }
-  };
-
-  await rec(appDir, '');
-  return streams;
 }
 
 async function exists(p: string): Promise<boolean> {

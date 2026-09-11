@@ -18,12 +18,13 @@
 import path from 'node:path';
 import { fail, ok, type Result } from '../../shared/errors';
 import type { TargetAdapter } from '../../adapters/types';
-import { readAsar, readAsarText } from './asar';
+import { listAsarFiles, readAsar, readAsarText } from './asar';
 import { extractArchive } from './archive-io';
 import { packArchiveInWorker } from './pack';
 import { physicalFsp, physicalSha256File } from './physical-fs';
 import { isSafeArchiveEntry, safeJoin } from './paths';
 import { analyzeThemeLayers, stripLinks } from './legacy-theme';
+import { verifyPackedResult, type EntryBaseline } from './archive-verify';
 
 export interface StageLimits {
   maxFiles: number;
@@ -45,6 +46,11 @@ export interface StageInput {
   css: string;
   imageBytes: Buffer;
   limits?: StageLimits;
+  /**
+   * 非白名单条目基线（来自首次接管快照）。
+   * 提供后，重打包结果会与之逐条比对；事故 F2 的硬门禁。
+   */
+  baseline?: Map<string, EntryBaseline>;
 }
 
 export interface StageThemeLayers {
@@ -307,25 +313,26 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
     );
   }
 
-  const verify = await readAsar(stagedArchive);
-  if (!verify.success) return verify;
-  const unpackedStaged = collectUnpacked(verify.data.header);
-  const unpackedPreserved =
-    unpackedStaged.size === unpackedOriginal.size &&
-    [...unpackedOriginal].every((rel) => unpackedStaged.has(rel));
-  if (!unpackedPreserved) {
+  // F2 硬门禁：用独立读取器逐条核对重打包结果（不再只看条目名与 unpacked 集合）
+  const verified = await verifyPackedResult({
+    stagedArchive,
+    originalEntries: new Set(listAsarFiles(snapshot.data.header)),
+    unpackedOriginal,
+    ...(input.baseline ? { baseline: input.baseline } : {}),
+    allowedChanges: adapter.allowedChanges,
+    expected: new Map<string, string | Buffer>([
+      [adapter.injection.cssFile, input.css],
+      [adapter.injection.imageFile, input.imageBytes],
+      [adapter.injection.htmlEntry, injected.data],
+    ]),
+  });
+  if (!verified.success) {
     return fail(
-      'STAGE_FAILED',
-      '重建后 unpacked 标记与原归档不一致',
-      '已中止，安装未被修改；原生模块可能因此无法加载。',
+      verified.error.code as 'ARCHIVE_VERIFY_FAILED',
+      verified.error.message,
+      verified.error.recoveryHint,
+      verified.error.detail,
     );
-  }
-
-  const stagedFiles = new Set(listPaths(verify.data.header));
-  for (const rel of after.data.keys()) {
-    if (!stagedFiles.has(rel)) {
-      return fail('STAGE_FAILED', `重建后缺少条目：${rel}`, '已中止，安装未被修改。');
-    }
   }
 
   const afterHash = await physicalSha256File(stagedArchive);
@@ -335,25 +342,13 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
     added,
     changed,
     removed,
-    unpackedPreserved,
-    fileCount: stagedFiles.size,
+    unpackedPreserved: verified.data.unpackedPreserved,
+    fileCount: verified.data.checked,
     themeLayers,
   });
 }
 
-function listPaths(header: Record<string, unknown>): string[] {
-  const out: string[] = [];
-  const rec = (node: Record<string, unknown>, prefix: string) => {
-    const files = (node.files ?? {}) as Record<string, Record<string, unknown>>;
-    for (const [name, child] of Object.entries(files)) {
-      const rel = prefix ? `${prefix}/${name}` : name;
-      if (child.files) rec(child, rel);
-      else out.push(rel);
-    }
-  };
-  rec(header, '');
-  return out;
-}
+
 
 async function exists(p: string): Promise<boolean> {
   try {

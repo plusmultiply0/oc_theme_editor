@@ -29,6 +29,10 @@ export const ERROR_CODES = [
   'FILE_LOCKED',
   /** 运行时无法按物理文件访问归档（Electron 未提供 original-fs）；工具自身问题，不得当成目标不受支持 */
   'RUNTIME_IO_UNAVAILABLE',
+  /** 归档内容与头部不符 / 条目边界异常 / 含无法解析的脚本 —— 输入不可信，必须拒绝继续 */
+  'ARCHIVE_CORRUPT',
+  /** 重打包结果与基线/预期不一致 —— 不能进入 committing，不写安装 */
+  'ARCHIVE_VERIFY_FAILED',
 
   // 事务
   'TRANSACTION_IN_PROGRESS',

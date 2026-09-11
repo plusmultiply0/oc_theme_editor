@@ -21,6 +21,17 @@ import { ensureDirs, originalDir, previousDir, runtimeDirs, type RuntimeLayout }
 import { ensureOriginalBackup, createBackup } from './backup';
 import { assessOriginalEvidence } from './original-evidence';
 import { stageChanges, type StageResult } from './stage';
+import {
+  buildBaseline,
+  checkScripts,
+  compareWithBaseline,
+  findSharedOffsetConflicts,
+  readBaselineFile,
+  scanArchive,
+  verifyIntegrity,
+  writeBaselineFile,
+  type EntryBaseline,
+} from './archive-verify';
 import { commitStaged, type CommitHooks } from './commit';
 import { withLock } from './lock';
 import { appendPhase, listTx, writeTx, type TxRecord } from './txlog';
@@ -115,6 +126,22 @@ async function runApply(
   if (!snapshot.success) return snapshot;
   const beforeHash = snapshot.data.sha256;
 
+  /*
+   * F2 硬门禁（第一部分）：先证明「输入可信」，才开始任何备份/打包。
+   * 事故里 staged 本来就是坏的也能一路走到 applied —— 这里是拦住它的第一道闸。
+   * 基线部分在 ensureOriginalBackup 之后做（需要先有首次接管快照）。
+   */
+  const gatePart1 = await verifyTargetArchive(archivePath, adapter);
+  if (!gatePart1.success) return gatePart1;
+
+  /*
+   * F2 硬门禁（第二部分）：与首次接管基线比对。
+   * 基线文件不存在时（首次接管），以**接手那一刻**的归档为基线 ——
+   * 那是本工具唯一能为它担保的状态；此后每次应用都必须与它一致。
+   */
+  const baselineGate = await resolveBaselineGate(archivePath, adapter, originalDir(layout));
+  if (!baselineGate.success) return baselineGate;
+
   // T42：重复应用同一主题且不重复写盘
   const themeHash = input.themeHash ?? computeThemeHash(input.css, input.imageBytes);
   const lastApplied = await latestApplied(layout);
@@ -179,6 +206,7 @@ async function runApply(
     workDir,
     css: input.css,
     imageBytes: input.imageBytes,
+    baseline: baselineGate.data.baseline,
   });
   if (!staged.success) {
     return fail(staged.error.code, staged.error.message, staged.error.recoveryHint, staged.error.detail);
@@ -238,6 +266,12 @@ async function runApply(
     note: assessment.note,
   });
   if (!original.success) return original;
+
+  // 首次接管：把接手时的基线与快照一起保存，之后每次应用都与它比对
+  if (baselineGate.data.created) {
+    const stored = writeBaselineFile(originalDir(layout), baselineGate.data.baseline);
+    if (!stored.success) return stored;
+  }
 
   const prev = await createBackup({
     archivePath,
@@ -322,4 +356,66 @@ async function pruneBackups(dir: string, keep: number): Promise<void> {
   } catch {
     // 清理失败不影响主流程
   }
+}
+
+/**
+ * F2 硬门禁第一部分：证明目标归档「输入可信」。
+ *
+ * 两层检查互相独立：
+ *  1. 逐条按头部完整性字段核对内容（含分块）；
+ *  2. 非白名单 .js/.json 按各自语义解析 —— 哈希只能证明「内容没变」，
+ *     不能证明「内容是好的」；事故里的坏文件正是被打包器重算了 hash 才一路绿灯。
+ *
+ * 另检查共享 offset 条目的内容一致性（事故的直接形态）。
+ */
+async function verifyTargetArchive(
+  archivePath: string,
+  adapter: TargetAdapter,
+): Promise<Result<{ checked: number }>> {
+  const isAllowed = (entry: string): boolean => adapter.allowedChanges.includes(entry);
+
+  const scanned = scanArchive(archivePath);
+  if (!scanned.success) return scanned;
+
+  const integrity = await verifyIntegrity(scanned.data);
+  if (!integrity.success) return integrity;
+
+  const shared = findSharedOffsetConflicts(scanned.data);
+  if (!shared.success) return shared;
+
+  const scripts = await checkScripts(scanned.data, { isAllowed });
+  if (!scripts.success) return scripts;
+
+  return ok({ checked: integrity.data.checked });
+}
+
+/**
+ * F2 硬门禁第二部分：解析基线并把当前归档与之比对。
+ *
+ * - 基线文件已存在（非首次接管）→ 当前归档的非白名单条目必须与它完全一致；
+ *   相对接管时被外部改动/已损坏的输入必须拒绝 —— 不能为坏内容重算 hash 后放行。
+ * - 基线文件不存在（首次接管）→ 以接手那一刻的归档为基线，不做比对（它就是基准本身）；
+ *   调用方在首次接管快照落盘后把基线一起保存。
+ */
+async function resolveBaselineGate(
+  archivePath: string,
+  adapter: TargetAdapter,
+  originalBackupDir: string,
+): Promise<
+  Result<{ baseline: Map<string, EntryBaseline>; compared: number; created: boolean }>
+> {
+  const isAllowed = (entry: string): boolean => adapter.allowedChanges.includes(entry);
+
+  const existing = readBaselineFile(originalBackupDir);
+  if (!existing.success) return existing;
+
+  if (existing.data) {
+    const compared = await compareWithBaseline(archivePath, existing.data, { isAllowed });
+    if (!compared.success) return compared;
+    return ok({ baseline: existing.data, compared: compared.data.compared, created: false });
+  }
+
+  const built = await buildBaseline(archivePath, isAllowed);
+  if (!built.success) return built;
+  return ok({ baseline: built.data, compared: 0, created: true });
 }

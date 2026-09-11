@@ -16,7 +16,7 @@
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
 import { fail, ok, type Result } from '../../shared/errors';
 import { hexToRgb, composite, rgbToHex } from './contrast';
-import { bubbleAlpha, overlayAlpha, panelAlpha, REGION_ALPHAS } from './surfaces';
+import { bubbleLayerAlpha, overlayAlpha, panelAlpha, REGION_ALPHAS } from './surfaces';
 import { renderTokenCss } from './tokens';
 
 export interface RenderCssInput {
@@ -65,7 +65,8 @@ export function renderThemeCss(input: RenderCssInput): string {
   const overlay = rgba(tokens.background, overlayAlpha(spec));
   const blur = spec.blurPx > 0 ? spec.blurPx : 0;
   const panel = panelAlpha(spec);
-  const bubble = bubbleAlpha(spec);
+  // 气泡叠在面板之上：这里画的是它**自己**那一层（局部 p），累计效果才是 1-(1-p)²
+  const bubble = bubbleLayerAlpha(spec);
 
   /*
    * 背景层始终是「图片层 + 遮罩层」两个独立伪元素：

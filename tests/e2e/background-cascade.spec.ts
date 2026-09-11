@@ -17,6 +17,8 @@ import { chromium, expect, test, type Browser, type Page } from '@playwright/tes
 import sharp from 'sharp';
 import { renderThemeCss } from '../../src/core/theme/css';
 import { deriveTokens } from '../../src/core/theme/generate';
+import { hexToRgb } from '../../src/core/theme/contrast';
+import { bubbleAlpha, panelAlpha, stackedAlpha } from '../../src/core/theme/surfaces';
 import { SCHEMA_VERSION, type ThemeSpec } from '../../src/shared/schema';
 
 const LAUNCH = { channel: 'msedge', headless: true, chromiumSandbox: true, timeout: 30_000 };
@@ -191,6 +193,108 @@ test.describe('背景层叠：实色面板与多层外壳（F2）', () => {
     const page = await openFixture(browser, cssText);
     await insertOfficialRuntime(page);
     expect(await alphaOf(page, '#session')).toBe(1);
+    await page.close();
+  });
+});
+
+test.describe('背景层叠：局部/累计 alpha 一致（F4）', () => {
+  let browser: Browser;
+
+  test.beforeAll(async () => {
+    browser = await chromium.launch(LAUNCH);
+  });
+
+  test.afterAll(async () => {
+    await browser?.close();
+  });
+
+  /**
+   * 纯色图 + 三层：bare（只有遮罩）、panel（面板层）、bubble（气泡叠在面板上）。
+   * 用来实测「从底图起算的累计不透明度」，与报告假定值对照。
+   */
+  async function alphaFixture(): Promise<{ page: Page; spec: ReturnType<typeof spec>; tokens: ReturnType<typeof deriveTokens> }> {
+    const solid = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: { r: 0, g: 0, b: 255 } },
+    })
+      .png()
+      .toBuffer();
+    const imageRef = `data:image/png;base64,${solid.toString('base64')}`;
+    const s = spec();
+    const tokens = deriveTokens(s.palette, 'light', undefined, '#e8e8ea');
+    const cssText = renderThemeCss({ tokens, spec: s, imageRef, resolvedMode: 'light' });
+
+    const page = await browser.newPage();
+    await page.setContent(
+      `<!doctype html><html><head><meta charset="utf-8">
+<style id="official-static">${OFFICIAL_STATIC_CSS}</style>
+<style id="ots-custom">${cssText}</style>
+<style>
+#bare { width: 120px; height: 60px; }
+#panel { position: relative; width: 200px; height: 120px; }
+#bubble { position: absolute; left: 100px; top: 60px; width: 100px; height: 60px; }
+</style></head>
+<body><div id="root">
+  <div id="bare"></div>
+  <div class="bg-background-base" id="panel">
+    <div data-slot="session-turn-assistant-content" id="bubble"></div>
+  </div>
+</div></body></html>`,
+      { waitUntil: 'load' },
+    );
+    return { page, spec: s, tokens };
+  }
+
+  async function centerPixel(page: Page, selector: string): Promise<[number, number, number]> {
+    const shot = await page.locator(selector).screenshot();
+    const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
+    const x = Math.floor(info.width / 2);
+    const y = Math.floor(info.height / 2);
+    const i = (y * info.width + x) * info.channels;
+    return [data[i], data[i + 1], data[i + 2]];
+  }
+
+  /** 从底色反解不透明度：pixel = base*(1-a) + color*a */
+  function solveAlpha(
+    pixel: [number, number, number],
+    base: [number, number, number],
+    color: [number, number, number],
+  ): number {
+    const parts: number[] = [];
+    for (let c = 0; c < 3; c += 1) {
+      const span = color[c] - base[c];
+      if (Math.abs(span) < 40) continue; // 差异太小的通道不参与（8bit 舍入噪声大）
+      parts.push((pixel[c] - base[c]) / span);
+    }
+    if (parts.length === 0) throw new Error('底色与面板色太接近，无法反解');
+    return parts.reduce((a, b) => a + b, 0) / parts.length;
+  }
+
+  test('面板层的实测不透明度等于参数 p', async () => {
+    const { page, spec: s, tokens } = await alphaFixture();
+    const base = await centerPixel(page, '#bare');
+    // 面板像素取面板自身未被气泡覆盖的左上角区域
+    const shot = await page.locator('#panel').screenshot();
+    const { data, info } = await sharp(shot).raw().toBuffer({ resolveWithObject: true });
+    const i = (8 * info.width + 8) * info.channels;
+    const panel: [number, number, number] = [data[i], data[i + 1], data[i + 2]];
+
+    const color = hexToRgb(tokens.panel);
+    const measured = solveAlpha(panel, base, [color.r, color.g, color.b]);
+    expect(measured).toBeCloseTo(panelAlpha(s), 2);
+    await page.close();
+  });
+
+  test('气泡叠在面板上：实测累计不透明度等于报告假定的 1-(1-p)²', async () => {
+    const { page, spec: s, tokens } = await alphaFixture();
+    const base = await centerPixel(page, '#bare');
+    const bubble = await centerPixel(page, '#bubble');
+    const color = hexToRgb(tokens.panel);
+    const measured = solveAlpha(bubble, base, [color.r, color.g, color.b]);
+
+    // 报告按累计值算对比度；若 CSS 把累计值当局部 alpha 画上去，
+    // 实际会变成 1-(1-p)³ —— 这里就是拦住那种重复计算的像素证据。
+    expect(measured).toBeCloseTo(bubbleAlpha(s), 2);
+    expect(measured).not.toBeCloseTo(stackedAlpha([panelAlpha(s), panelAlpha(s), panelAlpha(s)]), 2);
     await page.close();
   });
 });

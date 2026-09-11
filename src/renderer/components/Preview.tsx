@@ -10,7 +10,7 @@
  * 错误与 diff；终端与语法高亮明确标注不在覆盖范围内（T27）。
  */
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
-import { bubbleAlpha, panelAlpha, REGION_ALPHAS } from '../../core/theme/surfaces';
+import { bubbleLayerAlpha, panelAlpha, REGION_ALPHAS } from '../../core/theme/surfaces';
 
 export interface PreviewProps {
   tokens: ThemeTokens;
@@ -27,7 +27,9 @@ function alpha(hex: string, a: number): string {
 export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
   // 与写入归档、对比度报告共用同一套层级函数
   const panel = alpha(tokens.panel, panelAlpha(spec));
-  const bubble = alpha(tokens.panel, bubbleAlpha(spec));
+  // .msg 画在已经有 p 的 .mock-main 之上，所以这一层只画局部 p；
+  // 累计效果（1-(1-p)²）是报告的事，不能拿来当局部 alpha
+  const bubble = alpha(tokens.panel, bubbleLayerAlpha(spec));
 
   const vars: Record<string, string> = {
     '--p-bg-image': imageUrl ? `url("${imageUrl}")` : 'none',

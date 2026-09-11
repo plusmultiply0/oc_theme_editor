@@ -21,13 +21,34 @@ export function panelAlpha(spec: ThemeSpec): number {
 }
 
 /**
- * 对话气泡：叠在正文面板**之上**的又一层面板。
- * 两层同样不透明度的面板叠加，等效不透明度是 1-(1-a)²，报告必须按这个值算，
- * 否则会把双层场景的文字对比度算高。
+ * 多层 Source-Over 叠加后的**累计**不透明度（从最底层起算）。
+ * 报告要的是这个值：文字实际压在几层之上，对比度必须按累计结果算。
+ */
+export function stackedAlpha(layers: readonly number[]): number {
+  let transparent = 1;
+  for (const a of layers) transparent *= 1 - a;
+  return 1 - transparent;
+}
+
+/**
+ * 对话气泡：叠在正文面板**之上**的又一层面板，两层都是 p。
+ *
+ * 注意区分两种口径（事故 F4）：
+ * - **累计口径**（报告用）：从图片/遮罩起算到气泡为止 = 1-(1-p)²；
+ * - **局部口径**（CSS 与预览用）：气泡这一层自己只画 p —— 它下面的面板层已经算过一次，
+ *   若把累计值再当作局部 alpha 画上去，实际会变成 1-(1-p)³，比报告假定的更实，
+ *   图更淡、对比度判断也随之失真。
+ *
+ * Portal（对话框/菜单）没有面板祖先，它们的局部值就是 p，不要套用累计值。
  */
 export function bubbleAlpha(spec: ThemeSpec): number {
   const a = panelAlpha(spec);
-  return 1 - (1 - a) * (1 - a);
+  return stackedAlpha([a, a]);
+}
+
+/** 气泡层的**局部** alpha：CSS 与预览画这一层时用（面板层已单独画过） */
+export function bubbleLayerAlpha(spec: ThemeSpec): number {
+  return panelAlpha(spec);
 }
 
 /** 图片遮罩不透明度 */

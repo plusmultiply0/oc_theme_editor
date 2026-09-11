@@ -73,7 +73,12 @@ const files = [
  * - handoff/：内部交接与审查留档，审查本来就要求写明实际项目位置。
  * 把它们当成泄漏只会让这条规则淹没在噪声里，真正的泄漏反而看不见。
  */
-const LOCAL_ONLY_ARTIFACTS = [/^tools\/[^/]*result[^/]*\.json$/i, /^tools\/[^/]*\.png$/i];
+const LOCAL_ONLY_ARTIFACTS = [
+  /^tools\/[^/]*result[^/]*\.json$/i,
+  /^tools\/[^/]*\.png$/i,
+  // 恢复后体检：脚本与结果都只在本机跑，路径指向真实安装是它的本职
+  /^tools\/post-restore-health\.(cjs|json)$/i,
+];
 const AUDIT_TRAIL = [/^handoff\//];
 const exemptFromPathRules = (r) =>
   LOCAL_ONLY_ARTIFACTS.some((re) => re.test(r)) || AUDIT_TRAIL.some((re) => re.test(r));

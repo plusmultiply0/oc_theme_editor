@@ -48,7 +48,7 @@ const RESULT = path.join(__dirname, 'post-restore-health.json');
   function finish() {
     const payload = {
       ranAt: new Date().toISOString(),
-      target: TARGET,
+      target: `事故安装 resources/app.asar（${hash.slice(0, 8)}…）`,
       checks,
       failed: checks.filter((c) => !c.ok).length,
       total: checks.length,

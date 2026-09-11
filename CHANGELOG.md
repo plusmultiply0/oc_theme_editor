@@ -4,6 +4,25 @@
 
 ## 未发布（当前）
 
+### 背景图片不显示：四项渲染/门禁缺陷（2026-09-12 第五轮）
+
+依据 `handoff/background-incident-2026-09-12/BACKGROUND_FIX_PLAN.md`，每项一个提交：
+
+- **F1**（`525d072`）：官方启动后把 `style#oc-theme`（普通 `:root`）append 到 head，
+  位置在助手样式表之后，同特异性下把助手的半透明变量盖成实色，图片加载成功却被挡住。
+  token 声明改用 `html:root`（0,1,1）；同步纠正两处「最后加载即可覆盖」的错误注释。
+- **F2**（`3a3621d`）：`--background-stronger` 改为跟随面板透明度；
+  大面积 NewLayout 外壳（限定选择器）不再额外叠一层底色。
+- **F3**（`c4a04af`）：去掉「HTML 必须变化」的门禁（injectLink 本就幂等，换图时 HTML 不该变），
+  改为结构性校验 `verifyStagedHtml`：链接唯一、href 正确、在 head 内、标记唯一。
+- **F4**（`216e01e`）：区分局部层 alpha（CSS/预览）与从图片起的累计 alpha（报告），
+  修掉气泡层把累计值当局部值画导致的 1-(1-p)³ 重复计算。
+
+新增 `tests/e2e/background-cascade.spec.ts`（8 项，含像素级可见性与累计 alpha 实测）、
+`tests/integration/stage-idempotence.test.ts`（9 项）、`tests/unit/surfaces.test.ts`（6 项）。
+验证：typecheck 0 / lint 0 / 单元+集成 205 项 / 真实窗口 e2e 16 项 / 真实 Electron 主进程 35 项。
+**未做真机应用**（需授权），`release4/` 不含本次修复。
+
 ### 按 P0 审查报告 R1–R8 的修复（2026-09-11 第三轮）
 
 审查报告见 `handoff/review-2026-09-11/REVIEW.md`。本轮按「先修识别 → 修备份语义与旧主题冲突 →

@@ -20,7 +20,7 @@ import { listAsarFiles, readAsar, readAsarText } from '../../src/core/patch/asar
 const dirs: string[] = [];
 
 function tmp(prefix: string): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-pack-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), `ots-pack-${prefix}-`));
   dirs.push(d);
   return d;
 }
@@ -89,7 +89,7 @@ async function packAndRead(
   entriesToRead: string[],
 ): Promise<Map<string, string>> {
   const files: { path: string; unpacked: boolean }[] = [];
-  (function walk(current: string, _prefix: string) {
+  (function walk(current: string, prefix: string) {
     for (const e of fs.readdirSync(current, { withFileTypes: true })) {
       const rel = prefix ? `${prefix}/${e.name}` : e.name;
       if (e.isDirectory()) {

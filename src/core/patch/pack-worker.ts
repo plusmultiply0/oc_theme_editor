@@ -64,6 +64,7 @@ async function run(job: PackJob): Promise<void> {
 
   // 先加载依赖再关 asar 解释：打包后的 worker 自身就在 app.asar 里，
   // 加载模块仍需要 asar 支持；关掉之后本进程只做物理文件读写。
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- worker 是 CJS 入口，必须用 require 解析 app.asar 内的依赖
   const { createPackageFromStreams } = require('@electron/asar') as {
     createPackageFromStreams: (dest: string, streams: unknown[]) => Promise<void>;
   };

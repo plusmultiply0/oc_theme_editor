@@ -303,3 +303,77 @@
   下一次应用的确认框会列明会撤下的旧主题层；确认后即可回到单一主题层。
 - 干净环境启动验证（T65）。
 - 出厂指纹登记（可选）：按 `docs/original-evidence.md` 补录后「恢复原版」入口才会出现。
+
+## 事故修复：OpenCode 换肤后无法启动（2026-09-11，按 handoff/startup-incident-2026-09-11/RECOVERY_AND_FIX.md）
+
+每修一项提交一次。全程只做真机只读取证，**未对真实安装做任何写入**；
+恢复脚本 Recover-OpenCode.ps1 的 -Apply 需要 jc 明确授权后才执行。
+
+### F1 打包内容来源（commit a77f7d6、4dac142）
+
+- 根因在源码级确认：`@electron/asar` 的 `Filesystem.insertFile` 对 ≤2MB 文件走同步快路径，
+  `fs.readFileSync(归档内逻辑路径)` 相对打包进程 cwd 解析。
+- 修复：新增 `pack-worker.ts` + `pack.ts`，打包隔离到专用工作进程，cwd 固定为解包根目录；
+  主进程绝不临时 chdir。Electron 下走 `utilityProcess.fork`，普通 Node 走 `child_process.fork`。
+- 回归 7 项：两个不同版本的 jsonfile（2838/2014 字节）重打包后各自完整；
+  去重方向对调、同长度不同内容、内容相同的合法去重；仓库根 cwd（真实同名 node_modules）
+  下运行不再被污染；派生真实工作进程结果一致；事故复现脚本仍复现依赖库缺陷
+  （证明修复靠隔离 cwd，不是改第三方库）。
+- `pack-worker.ts` 纳入 tsconfig.node.json include；`npm run verify` 调整为先 build 再集成。
+
+### 独立缺陷：noAsar 异步窗口（commit 7eb2764）
+
+- 旧实现 `try { return fn() } finally { 恢复 }` 在 fn 返回 Promise 时立刻恢复，
+  异步期间 I/O 不受保护。改为 `await fn()`，窗口覆盖整个异步过程；嵌套调用不排队。
+- 新增 6 项状态机测试：await 期间为 true、抛错恢复、并发串行化、
+  外层本开则还原为开、嵌套不死锁、toggle=false 不碰进程开关。
+
+### F2 提交前不可变校验硬门禁（commit ef4fac8）
+
+- 新增 `archive-verify.ts`，三层互相独立的检查，任一失败都不进入 committing：
+  1. `verifyIntegrity` 逐条按头部完整性字段核对（整体 hash + 4MB 分块）+ 条目边界；
+  2. `findSharedOffsetConflicts` 共享 offset 必须同内容同长度（事故的直接形态）；
+  3. `checkScripts` 非白名单 .js/.json 按各自语义解析
+     （CJS 用 vm.Script，ESM 用 SourceTextModule、不支持就如实跳过并计数）。
+- 基线：首次接管时把当时的非白名单条目基线写进备份目录，之后每次应用逐条比对；
+  白名单条目不进基线。
+- `verifyPackedResult`：重打包结果用独立读取器逐条核对（完整性、共享 offset、
+  unpacked 集合、条目集合、非白名单与基线一致、白名单等于预期新内容）。
+- 新增错误码 `ARCHIVE_CORRUPT` / `ARCHIVE_VERIFY_FAILED`，错误信息列出具体路径。
+- 新增 13 项回归，包括事故形态「截断 CJS 且 hash 自洽 —— 完整性自检绿灯但解析拦下」
+  与端到端「损坏输入不能走到 applied 且目标 hash 不变」。
+- 顺带修正 `scanArchive` 对 ASAR 头部布局的解析
+  （[u32=4][u32=头 pickle 大小][u32=载荷长度][u32=JSON 长度][JSON]）。
+
+### F3 备份健康标记（commit 832f30e）
+
+- 备份记录新增 `health`（known-healthy / unverified / known-bad），旧记录迁移补齐。
+- `verifyBackupHealth` 对备份归档本身跑完整性 + 脚本解析并写回元数据。
+- restore 在写安装前查健康度：known-bad 一律拒绝（新错误码 `BACKUP_UNHEALTHY`）。
+- apply 在硬门禁通过后把两份新备份如实标记为 known-healthy。
+- 恢复面板按健康状态展示，known-bad 的条目不显示恢复按钮并说明原因。
+- 新增 3 项回归。
+
+### F4 重新验收（commit a214ed6）
+
+真实 Electron 验收抓到两处新问题并当场修正：
+1. `archive-verify.ts` 最初用了被包装的 `node:fs`，`.asar` 路径被当虚拟目录直接 ENOENT
+   （与事故 R1 同源）→ 全部切到 physical-fs。
+2. `utilityProcess` 子进程没有 `process.send`，用的是 `process.parentPort`；
+   worker 入口守卫此前把它当成「被直接执行」而以 code=2 退出 → 兼容两种通道。
+
+**最终验收结果**：
+- 真实 Electron 主进程（utilityProcess 打包 + 三层门禁 + 基线比对 + 恢复闭环）：**35/35**
+- Playwright 真实窗口闭环：**8/8**
+- 单元 + 集成：**186/186**
+- `npm run lint` 0、`npm run audit` FAIL 0
+
+### F0 / F4 待 jc
+
+- **恢复安装**：`Recover-OpenCode.ps1 -Apply` 需要明确授权。恢复候选是 10:15 的首次接管前快照
+  （`1c53ca…`，jsonfile 语法通过），不是出厂原版。
+- 修复后的工具对当前损坏安装的行为：三层门禁会拒绝应用
+  （与首次接管基线不一致：jsonfile 被截断、semver/range.bnf 不同），
+  界面会给出「请先用恢复入口回到接管时的状态」。这是有意为之的 F0 冻结。
+- `release3/` 是事故前的构建，**已过期**；重新发布前必须 `npm run dist` 重建，
+  并用 `npm run verify:package` 重新核对。

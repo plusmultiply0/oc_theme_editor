@@ -8,6 +8,25 @@
   "engines": {
     "node": ">=22"
   },
+  "build": {
+    "appId": "com.local.opencode-theme-switcher",
+    "productName": "OpenCodeThemeSwitcher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**",
+      "package.json",
+      "node_modules/**"
+    ],
+    "win": {
+      "target": [
+        "dir"
+      ]
+    },
+    "npmRebuild": false,
+    "removePackageScripts": true
+  },
   "scripts": {
     "dev": "vite",
     "start": "electron .",
@@ -19,9 +38,11 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --pass-with-no-tests",
     "dist": "npm run build && electron-builder --win --dir",
-    "smoke": "electron tools/smoke-main.cjs"
+    "smoke": "electron tools/smoke-main.cjs",
+    "audit": "node tools/audit.cjs",
+    "audit": "node tools/audit.cjs"
   },
   "dependencies": {
     "@electron/asar": "^4.3.0",

@@ -169,6 +169,28 @@
 - 未执行：真实安装的应用/恢复（需授权）、GUI 实机走查、E2E。
 - 下一任务：P5（T60–T65）集成、真实验收与便携包。
 
+## P5a：集成检查、合规审计与便携包（T60、T61、T65 部分）
+
+- 任务 ID：T60 命令与退出码、T61 合规审计、T65 便携包构建与产物核对。
+- 完成状态：T60 / T61 / T65 的构建与产物核对已完成；T62–T64 真实安装验收**未执行**（需授权）；T65 的干净环境启动验证**未执行**。
+- 改动文件：
+  - 新增 `tools/audit.cjs` + `npm run audit`：路径/用户名、凭证、产物泄漏、依赖许可、IPC 三处一致五项检查，退出码非 0 即阻断
+  - 新增 `docs/acceptance.md`：记录命令、退出码、审计结论、便携包核对与未执行项
+  - 新增 `playwright.config.ts` + `tests/e2e/README.md`：`test:e2e` 限定目录并加 `--pass-with-no-tests`，避免它跑去执行 vitest 用例；README 写明 E2E 未实现及补法
+  - 修改 `package.json`：新增 `audit` / `smoke` 脚本、`build`（electron-builder）配置；`test:e2e` 加 `--pass-with-no-tests`
+  - 修改 `.gitignore`：忽略 `test-results/`、`playwright-report/`
+- 命令与退出码（逐条实跑）：`typecheck` 0、`lint` 0、`test:unit` 0（4 文件 76 项）、`test:integration` 0（3 文件 44 项）、`test:e2e` 0（**0 用例**）、`build` 0、`audit` 0、`dist` 0。
+- 关键发现：
+  1. `npm run dist` 直连 GitHub 会 `ETIMEDOUT`（20.205.243.166:443）。改用 npmmirror 的 electron 与 electron-builder-binaries 镜像后构建成功。**默认命令在净网环境会失败**，CI 或换机器时要带上镜像变量。
+  2. 便携包 `resources/app.asar` 952 个条目，顶层只有 `out/`、`node_modules/`、`package.json`，源码/测试/旧原型都没进包，检索 `zjcfile`、`作者用户名` 命中 0。
+  3. `playwright test` 默认会把 vitest 的 `*.test.ts` 也当用例执行并报「Vitest cannot be imported in a CommonJS module」，必须限定 `testDir`。
+- 已知问题 / 边界：
+  - 便携包 **未签名**，不得对外声称已签名；体积 326 MB（dir 目标，未压缩）。
+  - 干净环境启动验证未做；本环境无法启动 Electron 窗口（同 P4b 的原因）。
+  - E2E 仍为 0 用例，`test:e2e` 退出码 0 只代表「没有用例」。
+- 未执行：T62 合成/真实安装验收流程、T63 真实应用与观察、T64 真实界面走查、T65 干净环境启动。
+- 下一任务：T62–T64（需 jc 授权）→ P6（T70–T74 交付材料）。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

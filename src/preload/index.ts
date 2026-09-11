@@ -8,6 +8,8 @@ import type { ThemeSwitcherApi } from '../shared/ipc';
 const api: ThemeSwitcherApi = {
   pickImage: () => ipcRenderer.invoke('pickImage'),
   importImage: (imageId) => ipcRenderer.invoke('importImage', imageId),
+  getImagePreview: (imageId) => ipcRenderer.invoke('getImagePreview', imageId),
+  importImageData: (input) => ipcRenderer.invoke('importImageData', input),
   generateTheme: (input) => ipcRenderer.invoke('generateTheme', input),
   analyzeContrast: (input) => ipcRenderer.invoke('analyzeContrast', input),
   discoverTargets: () => ipcRenderer.invoke('discoverTargets'),

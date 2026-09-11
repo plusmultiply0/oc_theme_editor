@@ -140,6 +140,35 @@
 - 未执行：GUI 九类状态与 E2E（P4b）、真实安装应用（需授权）。
 - 下一任务：P4b（T51、T52、T54 界面、T55 恢复界面、T56 键盘/焦点/缩放）。
 
+## P4b：桌面界面与联调（T50–T56）
+
+- 任务 ID：T50 主布局、T51 九类状态、T52 交互、T53 预览同源、T54 应用确认、T55 恢复语义、T56 键盘/焦点/缩放/减少透明度/外链。
+- 完成状态：代码与构建完成；**GUI 未在真实窗口里跑过（本环境无法启动 Electron 窗口），E2E 未执行**。
+- 改动文件：
+  - 新增 `src/renderer/logic.ts`：默认/重置/夹紧参数、错误状态归类、应用按钮可用条件、九类界面状态（纯函数，可单测）
+  - 新增 `src/renderer/components/Preview.tsx`、`ContrastPanel.tsx`、`ApplyDialog.tsx`、`RestorePanel.tsx`
+  - 重写 `src/renderer/App.tsx`：三栏布局、九类状态机、拖拽导入、参数防抖重算、应用确认、恢复面板、缩放、减少透明度
+  - 重写 `src/renderer/styles.css`：浅色蓝白、rem 布局，72rem 以下改纵向堆叠
+  - 新增 `getImagePreview` 与 `importImageData` 两个 IPC 通道：预览只给工具自己生成的缩略图 data URL；拖拽只接收文件**内容与文件名**，renderer 始终拿不到路径
+  - 新增 `tests/unit/ui-logic.test.ts`（18 项）、`tests/integration/main-services.test.ts` 补 1 项拖拽导入
+  - 新增 `tools/smoke-main.cjs` + `npm run smoke`：在真实 Electron 主进程里装配服务做只读识别（需手动运行）
+- 测试命令与退出码：
+  - `npx tsc --noEmit` → 0
+  - `npx eslint .` → 0
+  - `npx vitest run` → 0，7 文件 / 120 项全部通过（新增 19 项）
+  - `npm run build` → 0
+- 本轮设计决策：
+  1. **拖拽不走文件路径**。Electron 的拖入 `File` 带 `.path`，但契约规定 renderer 不得传路径；改为 renderer 读成 `Uint8Array` 传给主进程，主进程落一份副本到运行数据目录后再走同一条导入管线。
+  2. **失败必须说清安装有没有被改**。`errorScope()` 把错误码映射到「未修改 / 可能已修改 / 无法判定」，并为 ERROR_CODES 全量写了归类测试，避免新增错误码时漏掉。
+  3. **可读性不合格在准备阶段就拦住**（`stage` 内检查 `report.passed`），界面只是提前把按钮置灰并给出可行动原因。
+- 已知问题 / 边界：
+  - **GUI 未运行验证**：本会话环境里 `ELECTRON_RUN_AS_NODE=1`，带此变量时 `require('electron')` 返回路径字符串、主进程不启动；去掉后 Electron 作为 GUI 子系统进程启动，stdout 不回传终端，脚本无输出。因此窗口、系统选择框、真实渲染均**未验证**，只验证了纯逻辑与服务层。
+  - **E2E（T56 验收要求）未执行**：Playwright 对 Electron 的支持在本项目未搭建；界面交互目前只有纯逻辑单测覆盖。
+  - 参数与缩放存 `localStorage`，写入失败会在状态栏提示（保存失败路径本身未自动化验证）。
+  - 「减少透明度」默认跟随系统 `prefers-reduced-transparency`，未匹配到时为 false。
+- 未执行：真实安装的应用/恢复（需授权）、GUI 实机走查、E2E。
+- 下一任务：P5（T60–T65）集成、真实验收与便携包。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

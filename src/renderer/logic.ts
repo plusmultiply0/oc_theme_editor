@@ -1,0 +1,145 @@
+/**
+ * 界面纯逻辑（不碰 DOM，便于单测）。
+ * 放在这里是为了让「状态判定」这类容易写错的规则可以被测试覆盖，
+ * 而不是埋在组件里靠肉眼看。
+ */
+import type { ErrorCode } from '../shared/errors';
+import type { ThemeSpec } from '../shared/schema';
+
+export const DEFAULT_SPEC: Omit<ThemeSpec, 'imageId'> = {
+  schemaVersion: 1,
+  mode: 'auto',
+  palette: ['#404558', '#787e9f', '#a0a7c9'],
+  overlayOpacity: 0.35,
+  panelOpacity: 0.86,
+  blurPx: 0,
+  backgroundPosition: 'cover',
+};
+
+export function makeSpec(imageId = ''): ThemeSpec {
+  return { ...DEFAULT_SPEC, imageId };
+}
+
+/** 重置参数但保留当前图片 */
+export function resetSpec(spec: ThemeSpec): ThemeSpec {
+  return { ...DEFAULT_SPEC, imageId: spec.imageId };
+}
+
+/** 界面滑杆可能给出越界值，回写前统一夹紧到 schema 允许的范围 */
+export function clampSpec(spec: ThemeSpec): ThemeSpec {
+  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  return {
+    ...spec,
+    overlayOpacity: clamp(spec.overlayOpacity, 0, 1),
+    panelOpacity: clamp(spec.panelOpacity, 0, 1),
+    blurPx: clamp(Math.round(spec.blurPx), 0, 20),
+  };
+}
+
+/**
+ * 失败时安装处于什么状态。这句话必须由工具说清楚，
+ * 不能只丢一个堆栈给用户（T55）。
+ */
+export type ErrorScope = 'unmodified' | 'maybe-modified' | 'unknown';
+
+const UNMODIFIED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  'IMAGE_NOT_FOUND',
+  'IMAGE_INVALID_FORMAT',
+  'IMAGE_DECODE_FAILED',
+  'IMAGE_TOO_LARGE',
+  'IMAGE_UNCHANGED',
+  'TARGET_NOT_FOUND',
+  'TARGET_AMBIGUOUS',
+  'TARGET_UNSUPPORTED',
+  'TARGET_RUNNING',
+  'TARGET_VERSION_MISMATCH',
+  'TARGET_SIGNATURE_PROTECTED',
+  'PERMISSION_DENIED',
+  'DISK_FULL',
+  'FILE_LOCKED',
+  'TRANSACTION_IN_PROGRESS',
+  'STAGE_FAILED',
+  'BACKUP_FAILED',
+  'BACKUP_HASH_MISMATCH',
+  'BACKUP_MISSING',
+  'CONTRAST_BELOW_TARGET',
+  'THEME_GENERATION_FAILED',
+  'INVALID_PARAMS',
+]);
+
+const MODIFIED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  'NEEDS_RECOVERY',
+  'ROLLBACK_FAILED',
+  'TARGET_HASH_MISMATCH',
+]);
+
+export function errorScope(code: ErrorCode): ErrorScope {
+  if (UNMODIFIED.has(code)) return 'unmodified';
+  if (MODIFIED.has(code)) return 'maybe-modified';
+  return 'unknown';
+}
+
+export function scopeText(scope: ErrorScope): string {
+  if (scope === 'unmodified') return '安装未被修改，可以放心重试。';
+  if (scope === 'maybe-modified') return '安装可能已被修改，请不要手动替换文件。';
+  return '安装状态无法自动判定，请先不要对该安装做任何改动。';
+}
+
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0 B';
+  const mb = n / 1024 / 1024;
+  if (mb >= 1) return `${mb.toFixed(0)} MB`;
+  return `${(n / 1024).toFixed(0)} KB`;
+}
+
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (v: number) => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** 九类界面状态（T51） */
+export type UiState =
+  | { kind: 'empty' }
+  | { kind: 'analyzing' }
+  | { kind: 'ready' }
+  | { kind: 'staging' }
+  | { kind: 'confirming' }
+  | { kind: 'applying'; phase: string; percent?: number }
+  | { kind: 'success'; message: string }
+  | { kind: 'error'; message: string; hint: string; scope: ErrorScope }
+  | { kind: 'needsRecovery'; message: string; hint: string };
+
+export function isBusy(state: UiState): boolean {
+  return state.kind === 'analyzing' || state.kind === 'staging' || state.kind === 'applying';
+}
+
+/** 应用按钮的可用条件：有图、有目标、目标已验证、报告通过、且当前不在忙（T54） */
+export function canStage(args: {
+  hasImage: boolean;
+  hasPreview: boolean;
+  targetSupported: boolean;
+  reportPassed: boolean;
+  busy: boolean;
+}): boolean {
+  return (
+    args.hasImage &&
+    args.hasPreview &&
+    args.targetSupported &&
+    args.reportPassed &&
+    !args.busy
+  );
+}
+
+export function blockedReason(args: {
+  hasImage: boolean;
+  hasPreview: boolean;
+  targetSupported: boolean;
+  reportPassed: boolean;
+}): string | null {
+  if (!args.hasImage || !args.hasPreview) return '请先选择图片并等待配色生成完成。';
+  if (!args.targetSupported) return '当前没有已验证的目标，只能预览，不能应用。';
+  if (!args.reportPassed) return '存在未达标的可读性项，请先调高遮罩或面板不透明度。';
+  return null;
+}

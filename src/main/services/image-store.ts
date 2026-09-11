@@ -109,6 +109,44 @@ export class ImageStore {
     return ok({ imageId: record.imageId, fileName: record.fileName, byteSize: record.byteSize });
   }
 
+  /**
+   * 拖拽导入：renderer 只交出文件内容和文件名，不交出路径（T52）。
+   * 内容落在运行数据目录，后续读取与预览都走这条副本，原文件不再被引用。
+   */
+  async importData(fileName: string, data: Uint8Array): Promise<Result<ImportedImage>> {
+    const ext = path.extname(fileName).toLowerCase();
+    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+      return fail(
+        'IMAGE_INVALID_FORMAT',
+        `不支持的文件类型 ${ext || '（无扩展名）'}`,
+        `请拖入 ${ALLOWED_EXTENSIONS.join('、')} 格式的图片。`,
+      );
+    }
+    if (data.byteLength > this.limits.maxBytes) {
+      const mb = (this.limits.maxBytes / 1024 / 1024).toFixed(0);
+      return fail(
+        'IMAGE_TOO_LARGE',
+        `图片体积超过限制（${(data.byteLength / 1024 / 1024).toFixed(1)} MiB，上限 ${mb} MiB）`,
+        '请压缩图片或选择更小的文件。',
+      );
+    }
+
+    const imageId = newId('img', this.opts.now);
+    const dir = path.join(this.opts.runtimeRoot, 'imports');
+    await fs.mkdir(dir, { recursive: true });
+    const file = path.join(dir, `${imageId}${ext}`);
+    await fs.writeFile(file, Buffer.from(data));
+
+    this.records.set(imageId, {
+      imageId,
+      path: file,
+      fileName: path.basename(fileName),
+      byteSize: data.byteLength,
+      thumbnailId: newId('thumb', this.opts.now),
+    });
+    return this.import(imageId);
+  }
+
   /** 解码、取色、写缩略图；返回可安全回显给界面的元信息 */
   async import(imageId: string): Promise<Result<ImportedImage>> {
     const record = this.records.get(imageId);
@@ -165,6 +203,29 @@ export class ImageStore {
       return ok(await fs.readFile(record.path));
     } catch (e) {
       return fail('IMAGE_NOT_FOUND', '无法读取该图片', '文件可能已被移动或删除，请重新选择。', String(e));
+    }
+  }
+
+  /**
+   * 界面回显用的缩小副本（data URL）。
+   * 只用工具自己生成的缩略图；即便缩略图没写成功，也在内存里临时缩一张，
+   * 总之不会把原图路径交给 renderer。
+   */
+  async previewDataUrl(imageId: string): Promise<Result<string>> {
+    const record = this.records.get(imageId);
+    if (!record) {
+      return fail('IMAGE_NOT_FOUND', '图片记录已失效', '请重新选择图片。');
+    }
+    try {
+      if (record.thumbnailPath) {
+        const buf = await fs.readFile(record.thumbnailPath);
+        return ok(`data:image/png;base64,${buf.toString('base64')}`);
+      }
+      const original = await fs.readFile(record.path);
+      const buf = await sharp(original).rotate().resize(512, 512, { fit: 'inside' }).png().toBuffer();
+      return ok(`data:image/png;base64,${buf.toString('base64')}`);
+    } catch (e) {
+      return fail('IMAGE_DECODE_FAILED', '无法生成预览图', '图片可能已损坏，请换一张。', String(e));
     }
   }
 

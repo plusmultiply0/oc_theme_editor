@@ -56,6 +56,23 @@ export function registerHandlers(ipcMain: IpcMain, deps: HandlerDeps): void {
     }),
   );
 
+  ipcMain.handle('importImageData', (_e, input: { fileName?: unknown; data?: unknown }) =>
+    wrap(async () => {
+      if (!input || typeof input.fileName !== 'string' || !(input.data instanceof Uint8Array)) {
+        return fail('INVALID_PARAMS', '拖入的内容不是有效的图片', '请拖入 PNG、JPG 或 WebP 文件。');
+      }
+      return deps.images.importData(input.fileName, input.data);
+    }),
+  );
+
+  ipcMain.handle('getImagePreview', (_e, imageId: unknown) =>
+    wrap(async () => {
+      const id = requireString(imageId, '图片标识');
+      if (!id.success) return id;
+      return deps.images.previewDataUrl(id.data);
+    }),
+  );
+
   ipcMain.handle('generateTheme', (_e, input: GenerateThemeInput) =>
     wrap(() => deps.themes.generate(input)),
   );

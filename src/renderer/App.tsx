@@ -1,153 +1,379 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ContrastReport, TargetInfo, ThemeSpec, ThemeTokens } from '../shared/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  AppError,
+  BackupInfo,
+  DiscoveredTargets,
+  GenerateThemeOutput,
+  StageSummary,
+  TargetInfo,
+} from '../shared/types';
+import type { ThemeSpec } from '../shared/schema';
+import Preview from './components/Preview';
+import ContrastPanel from './components/ContrastPanel';
+import ApplyDialog from './components/ApplyDialog';
+import RestorePanel from './components/RestorePanel';
+import {
+  blockedReason,
+  canStage,
+  clampSpec,
+  errorScope,
+  formatDateTime,
+  isBusy,
+  makeSpec,
+  resetSpec,
+  scopeText,
+  type UiState,
+} from './logic';
 
-const initialSpec: ThemeSpec = {
-  schemaVersion: 1,
-  imageId: '',
-  mode: 'auto',
-  palette: ['#404558', '#787e9f', '#a0a7c9'],
-  overlayOpacity: 0.35,
-  panelOpacity: 0.86,
-  blurPx: 0,
-  backgroundPosition: 'cover',
-};
+const SPEC_KEY = 'ots.theme-spec';
+const SCALE_KEY = 'ots.ui-scale';
 
-type Status = { kind: 'idle' | 'busy' | 'ok' | 'error'; text: string };
+const SCALES = [
+  { label: '100%', value: 100 },
+  { label: '125%', value: 125 },
+  { label: '150%', value: 150 },
+] as const;
+
+function loadSpec(): ThemeSpec {
+  try {
+    const raw = localStorage.getItem(SPEC_KEY);
+    if (!raw) return makeSpec('');
+    const parsed = JSON.parse(raw) as ThemeSpec;
+    return clampSpec({ ...makeSpec(''), ...parsed, imageId: '' });
+  } catch {
+    return makeSpec('');
+  }
+}
+
+function saveSpec(spec: ThemeSpec): boolean {
+  try {
+    localStorage.setItem(SPEC_KEY, JSON.stringify(spec));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadScale(): number {
+  try {
+    const v = Number(localStorage.getItem(SCALE_KEY));
+    return SCALES.some((s) => s.value === v) ? v : 100;
+  } catch {
+    return 100;
+  }
+}
+
+function detectReducedTransparency(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
 
 export default function App() {
-  const [spec, setSpec] = useState<ThemeSpec>(initialSpec);
-  const [tokens, setTokens] = useState<ThemeTokens | null>(null);
-  const [report, setReport] = useState<ContrastReport | null>(null);
-  const [targets, setTargets] = useState<TargetInfo[]>([]);
-  const [status, setStatus] = useState<Status>({ kind: 'idle', text: '请选择一张本地图片开始。' });
+  const [spec, setSpec] = useState<ThemeSpec>(loadSpec);
+  const [imageName, setImageName] = useState<string>('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [result, setResult] = useState<GenerateThemeOutput | null>(null);
+  const [discovered, setDiscovered] = useState<DiscoveredTargets | null>(null);
+  const [targetId, setTargetId] = useState<string>('');
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [ui, setUi] = useState<UiState>({ kind: 'empty' });
+  const [summary, setSummary] = useState<StageSummary | null>(null);
+  const [scale, setScale] = useState<number>(loadScale);
+  const [reducedTransparency, setReducedTransparency] = useState<boolean>(detectReducedTransparency);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const genRef = useRef(0);
 
-  // 首次加载拉取目标列表；真实识别在 P3 实现（T50）
+  const targets = useMemo(() => discovered?.targets ?? [], [discovered]);
+  const target: TargetInfo | undefined = useMemo(
+    () => targets.find((t) => t.targetId === targetId) ?? targets[0],
+    [targets, targetId],
+  );
+  const targetSupported = target?.support === 'supported';
+  const reportPassed = result?.report.passed ?? false;
+
+  // 缩放：改根字号，布局用 rem，125% / 150% 下不裁切（T56）
   useEffect(() => {
-    void window.themeSwitcher.discoverTargets().then((r) => {
-      if (r.success) setTargets(r.data.targets);
-      else setStatus({ kind: 'error', text: `${r.error.message}｜${r.error.recoveryHint}` });
+    document.documentElement.style.fontSize = `${(16 * scale) / 100}px`;
+    try {
+      localStorage.setItem(SCALE_KEY, String(scale));
+    } catch {
+      setNotice('界面缩放未能保存，下次启动会回到 100%。');
+    }
+  }, [scale]);
+
+  const fail = useCallback((error: AppError) => {
+    const scope = errorScope(error.code);
+    setUi(
+      error.code === 'NEEDS_RECOVERY'
+        ? { kind: 'needsRecovery', message: error.message, hint: error.recoveryHint }
+        : { kind: 'error', message: error.message, hint: error.recoveryHint, scope },
+    );
+  }, []);
+
+  const refreshTargets = useCallback(async () => {
+    const r = await window.themeSwitcher.discoverTargets();
+    if (!r.success) {
+      fail(r.error);
+      return;
+    }
+    setDiscovered(r.data);
+    const first = r.data.targets.find((t) => t.support === 'supported') ?? r.data.targets[0];
+    if (first) setTargetId((prev) => prev || first.targetId);
+  }, [fail]);
+
+  const refreshBackups = useCallback(async (id: string) => {
+    if (!id) return;
+    const r = await window.themeSwitcher.listBackups(id);
+    if (r.success) setBackups(r.data);
+  }, []);
+
+  useEffect(() => {
+    void refreshTargets();
+  }, [refreshTargets]);
+
+  useEffect(() => {
+    void refreshBackups(target?.targetId ?? '');
+  }, [target?.targetId, refreshBackups]);
+
+  // 进度事件（T15）
+  useEffect(() => {
+    return window.themeSwitcher.onOperationEvent((e) => {
+      setUi((prev) =>
+        prev.kind === 'applying'
+          ? { kind: 'applying', phase: e.message, ...(e.percent === undefined ? {} : { percent: e.percent }) }
+          : prev,
+      );
     });
   }, []);
 
+  const generate = useCallback(
+    async (next: ThemeSpec, imageId: string) => {
+      if (!imageId) {
+        setResult(null);
+        setUi({ kind: 'empty' });
+        return;
+      }
+      const my = genRef.current + 1;
+      genRef.current = my;
+      setUi({ kind: 'analyzing' });
+      const r = await window.themeSwitcher.generateTheme({ imageId, spec: next });
+      if (my !== genRef.current) return; // 旧结果不得覆盖新图（T52）
+      if (!r.success) {
+        fail(r.error);
+        return;
+      }
+      setResult(r.data);
+      setUi({ kind: 'ready' });
+    },
+    [fail],
+  );
+
+  // 参数变化后自动重算；250ms 防抖，滑杆拖动不会每像素打一次 IPC
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void generate(clampSpec(spec), spec.imageId);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [spec, generate]);
+
+  const adoptImage = useCallback(
+    async (imported: { imageId: string; fileName?: string }) => {
+      const next = { ...spec, imageId: imported.imageId };
+      setSpec(next);
+      if (imported.fileName) setImageName(imported.fileName);
+      if (!saveSpec(next)) setNotice('参数未能保存到本机，下次启动会回到默认值。');
+      const url = await window.themeSwitcher.getImagePreview(imported.imageId);
+      if (url.success) setPreviewUrl(url.data);
+      else setPreviewUrl(null);
+    },
+    [spec],
+  );
+
   const pickImage = useCallback(async () => {
-    setStatus({ kind: 'busy', text: '正在选择图片…' });
+    setUi({ kind: 'analyzing' });
     const picked = await window.themeSwitcher.pickImage();
     if (!picked.success) {
-      setStatus({ kind: 'error', text: `${picked.error.message}｜${picked.error.recoveryHint}` });
+      if (picked.error.code === 'IMAGE_NOT_FOUND') {
+        setUi({ kind: result ? 'ready' : 'empty' });
+        return;
+      }
+      fail(picked.error);
       return;
     }
     const imported = await window.themeSwitcher.importImage(picked.data.imageId);
     if (!imported.success) {
-      setStatus({ kind: 'error', text: `${imported.error.message}｜${imported.error.recoveryHint}` });
+      fail(imported.error);
       return;
     }
-    const next: ThemeSpec = { ...spec, imageId: imported.data.imageId };
-    setSpec(next);
-    setStatus({ kind: 'ok', text: `已导入 ${picked.data.fileName}（${imported.data.width}×${imported.data.height}），原图只读。` });
-  }, [spec]);
+    await adoptImage({ imageId: imported.data.imageId, fileName: picked.data.fileName });
+  }, [adoptImage, fail, result]);
 
-  const generate = useCallback(async () => {
-    if (!spec.imageId) {
-      setStatus({ kind: 'error', text: '尚未选择图片。｜请先点击「选择图片」。' });
-      return;
-    }
-    setStatus({ kind: 'busy', text: '正在提取配色…' });
-    const theme = await window.themeSwitcher.generateTheme({ imageId: spec.imageId, spec });
-    if (!theme.success) {
-      setStatus({ kind: 'error', text: `${theme.error.message}｜${theme.error.recoveryHint}` });
-      return;
-    }
-    setTokens(theme.data.tokens);
-    const contrast = await window.themeSwitcher.analyzeContrast({
-      imageId: spec.imageId,
-      spec,
-      tokens: theme.data.tokens,
+  const onDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+      setUi({ kind: 'analyzing' });
+      const data = new Uint8Array(await file.arrayBuffer());
+      const imported = await window.themeSwitcher.importImageData({ fileName: file.name, data });
+      if (!imported.success) {
+        fail(imported.error);
+        return;
+      }
+      // 用新图的代表色替换旧色板，避免旧图参数残留
+      const next: ThemeSpec = { ...spec, imageId: imported.data.imageId, palette: imported.data.palette };
+      setSpec(next);
+      setImageName(file.name);
+      if (!saveSpec(next)) setNotice('参数未能保存到本机，下次启动会回到默认值。');
+      const url = await window.themeSwitcher.getImagePreview(imported.data.imageId);
+      setPreviewUrl(url.success ? url.data : null);
+    },
+    [fail, spec],
+  );
+
+  const updateSpec = useCallback((patch: Partial<ThemeSpec>) => {
+    setSpec((prev) => {
+      const next = clampSpec({ ...prev, ...patch });
+      if (!saveSpec(next)) setNotice('参数未能保存到本机，下次启动会回到默认值。');
+      return next;
     });
-    if (contrast.success) setReport(contrast.data);
-    setStatus({ kind: 'ok', text: '配色已生成。' });
-  }, [spec]);
+  }, []);
 
-  const apply = useCallback(async () => {
-    const target = targets[0];
-    if (!target) {
-      setStatus({ kind: 'error', text: '未发现可用目标。｜请确认 OpenCode 已安装。' });
-      return;
-    }
-    setStatus({ kind: 'busy', text: '正在准备应用…' });
-    const staged = await window.themeSwitcher.stageTheme({
+  const stage = useCallback(async () => {
+    if (!target) return;
+    const can = canStage({
+      hasImage: Boolean(spec.imageId),
+      hasPreview: Boolean(result),
+      targetSupported,
+      reportPassed,
+      busy: isBusy(ui),
+    });
+    if (!can) return;
+    setUi({ kind: 'staging' });
+    const r = await window.themeSwitcher.stageTheme({
       targetId: target.targetId,
       imageId: spec.imageId,
       spec,
     });
-    if (!staged.success) {
-      setStatus({ kind: 'error', text: `${staged.error.message}｜${staged.error.recoveryHint}` });
+    if (!r.success) {
+      fail(r.error);
       return;
     }
-    const applied = await window.themeSwitcher.applyTheme({ operationId: staged.data.operationId });
-    if (!applied.success) {
-      setStatus({ kind: 'error', text: `${applied.error.message}｜${applied.error.recoveryHint}` });
+    setSummary(r.data.summary);
+    setUi({ kind: 'confirming' });
+  }, [fail, reportPassed, result, spec, target, targetSupported, ui]);
+
+  const apply = useCallback(async () => {
+    if (!summary) return;
+    setUi({ kind: 'applying', phase: '正在写入应用资源…' });
+    const r = await window.themeSwitcher.applyTheme({ operationId: summary.operationId });
+    setSummary(null);
+    if (!r.success) {
+      fail(r.error);
       return;
     }
-    setStatus({ kind: 'ok', text: '主题已应用。' });
-  }, [spec, targets]);
+    setUi({ kind: 'success', message: `已应用（${formatDateTime(r.data.createdAt)}）。请重新启动 OpenCode 查看效果。` });
+    await refreshBackups(target?.targetId ?? '');
+  }, [fail, refreshBackups, summary, target?.targetId]);
 
-  const restore = useCallback(async () => {
-    const target = targets[0];
-    if (!target) return;
-    setStatus({ kind: 'busy', text: '正在恢复…' });
-    const r = await window.themeSwitcher.restoreTheme({ targetId: target.targetId, kind: 'previous' });
-    setStatus(
-      r.success
-        ? { kind: 'ok', text: '已恢复。' }
-        : { kind: 'error', text: `${r.error.message}｜${r.error.recoveryHint}` },
-    );
-  }, [targets]);
+  const restore = useCallback(
+    async (kind: 'original' | 'previous') => {
+      if (!target) return;
+      setUi({ kind: 'applying', phase: '正在恢复…' });
+      const r = await window.themeSwitcher.restoreTheme({ targetId: target.targetId, kind });
+      if (!r.success) {
+        fail(r.error);
+        return;
+      }
+      setUi({
+        kind: 'success',
+        message: kind === 'original' ? '已恢复原版。' : '已恢复上一主题。',
+      });
+      await refreshBackups(target.targetId);
+    },
+    [fail, refreshBackups, target],
+  );
 
-  const target = targets[0];
+  const blocked = blockedReason({
+    hasImage: Boolean(spec.imageId),
+    hasPreview: Boolean(result),
+    targetSupported,
+    reportPassed,
+  });
 
   return (
-    <div className="app" style={tokens ? ({
-      '--ts-background': tokens.background,
-      '--ts-panel': tokens.panel,
-      '--ts-text': tokens.text,
-      '--ts-muted': tokens.muted,
-      '--ts-primary': tokens.primary,
-      '--ts-on-primary': tokens.onPrimary,
-      '--ts-border': tokens.border,
-    } as React.CSSProperties) : undefined}>
+    <div className="app">
       <header className="topbar">
         <div>
           <h1>OpenCode 换肤助手</h1>
           <p className="sub">本地运行 · 不联网 · 不上传图片</p>
         </div>
-        <div className="target">
-          {target ? (
-            <>
-              <span className={`badge ${target.support}`}>{target.support}</span>
-              <span className="mono">{target.version}</span>
-              {target.rejectReason ? <span className="reason">{target.rejectReason}</span> : null}
-            </>
-          ) : (
-            <span className="muted">未发现目标</span>
-          )}
+
+        <div className="topbar-right">
+          <div className="scale" role="group" aria-label="界面缩放">
+            {SCALES.map((s) => (
+              <button
+                key={s.value}
+                className={`btn small ${scale === s.value ? 'active' : ''}`}
+                type="button"
+                aria-pressed={scale === s.value}
+                onClick={() => setScale(s.value)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div className="target">
+            {target ? (
+              <>
+                <span className={`badge ${target.support}`}>{target.support}</span>
+                <span className="mono">{target.version}</span>
+                <span className="muted">{target.installPath}</span>
+                {target.rejectReason ? <span className="reason">{target.rejectReason}</span> : null}
+              </>
+            ) : (
+              <span className="muted">未发现目标</span>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="layout">
         <section className="panel controls">
-          <button className="btn primary" onClick={() => void pickImage()}>
+          <h2>图片与参数</h2>
+
+          <div
+            className={`dropzone ${dragging ? 'dragging' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => void onDrop(e)}
+          >
+            {previewUrl ? (
+              <img className="thumb" src={previewUrl} alt="已选择的背景图片缩略图" />
+            ) : (
+              <p className="muted">把图片拖到这里，或点击下面的按钮选择</p>
+            )}
+          </div>
+
+          <button className="btn primary" type="button" onClick={() => void pickImage()} disabled={isBusy(ui)}>
             选择图片
           </button>
-          <button className="btn" onClick={() => void generate()} disabled={!spec.imageId}>
-            生成配色
-          </button>
+          <p className="scope">{imageName || '尚未选择图片'}</p>
 
           <label className="field">
             <span>背景遮罩 {spec.overlayOpacity.toFixed(2)}</span>
             <input
               type="range" min={0} max={1} step={0.01}
               value={spec.overlayOpacity}
-              onChange={(e) => setSpec({ ...spec, overlayOpacity: Number(e.target.value) })}
+              onChange={(e) => updateSpec({ overlayOpacity: Number(e.target.value) })}
             />
           </label>
           <label className="field">
@@ -155,7 +381,7 @@ export default function App() {
             <input
               type="range" min={0} max={1} step={0.01}
               value={spec.panelOpacity}
-              onChange={(e) => setSpec({ ...spec, panelOpacity: Number(e.target.value) })}
+              onChange={(e) => updateSpec({ panelOpacity: Number(e.target.value) })}
             />
           </label>
           <label className="field">
@@ -163,89 +389,157 @@ export default function App() {
             <input
               type="range" min={0} max={20} step={1}
               value={spec.blurPx}
-              onChange={(e) => setSpec({ ...spec, blurPx: Number(e.target.value) })}
+              onChange={(e) => updateSpec({ blurPx: Number(e.target.value) })}
             />
           </label>
           <label className="field">
             <span>明暗模式</span>
-            <select value={spec.mode} onChange={(e) => setSpec({ ...spec, mode: e.target.value as ThemeSpec['mode'] })}>
-              <option value="auto">跟随系统</option>
+            <select
+              value={spec.mode}
+              onChange={(e) => updateSpec({ mode: e.target.value as ThemeSpec['mode'] })}
+            >
+              <option value="auto">跟随图片明暗</option>
               <option value="light">浅色</option>
               <option value="dark">深色</option>
             </select>
           </label>
+          <label className="field">
+            <span>主色（留空则按图片自动取）</span>
+            <div className="primary-row">
+              <input
+                type="color"
+                value={spec.primary ?? result?.tokens.primary ?? '#3b6fd4'}
+                onChange={(e) => updateSpec({ primary: e.target.value })}
+              />
+              <button
+                className="btn small"
+                type="button"
+                onClick={() => updateSpec({ primary: undefined })}
+                disabled={!spec.primary}
+              >
+                跟随图片
+              </button>
+            </div>
+          </label>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={reducedTransparency}
+              onChange={(e) => setReducedTransparency(e.target.checked)}
+            />
+            <span>减少透明度（面板用纯色）</span>
+          </label>
 
           <div className="actions">
-            <button className="btn primary" onClick={() => void apply()}>应用到 OpenCode</button>
-            <button className="btn" onClick={() => void restore()}>恢复上一主题</button>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => void stage()}
+              disabled={Boolean(blocked) || isBusy(ui)}
+              title={blocked ?? undefined}
+            >
+              应用到 OpenCode
+            </button>
+            <button className="btn" type="button" onClick={() => updateSpec(resetSpec(spec))}>
+              重置参数
+            </button>
           </div>
+          {blocked ? <p className="scope">{blocked}</p> : null}
         </section>
 
-        <section className="panel preview">
-          <div className="preview-note">模拟预览，真实效果取决于已验证版本</div>
-          <div className="mock-window">
-            <div className="mock-sidebar">
-              <div className="mock-item active">会话一</div>
-              <div className="mock-item">会话二</div>
-              <div className="mock-item">设置</div>
-            </div>
-            <div className="mock-main">
-              <div className="msg user">帮我把这段代码改成异步</div>
-              <div className="msg bot">
-                好的，下面是修改后的版本。
-                <pre className="code">
-                  <code>{`async function run() {\n  const r = await fetch(url);\n  return r.json();\n}`}</code>
-                </pre>
-              </div>
-              <div className="msg-row">
-                <input className="input" placeholder="输入消息…" readOnly />
-                <button className="btn small primary">发送</button>
-              </div>
-              <div className="states">
-                <button className="btn small">默认</button>
-                <button className="btn small hover">悬停</button>
-                <button className="btn small pressed">按下</button>
-                <button className="btn small focus">焦点</button>
-              </div>
-              <div className="feedback">
-                <span className="err">错误：无法连接</span>
-                <span className="warn">警告：配置缺失</span>
-                <span className="ok">成功：已保存</span>
-              </div>
-              <div className="diff">
-                <div className="add">+ const r = await fetch(url)</div>
-                <div className="del">- const r = fetch(url)</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel report">
-          <h2>可读性检查</h2>
-          {report ? (
-            <>
-              <p className={report.passed ? 'pass' : 'fail'}>
-                {report.passed ? '全部通过' : '存在未达标项'}
+        <section className="panel preview-panel">
+          {result ? (
+            <Preview
+              tokens={result.tokens}
+              imageUrl={previewUrl}
+              spec={spec}
+              reducedTransparency={reducedTransparency}
+            />
+          ) : (
+            <div className="empty-preview">
+              <p className="muted">
+                {ui.kind === 'analyzing' ? '正在提取配色…' : '选择一张图片后，这里会显示模拟预览。'}
               </p>
+            </div>
+          )}
+        </section>
+
+        <div className="side-column">
+          <ContrastPanel report={result?.report ?? null} effectiveBackground={result?.effectiveBackground ?? null} />
+          <RestorePanel
+            backups={backups}
+            busy={isBusy(ui)}
+            onRestore={(kind) => void restore(kind)}
+            onRefresh={() => void refreshBackups(target?.targetId ?? '')}
+          />
+          {discovered && (discovered.rejected.length > 0 || targets.length === 0) ? (
+            <section className="panel">
+              <h2>未通过的候选</h2>
               <ul className="entries">
-                {report.entries.map((e) => (
-                  <li key={`${e.element}-${e.state}`} className={e.pass ? 'pass' : 'fail'}>
-                    <span>{e.element}·{e.state}</span>
-                    <span className="mono">{e.ratio.toFixed(2)} / {e.required}</span>
+                {discovered.rejected.map((r) => (
+                  <li key={r.path} className="fail">
+                    <span className="entry-name">{r.message}</span>
+                    <span className="mono">{r.path}</span>
                   </li>
                 ))}
               </ul>
-              <p className="scope">范围：{report.scope}</p>
-              <p className="scope">采样：{report.sampling}</p>
-              {!report.verified ? <p className="scope">未做实底保护层验证，不宣称安全通过。</p> : null}
-            </>
-          ) : (
-            <p className="muted">生成配色后显示对比度结果。</p>
-          )}
-        </section>
+              <p className="scope">
+                扫过 {discovered.scanned.length} 个明确登记的位置；不做全盘搜索。
+              </p>
+              {discovered.scanned.length > 0 ? (
+                <ul className="entries">
+                  {discovered.scanned.map((p) => (
+                    <li key={p} className="mono">{p}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
       </main>
 
-      <footer className={`status ${status.kind}`}>{status.text}</footer>
+      <footer className={`status ${ui.kind}`}>
+        {ui.kind === 'empty' ? '请选择一张本地图片开始。' : null}
+        {ui.kind === 'analyzing' ? '正在提取配色…' : null}
+        {ui.kind === 'ready' ? '配色已生成，可继续调节或直接应用。' : null}
+        {ui.kind === 'staging' ? '正在检查目标与生成准备内容…' : null}
+        {ui.kind === 'confirming' ? '请确认应用信息。' : null}
+        {ui.kind === 'applying' ? (
+          <>
+            {ui.phase}
+            {ui.percent === undefined ? null : `（${ui.percent}%）`}
+          </>
+        ) : null}
+        {ui.kind === 'success' ? ui.message : null}
+        {ui.kind === 'error' ? (
+          <>
+            <strong>{ui.message}</strong>
+            <span>{ui.hint}</span>
+            <span>{scopeText(ui.scope)}</span>
+          </>
+        ) : null}
+        {ui.kind === 'needsRecovery' ? (
+          <>
+            <strong>{ui.message}</strong>
+            <span>{ui.hint}</span>
+            <span>请使用「恢复」入口处理；不要手动替换应用文件。</span>
+          </>
+        ) : null}
+        {notice ? <span className="notice">{notice}</span> : null}
+      </footer>
+
+      {ui.kind === 'confirming' && summary ? (
+        <ApplyDialog
+          summary={summary}
+          busy={false}
+          onCancel={() => {
+            setSummary(null);
+            setUi({ kind: 'ready' });
+          }}
+          onConfirm={() => void apply()}
+        />
+      ) : null}
     </div>
   );
 }

@@ -19,6 +19,8 @@ import type {
 export const IPC_CHANNELS = [
   'pickImage',
   'importImage',
+  'importImageData',
+  'getImagePreview',
   'generateTheme',
   'analyzeContrast',
   'discoverTargets',
@@ -150,6 +152,13 @@ export interface RestoreThemeInput {
 export interface ThemeSwitcherApi {
   pickImage(): Promise<Result<PickedImage>>;
   importImage(imageId: string): Promise<Result<ImportedImage>>;
+  /**
+   * 取回用于界面回显的缩小副本（data URL）。
+   * 给的是工具自己生成的缩略图，不是原图路径——renderer 永远拿不到路径。
+   */
+  getImagePreview(imageId: string): Promise<Result<string>>;
+  /** 拖拽导入：只接收文件内容与文件名，不接收路径 */
+  importImageData(input: { fileName: string; data: Uint8Array }): Promise<Result<ImportedImage>>;
   generateTheme(input: GenerateThemeInput): Promise<Result<GenerateThemeOutput>>;
   analyzeContrast(input: AnalyzeContrastInput): Promise<Result<ContrastReport>>;
   discoverTargets(): Promise<Result<DiscoveredTargets>>;

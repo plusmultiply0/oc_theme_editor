@@ -117,6 +117,32 @@ describe('主进程服务：识别 → 生成 → 准备 → 应用 → 恢复',
     expect(await sha256File(c.imageFile)).toBe(before);
   });
 
+  it('拖拽导入只接收内容与文件名，不接收路径', async () => {
+    const c = ctx as Ctx;
+    const bytes = await sharp({
+      create: { width: 48, height: 48, channels: 3, background: { r: 200, g: 120, b: 60 } },
+    })
+      .png()
+      .toBuffer();
+
+    const r = await c.images.importData('dropped.png', new Uint8Array(bytes));
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.width).toBe(48);
+    expect(r.data.palette.length).toBeGreaterThan(0);
+
+    // 预览给的是工具自己的缩略图，不是原图路径
+    const url = await c.images.previewDataUrl(r.data.imageId);
+    expect(url.success).toBe(true);
+    if (url.success) expect(url.data.startsWith('data:image/png;base64,')).toBe(true);
+
+    // 后缀不在白名单时直接拒绝
+    const bad = await c.images.importData('dropped.svg', new Uint8Array(bytes));
+    expect(bad.success).toBe(false);
+    if (bad.success) return;
+    expect(bad.error.code).toBe('IMAGE_INVALID_FORMAT');
+  });
+
   it('生成主题时返回 token、CSS 与逐条可读性报告，且预览与写入同源', async () => {
     const c = ctx as Ctx;
     const picked = await c.images.pick();

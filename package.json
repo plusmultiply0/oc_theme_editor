@@ -20,7 +20,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
-    "dist": "npm run build && electron-builder --win --dir"
+    "dist": "npm run build && electron-builder --win --dir",
+    "smoke": "electron tools/smoke-main.cjs"
   },
   "dependencies": {
     "@electron/asar": "^4.3.0",

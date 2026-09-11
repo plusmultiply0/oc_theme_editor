@@ -13,3 +13,5 @@ app.*.asar
 .workbuddy/
 test-results/
 playwright-report/
+*.log
+probe.log

@@ -7,30 +7,29 @@
 
 ## 1. 产物
 
-生成时间：2026-09-11（**第三次构建**，含 P0 审查 R1–R8 修复）。
+生成时间：2026-09-11（**第四次构建**，含事故修复 F1–F4 与恢复后校验器修正）。
 
 | 文件 | 大小 | SHA256 |
 |---|---|---|
-| `release3/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `ac4896317bd66a87b002aa090a248e5be5f0ccd9b7d8f8a17b2d93a0bb23837f` |
-| `release3/win-unpacked/resources/app.asar` | 17.6 MB | `824fd0d9633a06d35a3cb498af95517b27d3ca0a009ca469cf0991e356b22bce` |
+| `release4/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `cc01fc93222104b19c56e475b67d39fdbdc20ee8e78e0d04217c9aa5ebc6e069` |
+| `release4/win-unpacked/resources/app.asar` | 17.7 MB | `a3a9fa5128428a992b7c54aad7d00ac65354185c66374a8e85e97416a2cb3910` |
 
-目录总大小约 325 MB（`--win --dir`，免安装目录，不是安装包）。
+归档 963 条目 / unpacked 7。**仍未签名**。
 
-**为什么输出在 `release3/`：** `release/` 与 `release2/` 里的旧 `app.asar` 被占用（判定为安全软件在扫描），
-删除与改名都被拒绝。为不再出现三个目录互相混淆，`package.json` 的 `build.directories.output`
-已固定为 `release3`，以后每次构建都覆盖它。
-**`release/` 与 `release2/` 是过期产物，不要用它们验证或分发**；锁释放后在资源管理器里手动删除即可。
+**输出目录历史**：`release/`、`release2/`、`release3/` 里的旧 `app.asar` 被占用
+（安全软件扫描 + 环境安全删除包装器对 `.asar` 回收失败），删除与覆盖都被拒绝。
+当前输出固定为 `release4`（`package.json` 的 `build.directories.output`）。
+**`release/` ~ `release3/` 全部是过期产物，不要用它们验证或分发**；
+锁释放后在资源管理器手动删除即可。
 
 本轮核对（`npm run verify:package`，28 项，0 失败）：
 
 | 项 | 结果 |
 |---|---|
-| 归档条目数 | 960（上一轮 952；新增的是本轮模块），unpacked 7 |
-| 归档顶层 | 仅 `node_modules`(914) / `out`(45) / `package.json`(1) |
+| 归档条目数 | 963（上一轮 960；新增事故修复模块），unpacked 7 |
+| 归档顶层 | 仅 `node_modules` / `out` / `package.json` |
 | 源码/测试/交接/文档条目 | 0 |
-| 本轮模块在包内 | `physical-fs.js`、`archive-io.js`、`legacy-theme.js`、`original-evidence.js`、`surfaces.js`、`tokens.js`、`recovery-service.js` 全部命中 |
-| 主进程抽查 | 含 `RecoveryService` 启动、`THEME_SWITCHER_NO_REGISTRY`、`chooseTargetDirectory`/`getRecoveryStatus`/`resolveRecovery` 处理器 |
-| renderer 抽查（vite 单文件） | 「减少透明度」「恢复到首次接管时」「没有可证明的出厂原版」「选择安装目录」「待恢复」「旧主题层」全部命中 |
+| 事故修复模块在包内 | `pack-worker.js`、`pack.js`、`archive-verify.js`、`physical-fs.js`、`archive-io.js` 等 |
 | 包内私有路径与凭证 | 扫描全部文本条目，0 命中 |
 
 重新构建后哈希会变化，发布前请用 `npm run verify:package` 重新核对并替换本表。

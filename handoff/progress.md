@@ -377,3 +377,12 @@
   界面会给出「请先用恢复入口回到接管时的状态」。这是有意为之的 F0 冻结。
 - `release3/` 是事故前的构建，**已过期**；重新发布前必须 `npm run dist` 重建，
   并用 `npm run verify:package` 重新核对。
+
+## 恢复安装执行（2026-09-11，jc 授权）
+
+- 6 个僵死的 OpenCode.exe 已关闭；`Recover-OpenCode.ps1 -Apply` 成功，
+  恢复后归档 `1c53ca24…`，损坏归档保留为 `app.asar.failed-218e45ca….bak`。
+- 恢复后体检 6/6（`tools/post-restore-health.cjs`），过程中发现并修正校验器三处误报
+  （空文件共享 offset、顶层 return、行中 export），详见事故目录 progress.md。
+- 待 jc：手动启动 OpenCode 验证界面、会话与终端；theme-switcher 实例里的待恢复事务
+  如有提示，在界面里按磁盘事实落账即可。

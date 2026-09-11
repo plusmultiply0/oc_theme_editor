@@ -356,3 +356,60 @@ describe('重打包结果校验（verifyPackedResult）', () => {
     if (!r.success) expect(r.error.detail).toContain('oc-theme-custom.css');
   });
 });
+describe('真实安装上的合法形态不得误判（恢复后体检 2026-09-11）', () => {
+  it('空文件（size=0、块=[sha256(空)]）与相邻文件共享 offset 是合法产物', async () => {
+    const inst = await fixture();
+    const { header } = readHeader(inst.archivePath);
+    // 造一个空文件条目：共享 package.json 的 offset，integrity 是官方打包器对空文件的记法
+    const { createHash } = await import('node:crypto');
+    const emptyHash = createHash('sha256').update(Buffer.alloc(0)).digest('hex');
+    header.files = header.files ?? {};
+    header.files['node_modules'] = header.files['node_modules'] ?? { files: {} };
+    header.files['node_modules'].files = header.files['node_modules'].files ?? {};
+    header.files['node_modules'].files!['empty-stub'] = {
+      files: {
+        'stub.js': {
+          size: 0,
+          offset: getEntry(header, 'node_modules/@standard-schema/spec/package.json')?.offset ?? '0',
+          integrity: { algorithm: 'SHA256', hash: emptyHash, blockSize: 4 * 1024 * 1024, blocks: [emptyHash] },
+        },
+      },
+    };
+    const out = writeHeader(inst.archivePath, header);
+    const scan = scanArchive(out);
+    if (!scan.success) throw new Error(scan.error.message);
+    const integrity = await verifyIntegrity(scan.data);
+    expect(integrity.success).toBe(true);
+    const shared = findSharedOffsetConflicts(scan.data);
+    expect(shared.success).toBe(true);
+  });
+
+  it('顶层 return 是合法 CJS（mkdirp/bin/cmd.js 形态），不得判为损坏', async () => {
+    const inst = await fixture({
+      files: {
+        'node_modules/legacy/bin.js': '#!/usr/bin/env node\nvar fs = require(\'fs\');\nif (process.argv.length < 3) return;\nconsole.log(1);\n',
+      },
+    });
+    const scan = scanArchive(inst.archivePath);
+    if (!scan.success) throw new Error(scan.error.message);
+    const scripts = await checkScripts(scan.data, { isAllowed });
+    expect(scripts.success).toBe(true);
+    expect(scripts.data.checked).toBeGreaterThan(0);
+  });
+
+  it('行中 export（注释后跟 export）不被误判为损坏 —— ESM 不可用时按无法判定跳过', async () => {
+    const inst = await fixture({
+      files: {
+        'node_modules/esm-mixed/index.js': '/* oxlint-disable */\n/** @internal */export const javascript = 1;\n',
+      },
+    });
+    const scan = scanArchive(inst.archivePath);
+    if (!scan.success) throw new Error(scan.error.message);
+    const scripts = await checkScripts(scan.data, { isAllowed });
+    expect(scripts.success).toBe(true);
+    // SourceTextModule 可用的运行时应解析通过；不可用时应计入 unsupported 而不是 problems
+    if (typeof (await import('node:vm')).SourceTextModule !== 'function') {
+      expect(scripts.data.unsupported).toBeGreaterThan(0);
+    }
+  });
+});

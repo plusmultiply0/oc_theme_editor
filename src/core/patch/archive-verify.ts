@@ -220,18 +220,25 @@ export async function verifyIntegrity(
       problems.push(`${entry.path}（分块大小非法 ${bs}）`);
       continue;
     }
-    const blocks: string[] = [];
-    for (let o = 0; o < bytes.length; o += bs) {
-      blocks.push(sha256(bytes.subarray(o, o + bs)));
-    }
-    if (blocks.length !== entry.integrity.blocks.length) {
-      problems.push(`${entry.path}（分块数不符：算出 ${blocks.length}，头部 ${entry.integrity.blocks.length}）`);
-      continue;
-    }
-    for (let i = 0; i < blocks.length; i += 1) {
-      if (blocks[i] !== entry.integrity.blocks[i]) {
-        problems.push(`${entry.path}（第 ${i + 1} 块 hash 不符）`);
-        break;
+    /*
+     * 空文件（size=0）没有可分块的字节：整体 hash 已按空内容核对通过，
+     * 分块比较没有意义（真实安装里打包器给空文件记 [sha256(空)] 或不记块，两种都合法）。
+     * drizzle-orm 等包里就有一批真实空文件（哈希 e3b0c442…）。
+     */
+    if (bytes.length > 0) {
+      const blocks: string[] = [];
+      for (let o = 0; o < bytes.length; o += bs) {
+        blocks.push(sha256(bytes.subarray(o, o + bs)));
+      }
+      if (blocks.length !== entry.integrity.blocks.length) {
+        problems.push(`${entry.path}（分块数不符：算出 ${blocks.length}，头部 ${entry.integrity.blocks.length}）`);
+        continue;
+      }
+      for (let i = 0; i < blocks.length; i += 1) {
+        if (blocks[i] !== entry.integrity.blocks[i]) {
+          problems.push(`${entry.path}（第 ${i + 1} 块 hash 不符）`);
+          break;
+        }
       }
     }
     checked += 1;
@@ -256,7 +263,13 @@ export async function verifyIntegrity(
 export function findSharedOffsetConflicts(scan: ArchiveScan): Result<{ groups: number }> {
   const byOffset = new Map<number, ArchiveEntry[]>();
   for (const entry of scan.entries.values()) {
-    if (entry.unpacked || entry.link) continue;
+    /*
+     * 空文件（size=0）排除：它没有内容，打包器给它们分配「当前 offset」
+     * 且不推进数据区，因此与相邻文件共享 offset 是合法产物
+     * （真实安装取证：drizzle-orm / @standard-schema 的一批空占位文件）。
+     * 事故形态是**两个非空**文件共享 offset 且长度不同 —— 仍然要拦。
+     */
+    if (entry.unpacked || entry.link || entry.size === 0) continue;
     const list = byOffset.get(entry.offset) ?? [];
     list.push(entry);
     byOffset.set(entry.offset, list);
@@ -292,22 +305,42 @@ export function findSharedOffsetConflicts(scan: ArchiveScan): Result<{ groups: n
   return ok({ groups });
 }
 
-/** 判断一个 .js 是不是 ESM：顶层 import/export。CJS 用 vm.Script，ESM 用 SourceTextModule（可用时） */
 /** 无法判定的标记（例如运行时不支持 vm.SourceTextModule）；跳过并如实计数，绝不误判 */
 const SKIP_UNSUPPORTED = '__skip_unsupported__';
 
+/**
+ * 判断一个脚本的语法是否完好。
+ *
+ * 三级策略（真实安装取证后确定，误报会挡住正常安装）：
+ * 1. 剥掉 shebang 后按 **Node 的 CJS 模块包装器** 解析 ——
+ *    顶层 `return`（mkdirp/bin/cmd.js）、`require` 都是合法 CJS，裸 vm.Script 会误判；
+ * 2. 失败再按 ESM 解析 —— `export *`、行中 export（httpApiSwagger.js 里
+ *    export 出现在行内注释之后）都能覆盖；
+ * 3. 两者都失败才是损坏；ESM 能力不可用时，若形态表明是 ESM，
+ *    如实按「无法判定」跳过并计数，绝不误判为损坏。
+ */
 function syntaxProblem(rel: string, source: string): string | null {
-  const isEsm = /^\s*(?:import|export)[\s{(]/m.test(source) || /\bimport\s*\(/.test(source);
+  const body = source.replace(/^#![^\n]*/, '');
+  const wrapped = `(function (exports, require, module, __filename, __dirname) {\n${body}\n});`;
   try {
-    if (isEsm && typeof vm.SourceTextModule === 'function') {
-      new vm.SourceTextModule(source, { identifier: rel });
-      return null;
-    }
-    if (isEsm) return SKIP_UNSUPPORTED; // 无法按 ESM 解析时选择跳过，绝不用 CJS 包装器把正常 ESM 误判为损坏
-    new vm.Script(source, { filename: rel });
+    new vm.Script(wrapped, { filename: rel });
     return null;
-  } catch (e) {
-    return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  } catch (cjsError) {
+    if (typeof vm.SourceTextModule === 'function') {
+      try {
+        new vm.SourceTextModule(source, { identifier: rel });
+        return null;
+      } catch (esmError) {
+        return esmError instanceof Error ? `${esmError.name}: ${esmError.message}` : String(esmError);
+      }
+    }
+    // ESM 不可用：能安全判定的只有「确定不是 ESM 形态」的损坏
+    const esmShaped =
+      /\b(?:import|export)[\s{*(]/.test(source) ||
+      /\bimport\s*\(/.test(source) ||
+      /'export'|'import'/.test(String(cjsError));
+    if (esmShaped) return SKIP_UNSUPPORTED;
+    return cjsError instanceof Error ? `${cjsError.name}: ${cjsError.message}` : String(cjsError);
   }
 }
 

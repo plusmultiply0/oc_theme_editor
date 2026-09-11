@@ -1,0 +1,38 @@
+{
+  "ranAt": "2026-09-11T14:32:51.277Z",
+  "target": "C:/Users/ylzho/AppData/Local/Programs/@opencode-aidesktop/resources/app.asar",
+  "checks": [
+    {
+      "name": "归档哈希与恢复快照一致",
+      "ok": true,
+      "detail": "1c53ca2472698a9e5ea1162ccb917a98b4e3f8d99ddd427b488dd063ddee6fc2"
+    },
+    {
+      "name": "scanArchive 可解析归档头",
+      "ok": true,
+      "detail": "6994 条目"
+    },
+    {
+      "name": "逐条完整性",
+      "ok": true,
+      "detail": "检查 6947 条"
+    },
+    {
+      "name": "共享 offset 一致性",
+      "ok": true,
+      "detail": "无冲突"
+    },
+    {
+      "name": "非白名单脚本解析（含 jsonfile）",
+      "ok": true,
+      "detail": "解析 1293，跳过 0，不支持 2776"
+    },
+    {
+      "name": "jsonfile 条目存在",
+      "ok": true,
+      "detail": "size=2014"
+    }
+  ],
+  "failed": 0,
+  "total": 6
+}

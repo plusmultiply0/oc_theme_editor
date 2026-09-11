@@ -4,6 +4,7 @@ import { contrastRatio, composite, effectiveBackground, hexToRgb } from '../../s
 import { extractPalette, isMostlyGray } from '../../src/core/theme/palette';
 import { DEFAULT_LIMITS, looksLikeSvg, sniffFormat, validateImage } from '../../src/core/theme/validate';
 import { validateImageRef } from '../../src/core/theme/css';
+import { ensureContrast } from '../../src/core/theme/color';
 import { analyzeImage, deriveTokens, generateTheme } from '../../src/core/theme/generate';
 import { SCHEMA_VERSION, type ThemeSpec } from '../../src/shared/schema';
 
@@ -247,5 +248,24 @@ describe('主题生成', () => {
 
   it('hex 解析正确', () => {
     expect(hexToRgb('#ff8000')).toEqual({ r: 255, g: 128, b: 0 });
+  });
+});
+
+describe('中间调底色上的可读性（真实数据回归）', () => {
+  // 真实安装上出现过：主色为中间调时，主按钮文字只有 4.11，达不到 4.5。
+  // 原因是 ensureContrast 只沿「远离背景」一个方向调整，而起点已经是纯白。
+  it.each(['#5b6ea8', '#6a7bb5', '#7a86c9', '#4a5b8f', '#8a93d0'])(
+    '主色 %s 下主按钮文字仍达到 4.5',
+    (primary) => {
+      const tokens = deriveTokens([primary], 'dark', primary, '#20242e');
+      expect(contrastRatio(tokens.onPrimary, tokens.primary)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it('ensureContrast 在两个方向都试过之后再判无解', () => {
+    const mid = '#6a7bb5';
+    const r = ensureContrast('#ffffff', mid, 'text');
+    expect(r.pass).toBe(true);
+    expect(r.ratio).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -11,6 +11,7 @@ import type { ContrastReport, ThemeMode, ThemeSpec, ThemeTokens } from '../../sh
 import { extractPalette } from './palette';
 import {
   CONTRAST_TARGETS,
+  contrastRatio,
   effectiveBackground,
   hexToRgb,
   rgbToHex,
@@ -140,10 +141,10 @@ export function deriveTokens(
 
   const { hover, pressed } = deriveStates(primary);
   const muted = ensureContrast(mix(textFixed.color, refBg, 0.42), refBg, 'text');
+  // 起点直接取黑白中对比度更高的那个，不用亮度阈值猜——
+  // 中间调主色上「偏亮就用黑字」这条经验规则会选错方向。
   const onPrimary = ensureContrast(
-    (hexToRgb(primary).r * 0.299 + hexToRgb(primary).g * 0.587 + hexToRgb(primary).b * 0.114) > 150
-      ? '#101418'
-      : '#ffffff',
+    contrastRatio('#ffffff', primary) >= contrastRatio('#101418', primary) ? '#ffffff' : '#101418',
     primary,
     'text',
   ).color;

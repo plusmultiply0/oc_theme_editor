@@ -66,9 +66,76 @@ npx electron-builder --win --dir
 - **未执行**：在「无作者开发目录 / 无全局 Node 与 Python」的干净机器上启动验证。本环境无法启动 Electron 窗口
   （`ELECTRON_RUN_AS_NODE=1` 时主进程不起；去掉后 GUI 进程 stdout 不回传），因此**只完成了产物内容核对，未完成启动验证**。
 
-## 5. 真实安装验收（T62、T63、T64）— 未执行
+## 5. 真实安装验收（T62、T63、T64）
 
-这三项需要对 jc 本机的 OpenCode 安装执行真实写入（应用 → 重启观察 → 换主题 → 恢复），
-**必须另行获得明确授权**，授权内容应包括：目标安装、版本、允许的操作范围、是否允许启动/关闭应用、是否采集截图。
+授权：jc 于 2026-09-11 授权对真实安装执行写入（应用/恢复），**应用的启动、关闭与画面观察由 jc 手动完成**。
 
-未授权前，工具对真实安装只做只读识别，不做任何写入。
+驱动脚本：`tools/live-cli.cjs`（`status` / `precheck` / `apply` / `restore`），与 GUI 共用同一套服务层与事务逻辑。
+
+### 5.1 只读预检（已完成）
+
+```
+目标：C:\Users\ylzho\AppData\Local\Programs\@opencode-aidesktop  版本 1.18.29  supported
+归档：resources\app.asar（145.3 MB）
+进程：idle　可写：true
+磁盘：可用 5641 MB，需要 500 MB
+```
+
+**进程探针首次在真实环境跑通**（`systemProcessProbe`，PowerShell `Get-CimInstance`），此前一直只在测试中注入 `idle` 探针绕过。
+
+### 5.2 第 1 次应用（已完成）
+
+首次尝试被安全规则拦下，这是本轮最有价值的发现：
+
+```
+[FAIL] 准备（预检 + 生成产物）: CONTRAST_BELOW_TARGET
+发生了什么：以下元素未达到可读性目标：主按钮文字 4.11（需 4.5）
+```
+
+根因：`ensureContrast` 只沿「远离背景」一个方向调整明度，而起点已是纯白；
+中间调主色（实测主色约 `#6a7bb5`）上纯白只能到 4.11，反方向的深色起点反而能到 5.1。
+修复：起点改为「黑白中对比度更高者」，且调整时两个方向都试；已补 5 个中间调主色的回归用例。
+
+修复后应用成功：
+
+```
+[OK] 应用
+操作 ID：op-20260911T021501212Z-chtazi
+状态：applied　主题：demo-wallpaper-a.png · 深色 · 遮罩 0.35 · 面板 0.86
+目标指纹（提交前）：1c53ca2472698a9e…
+提交后指纹：aeab66d4a2681f8c…
+```
+
+只读复核写入结果：
+
+| 项 | 结果 |
+|---|---|
+| 归档条目数 | 6996（原 6994 + 新增 2） |
+| unpacked 条目 | **47，全部保留**（原生模块标记未被破坏） |
+| `out/renderer/index.html` | 已注入 `<link rel="stylesheet" href="./oc-theme-custom.css">`，位置在原 `snow-theme.css` 之后 |
+| `out/renderer/oc-theme-custom.css` | 2901 字节，背景引用 `./oc-theme-background.jpg` |
+| `out/renderer/oc-theme-background.jpg` | 68950 字节 |
+| 备份 | `%LOCALAPPDATA%\OpenCodeThemeSwitcher\instances\a67a928b01029b5c\backups`，original + previous 各一份 |
+
+### 5.3 待 jc 完成的观察（T64）
+
+请启动 OpenCode 并按下列清单走查，逐项记录「符合 / 不符合 / 看不到」：
+
+1. 侧栏：会话列表、选中项底色、文字是否清晰
+2. 正文：用户气泡与助手气泡、长段落换行
+3. 代码：容器底色（语法高亮**故意不改**，若被改属于缺陷）
+4. 输入区：输入框底色、placeholder 可读性、发送按钮
+5. 菜单 / 对话 / 提示浮层：面板半透明后的可读性
+6. 按钮：默认 / 悬停 / 按下 / 焦点四态是否可区分
+7. 终端：应保持原配色（不在覆盖范围内）
+8. 错误提示与 diff：新增/删除行颜色
+9. 缩放窗口与改变窗口大小：背景是否跟随 `cover` 正确缩放，有无拉伸或黑边
+
+确认后**完全退出 OpenCode**，我再执行「换第 2 个主题」与「恢复」。
+
+### 5.4 后续步骤（未完成）
+
+- [ ] 第 2 次应用（换主题：`demo-wallpaper-b.png`，浅色）→ jc 观察 → 退出
+- [ ] 恢复上一主题 → jc 观察 → 退出
+- [ ] 恢复原版 → jc 确认回到出厂界面
+- [ ] 每个写入阶段重新预检（进程 / 写权限 / 磁盘）

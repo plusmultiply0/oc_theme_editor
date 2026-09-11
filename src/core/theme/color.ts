@@ -56,15 +56,20 @@ export function ensureContrast(
   let bestRatio = contrastRatio(foreground, background);
   if (bestRatio >= required) return { color: best, ratio: bestRatio, pass: true };
 
-  // 沿「远离背景」的方向最多调整 20 档
-  for (let i = 1; i <= 20; i += 1) {
-    const candidate = isDarkBg ? lighten(foreground, i * 0.05) : darken(foreground, i * 0.05);
-    const ratio = contrastRatio(candidate, background);
-    if (ratio > bestRatio) {
-      bestRatio = ratio;
-      best = candidate;
+  // 先沿「远离背景」的方向走；走不通再试反方向。
+  // 中间调底色（L≈0.18–0.21）上纯白达不到 4.5，此时反方向的深色反而达标，
+  // 只认一个方向就会把这种底色判成无解。
+  const directions = isDarkBg ? [1, -1] : [-1, 1];
+  for (const dir of directions) {
+    for (let i = 1; i <= 20; i += 1) {
+      const candidate = dir > 0 ? lighten(foreground, i * 0.05) : darken(foreground, i * 0.05);
+      const ratio = contrastRatio(candidate, background);
+      if (ratio > bestRatio) {
+        bestRatio = ratio;
+        best = candidate;
+      }
+      if (ratio >= required) return { color: candidate, ratio, pass: true };
     }
-    if (ratio >= required) return { color: candidate, ratio, pass: true };
   }
   return { color: best, ratio: bestRatio, pass: false };
 }

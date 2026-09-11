@@ -8,7 +8,9 @@
  *   避免「预览半透明、输出实底」这类不一致。
  * - 只引用工具自己的本地图片引用，拒绝远程 URL、@import 与用户代码。
  * - 终端（.xterm）与 `--syntax-*` / `--markdown-*` 语法色不在覆盖范围内（T27）。
- * - 不叠加 `!important`：本表在 `<head>` 最后加载，同特异性下后者胜出；
+ * - 不叠加 `!important` 去救变量：官方运行时会在本表**之后**追加 `style#oc-theme`
+ *   （普通 `:root`），同特异性下后者胜出，所以 token 声明改用更具体的 `html:root`
+ *   （见下方注释）；`!important` 只用于确实需要压过官方组件类选择器的少数规则。
  *   旧主题那种 `#root { --x: … !important }` 由迁移预检先行撤下（见 legacy-theme.ts）。
  */
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
@@ -108,7 +110,24 @@ export function renderThemeCss(input: RenderCssInput): string {
    token 名依据 OpenCode 1.18.29 官方 main CSS 的语义变量清单，不含终端与语法高亮。 */
 ${backgroundBlock}
 
-:root {
+/*
+ * token 声明必须用 html:root 而不是 :root（事故 F1）。
+ *
+ * 官方在启动后通过 ensureThemeStyleElement() 把 style#oc-theme（普通 :root 规则）
+ * append 到 head，位置在助手样式表**之后**；切主题/明暗模式时会再次写入。
+ * 助手若也用 :root，两者特异性相同（0,1,0），后加载者胜出 ——
+ * 官方的实色变量会盖掉助手的 RGBA 面板值，根布局重新变实底，
+ * 图片虽然加载成功却被完全挡住。
+ *
+ * html:root 是类型选择器 + 伪类（0,1,1），在同一根元素上比官方 :root 更具体，
+ * 因此不必到处加 !important，也不改官方主题函数。
+ * 不要退化成 #root：官方根级的 --color-* 别名可能已在祖先解析，
+ * body 下的 Portal 也不一定继承 #root。
+ *
+ * 此方案针对已确认的 1.18.29 普通 :root 规则；若官方改用 inline style /
+ * !important / 更强选择器，需要重新适配，不能宣称全版本通用。
+ */
+html:root {
   color-scheme: ${resolvedMode};
 
 ${renderTokenCss(tokens, spec)}

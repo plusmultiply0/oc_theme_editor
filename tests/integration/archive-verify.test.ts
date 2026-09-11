@@ -393,7 +393,7 @@ describe('真实安装上的合法形态不得误判（恢复后体检 2026-09-1
     const scan = scanArchive(inst.archivePath);
     if (!scan.success) throw new Error(scan.error.message);
     const scripts = await checkScripts(scan.data, { isAllowed });
-    expect(scripts.success).toBe(true);
+    if (!scripts.success) throw new Error(`${scripts.error.message} | ${scripts.error.detail ?? ''}`);
     expect(scripts.data.checked).toBeGreaterThan(0);
   });
 
@@ -406,7 +406,7 @@ describe('真实安装上的合法形态不得误判（恢复后体检 2026-09-1
     const scan = scanArchive(inst.archivePath);
     if (!scan.success) throw new Error(scan.error.message);
     const scripts = await checkScripts(scan.data, { isAllowed });
-    expect(scripts.success).toBe(true);
+    if (!scripts.success) throw new Error(`${scripts.error.message} | ${scripts.error.detail ?? ''}`);
     // SourceTextModule 可用的运行时应解析通过；不可用时应计入 unsupported 而不是 problems
     if (typeof (await import('node:vm')).SourceTextModule !== 'function') {
       expect(scripts.data.unsupported).toBeGreaterThan(0);

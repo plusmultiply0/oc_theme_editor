@@ -11,9 +11,14 @@
  *   --v2-overlay-*、--v2-state-*
  * - diff 层：--surface-diff-*、--text-diff-*、--icon-diff-*
  *
- * 官方把这套变量定义在 `:root`（含一个 `@media (prefers-color-scheme: dark)` 分支）。
- * 本工具的样式表在 `<head>` 里最后加载，同特异性下后者胜出，因此这里用普通
- * `:root` 声明即可覆盖；**不再叠加更多 !important**。
+ * 官方把这套变量定义在 `:root`（含一个 `@media (prefers-color-scheme: dark)` 分支），
+ * **并且会在运行时把 `style#oc-theme`（同样是普通 `:root`）append 到 `<head>`**
+ * —— 位置在助手样式表之后，切主题/明暗模式时还会重写一次。
+ *
+ * 因此「本表在 head 最后加载即可覆盖」是错的：同特异性下后加载者胜出，
+ * 官方会把助手的半透明面板值盖成实色，背景图片虽然加载成功却被挡住（事故 F1）。
+ * 声明所在的输出模板由 css.ts 改成 `html:root`（0,1,1）以提升特异性，
+ * 这里只负责产出「名字 + 值」，不再依赖加载顺序，**也不要靠叠加 !important 补救**。
  *
  * 明确不覆盖：终端（.xterm）与 `--syntax-*` / `--markdown-*` 语法色（T27）。
  */

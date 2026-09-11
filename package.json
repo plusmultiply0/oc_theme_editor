@@ -12,7 +12,7 @@
     "appId": "com.local.opencode-theme-switcher",
     "productName": "OpenCodeThemeSwitcher",
     "directories": {
-      "output": "release"
+      "output": "release3"
     },
     "files": [
       "out/**",
@@ -41,6 +41,7 @@
     "test:e2e": "playwright test",
     "test:e2e:electron": "node tools/run-electron-e2e.cjs",
     "verify": "npm run typecheck && npm run lint && npm run test:unit && npm run test:integration && npm run build && npm run test:e2e",
+    "verify:package": "node tools/verify-package.cjs",
     "dist": "npm run build && electron-builder --win --dir",
     "smoke": "electron tools/smoke-main.cjs",
     "audit": "node tools/audit.cjs"

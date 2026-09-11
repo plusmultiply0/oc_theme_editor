@@ -139,3 +139,50 @@ npx electron-builder --win --dir
 - [ ] 恢复上一主题 → jc 观察 → 退出
 - [ ] 恢复原版 → jc 确认回到出厂界面
 - [ ] 每个写入阶段重新预检（进程 / 写权限 / 磁盘）
+
+---
+
+## 6. P5c 回归（2026-09-11 第三轮，按 P0 审查 R1–R8）
+
+前置：`npm run build`（0，主进程 + renderer）。所有用例都跑在临时目录的合成安装上，
+**没有触碰真实安装**；真机侧只做了只读取证（`tools/inspect-asar.cjs`、`tools/dump-official-css.cjs`）。
+
+| 命令 | 退出码 | 结果摘要 |
+|---|---|---|
+| `npx tsc --noEmit -p tsconfig.json` | 0 | 无输出 |
+| `npx eslint .` | 0 | 无告警 |
+| `npx vitest run tests/unit` | 0 | 4 文件 / **96 项** |
+| `npx vitest run tests/integration/{discover,transaction,main-services,main-recovery}.test.ts` | 0 | 4 文件 / **51 项** |
+| `npx vitest run tests/integration/electron-runtime.test.ts` | 0 | 真实 Electron 主进程，**35 项断言**全过（`tools/electron-fixture-e2e-result.json`，逐条落盘） |
+| `npx playwright test` | 0 | **8 项真实窗口闭环** |
+| `npm run audit` | 0 | FAIL 0 / WARN 0；路径/用户名规则对本地诊断产物与 `handoff/` 豁免（输出里显式列出），凭证规则不豁免 |
+
+### 6.1 这轮真的发现了什么（不是重跑一遍旧断言）
+
+| 发现 | 证据 | 处理 |
+|---|---|---|
+| Electron 主进程 `fs.statSync('…/app.asar')` 返回 `isFile=false / size=0` | `tools/asar-probe-result.json`（真实 Electron 运行时） | 全部归档 I/O 走 `original-fs`（R1） |
+| 真机 HTML 同时挂官方 CSS、原型旧主题与本工具主题；旧主题用 `#root { --x: … !important }` | `tools/inspect-asar.cjs --read out/renderer/index.html` | 准备阶段撤下已确认的旧主题层（R3） |
+| 真机 `snow-theme.css` 的内容其实是**粉彩主题**（原型原地覆盖过） | 同上 | 来源标记与内容指纹分开判定（R3） |
+| 真机备份 `original` 与 `previous` 哈希相同且 `pristine=true` | `%LOCALAPPDATA%\OpenCodeThemeSwitcher\instances\…\backups\*\meta.json` | 备份语义改为证据制（R2） |
+| 多采样点取最差后暴露 4 个真实对比度缺陷：链接 3.1、主按钮 pressed 3.77、焦点环 2.26、用户消息气泡 4.37 | 单元/集成测试输出 | 修推导逻辑（新增 `accentText`、三态保障、按最不利底色保障），不是放宽目标（R4） |
+| 无显示会话下 Electron 的 GPU 子进程反复重启，`app.exit()` 被拖住约 3 分钟 | `tools/electron-fixture-e2e-result.json` 写出后进程仍不退出 | 截图/fixture 工具改 `process.exit()`（结果同步落盘），并统一 `--disable-gpu --no-sandbox --in-process-gpu` 等开关；测试改监听 `exit` 而非 `close` |
+
+### 6.2 修正此前的记录
+
+- 第 2 节里「`npm run test:e2e` 0 = 0 个用例」**作废**：现在 `test:e2e` 是真实窗口闭环
+  （8 项），且命令已去掉 `--pass-with-no-tests`——零用例会让门禁失败。
+- 第 3 节「IPC 三处一致：14 个通道」→ 现在 **17 个通道**（新增 `chooseTargetDirectory`、
+  `getRecoveryStatus`、`resolveRecovery`），脚本自动核对通过。
+- 第 5.4 节「恢复原版」的预期要改：在没有出厂指纹证据时，「恢复原版」入口**不会出现**，
+  可用的是「恢复到首次接管时」。当前真机那份 `original` 备份已被降级为「首次接管快照」
+  （下次读取元数据时自动迁移，迁移前留 `meta.json.pre-r2.bak`）。
+
+### 6.3 仍未执行
+
+- **T64 真机视觉走查**：需要 jc 启动 OpenCode 逐项确认（第 5.3 节清单仍有效）。
+  下一次应用的确认框会列明会撤下的旧主题层。
+- **T65 干净环境启动验证**。
+- 出厂指纹登记（可选）：按 `docs/original-evidence.md` 补录后「恢复原版」入口才会出现。
+- `npm run dist` 的便携包**未重新构建**：本轮改了大量源码，`release2/win-unpacked` 是旧产物，
+  重新发布前必须按第 4 节流程重打包并重新核对归档内容。

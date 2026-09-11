@@ -11,9 +11,9 @@
  * 第 3 步之后失败：目标已是新内容，必须按 hash 判定，标记 needs_recovery，不盲目回滚。
  */
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import { fail, ok, type Result } from '../../shared/errors';
 import { sha256File } from './asar';
+import { physicalFsp } from './physical-fs';
 
 export interface CommitHooks {
   /** 在 hash 复核前改动目标，模拟「准备期间目标被升级/被其他进程改动」 */
@@ -62,10 +62,10 @@ export async function commitStaged(input: CommitInput): Promise<Result<CommitRes
 
   const tempFile = `${targetPath}.ts-staged`;
   try {
-    await fs.copyFile(stagedPath, tempFile);
+    await physicalFsp.copyFile(stagedPath, tempFile);
     const stagedHash = await sha256File(tempFile);
     if (stagedHash !== expectedAfterHash) {
-      await fs.rm(tempFile, { force: true });
+      await physicalFsp.rm(tempFile, { force: true });
       return fail(
         'STAGE_FAILED',
         '准备产物与记录不一致',
@@ -74,7 +74,7 @@ export async function commitStaged(input: CommitInput): Promise<Result<CommitRes
       );
     }
   } catch (e) {
-    await fs.rm(tempFile, { force: true }).catch(() => undefined);
+    await physicalFsp.rm(tempFile, { force: true }).catch(() => undefined);
     const code = (e as NodeJS.ErrnoException).code;
     return fail(
       code === 'ENOSPC' ? 'DISK_FULL' : 'STAGE_FAILED',
@@ -85,7 +85,7 @@ export async function commitStaged(input: CommitInput): Promise<Result<CommitRes
   }
 
   if (input.hooks?.interruptBeforeRename) {
-    await fs.rm(tempFile, { force: true }).catch(() => undefined);
+    await physicalFsp.rm(tempFile, { force: true }).catch(() => undefined);
     try {
       await input.hooks.interruptBeforeRename();
     } catch (e) {
@@ -95,9 +95,9 @@ export async function commitStaged(input: CommitInput): Promise<Result<CommitRes
   }
 
   try {
-    await fs.rename(tempFile, targetPath);
+    await physicalFsp.rename(tempFile, targetPath);
   } catch (e) {
-    await fs.rm(tempFile, { force: true }).catch(() => undefined);
+    await physicalFsp.rm(tempFile, { force: true }).catch(() => undefined);
     const code = (e as NodeJS.ErrnoException).code;
     if (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES') {
       return fail('FILE_LOCKED', '目标文件被占用，替换失败', '请确认应用已退出后重试；安装未被修改。', String(e));

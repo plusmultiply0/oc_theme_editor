@@ -5,13 +5,13 @@
  * 恢复是一次新的前向操作，不改写历史记录；还原前同样先备份当前状态。
  * 备份损坏、目标已升级、hash 不符、原版未知时一律拒绝，不做「尽力而为」的写入。
  */
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { adapterById } from '../../adapters/registry';
 import type { TargetAdapter } from '../../adapters/types';
 import { fail, ok, type Result } from '../../shared/errors';
 import type { OperationManifest, TargetInfo } from '../../shared/schema';
 import { readAsar, readAsarPackage, sha256File } from './asar';
+import { physicalFsp } from './physical-fs';
 import { preRestoreDir, type RuntimeLayout } from './layout';
 import { latestBackup, verifyBackup, createBackup, type BackupRecord } from './backup';
 import { commitStaged, type CommitHooks } from './commit';
@@ -19,7 +19,13 @@ import { withLock } from './lock';
 import { appendPhase, writeTx, type TxRecord } from './txlog';
 import type { ProcessProbe } from './precheck';
 
-export type RestoreKind = 'previous' | 'original';
+/**
+ * 三个入口，语义不能合并（R2）：
+ * - previous：恢复上一主题
+ * - original：恢复出厂原版 —— **只在有原版证据时可用**
+ * - takeover：恢复「首次接管快照」—— 没有原版证据时的诚实入口，界面必须标明它不是出厂状态
+ */
+export type RestoreKind = 'previous' | 'original' | 'takeover';
 
 export interface RestoreInput {
   target: TargetInfo;
@@ -36,7 +42,13 @@ export interface RestoreResult {
 }
 
 function backupDirFor(layout: RuntimeLayout, kind: RestoreKind): string {
-  return kind === 'original' ? `${layout.backupsDir}/original` : `${layout.backupsDir}/previous`;
+  return kind === 'previous' ? `${layout.backupsDir}/previous` : `${layout.backupsDir}/original`;
+}
+
+function titleOf(kind: RestoreKind): string {
+  if (kind === 'original') return '恢复原版';
+  if (kind === 'takeover') return '恢复首次接管快照';
+  return '恢复上一主题';
 }
 
 export async function restoreTarget(input: RestoreInput): Promise<Result<RestoreResult>> {
@@ -66,17 +78,19 @@ export async function restoreTarget(input: RestoreInput): Promise<Result<Restore
     if (!record) {
       return fail(
         'BACKUP_MISSING',
-        input.kind === 'original' ? '没有可用的原版备份' : '没有可恢复的上一主题',
-        input.kind === 'original'
-          ? '原版备份只在本工具首次接管时创建；未创建过则无法恢复原版。'
-          : '请先应用一次主题，之后才能恢复上一主题。',
+        input.kind === 'previous' ? '没有可恢复的上一主题' : '没有可用的首次接管快照',
+        input.kind === 'previous'
+          ? '请先应用一次主题，之后才能恢复上一主题。'
+          : '首次接管快照只在本工具第一次应用时创建；未创建过则没有可恢复的内容。',
       );
     }
-    if (input.kind === 'original' && !record.pristine) {
+    if (input.kind === 'original' && record.evidence !== 'factory') {
       return fail(
         'BACKUP_MISSING',
-        '无法确认为原版，恢复原版已禁用',
-        '本工具首次接管该安装时它已被改动过，因此不能保证这份备份是出厂原版。',
+        '无法确认为出厂原版，恢复原版已禁用',
+        '本工具没有拿到该版本的出厂指纹证据，这份备份只能作为「首次接管快照」恢复；' +
+          '请使用「恢复首次接管快照」入口，它会回到本工具第一次接管时的状态（可能仍是旧定制界面）。',
+        record.note,
       );
     }
 
@@ -106,10 +120,10 @@ export async function restoreTarget(input: RestoreInput): Promise<Result<Restore
       afterHash: record.sha256,
       backupHash: pre.data.sha256,
       backupPath: pre.data.file,
-      themeSummary: input.kind === 'original' ? '恢复原版' : '恢复上一主题',
+      themeSummary: titleOf(input.kind),
       status: 'backed_up',
       createdAt: new Date().toISOString(),
-      kind: input.kind === 'original' ? 'restore-original' : 'restore-previous',
+      kind: input.kind === 'previous' ? 'restore-previous' : 'restore-original',
       backupKind: 'pre-restore',
       phases: [{ phase: 'backed_up', at: new Date().toISOString() }],
       targetPath: archivePath,
@@ -136,9 +150,10 @@ export async function restoreTarget(input: RestoreInput): Promise<Result<Restore
     const done = await appendPhase(input.layout.txDir, committing.data, 'applied');
     if (!done.success) return done;
 
-    // 恢复完成后清掉「上一主题」记录，避免把刚还原的状态又当作可回退项
+    // 恢复完成后清掉「上一主题」记录，避免把刚还原的状态又当作可回退项；
+    // 「首次接管快照」是唯一一份，保留下来供再次恢复。
     if (input.kind === 'previous') {
-      await fs.rm(record.file, { force: true });
+      await physicalFsp.rm(record.file, { force: true });
     }
 
     return ok({ manifest: stripTx(done.data), backup: pre.data });

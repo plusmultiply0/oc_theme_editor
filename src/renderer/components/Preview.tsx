@@ -1,19 +1,21 @@
 /**
- * 模拟预览（T53）。
+ * 模拟预览（T53；R4、R5）。
  *
- * 用的是与写入归档完全相同的 token 与参数：这里显示的主色就是会被写进去的主色，
- * 避免了「预览好看、应用变样」。
- * 场景覆盖长文本、代码、链接、输入 placeholder、弹出菜单、选中/焦点/悬停/按下、
+ * 这里显示的 token、层级与不透明度**就是会被写进归档的那一份**，
+ * 面板/气泡的不透明度直接取自 core/theme/surfaces 的同一组函数，
+ * 避免「预览好看、应用变样」。
+ *
+ * 背景结构与实际输出保持一致：图片层（可模糊）+ 遮罩层（叠在图片之上）。
+ * 场景覆盖长文本、代码、链接、输入 placeholder、弹出菜单、选中/悬停/按下/焦点、
  * 错误与 diff；终端与语法高亮明确标注不在覆盖范围内（T27）。
  */
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
+import { bubbleAlpha, panelAlpha, REGION_ALPHAS } from '../../core/theme/surfaces';
 
 export interface PreviewProps {
   tokens: ThemeTokens;
   imageUrl: string | null;
   spec: ThemeSpec;
-  /** 系统开启「减少透明度」时，面板退化为不透明纯色（T56） */
-  reducedTransparency: boolean;
 }
 
 function alpha(hex: string, a: number): string {
@@ -22,21 +24,29 @@ function alpha(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
-export default function Preview({ tokens, imageUrl, spec, reducedTransparency }: PreviewProps) {
-  const panelOpacity = reducedTransparency ? 1 : spec.panelOpacity;
-  const panel = alpha(tokens.panel, panelOpacity);
-  const surface = alpha(tokens.panel, reducedTransparency ? 1 : panelOpacity - 0.06);
+export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
+  // 与写入归档、对比度报告共用同一套层级函数
+  const panel = alpha(tokens.panel, panelAlpha(spec));
+  const bubble = alpha(tokens.panel, bubbleAlpha(spec));
 
   const vars: Record<string, string> = {
     '--p-bg-image': imageUrl ? `url("${imageUrl}")` : 'none',
     '--p-overlay': alpha(tokens.background, spec.overlayOpacity),
     '--p-blur': spec.blurPx > 0 ? `blur(${spec.blurPx}px)` : 'none',
+    '--p-blur-inset': spec.blurPx > 0 ? `-${spec.blurPx * 2}px` : '0',
     '--p-background': tokens.background,
+    // 面板与侧栏同层：早先侧栏用 panelOpacity-0.06，报告按 panelOpacity 算，两边对不上
     '--p-panel': panel,
-    '--p-surface': surface,
+    '--p-bubble': bubble,
+    '--p-neutral-surface': alpha(tokens.text, REGION_ALPHAS.neutral),
+    '--p-hover-overlay': alpha(tokens.hover, REGION_ALPHAS.hover),
+    '--p-pressed-overlay': alpha(tokens.pressed, REGION_ALPHAS.pressed),
+    '--p-selected-overlay': alpha(tokens.selection, REGION_ALPHAS.selected),
+    '--p-user-bubble': alpha(tokens.selection, REGION_ALPHAS.userBubble),
     '--p-text': tokens.text,
     '--p-muted': tokens.muted,
     '--p-primary': tokens.primary,
+    '--p-accent-text': tokens.accentText,
     '--p-on-primary': tokens.onPrimary,
     '--p-hover': tokens.hover,
     '--p-pressed': tokens.pressed,
@@ -52,16 +62,19 @@ export default function Preview({ tokens, imageUrl, spec, reducedTransparency }:
 
   return (
     <div className="preview">
-      <div className="preview-note">模拟预览，真实效果取决于已验证版本</div>
+      <div className="preview-note">模拟预览：与写入归档使用同一份 token 与不透明度参数</div>
       <div className="mock-window" style={vars as React.CSSProperties}>
-        <div className="mock-bg" aria-hidden="true" />
+        {/* 图片层与遮罩层分开：模糊只作用于图片，遮罩叠在图片之上 */}
+        <div className="mock-bg-image" aria-hidden="true" />
+        <div className="mock-overlay" aria-hidden="true" />
+
         <div className="mock-body">
           <aside className="mock-sidebar">
             <div className="mock-brand">会话</div>
             <div className="mock-item active">重构取色模块</div>
             <div className="mock-item">数据清洗脚本</div>
             <div className="mock-item">论文第三章</div>
-            <div className="mock-item muted">设置</div>
+            <div className="mock-item">设置</div>
           </aside>
 
           <div className="mock-main">
@@ -105,7 +118,7 @@ export default function Preview({ tokens, imageUrl, spec, reducedTransparency }:
             <div className="mock-menu" role="menu" aria-label="示例弹出菜单">
               <div className="mock-menu-item">复制到剪贴板</div>
               <div className="mock-menu-item hover">重新生成</div>
-              <div className="mock-menu-item muted">删除（不可用）</div>
+              <div className="mock-menu-item disabled">删除（不可用）</div>
             </div>
 
             <div className="msg-row">
@@ -114,10 +127,11 @@ export default function Preview({ tokens, imageUrl, spec, reducedTransparency }:
             </div>
 
             <div className="states">
-              <button className="btn" type="button">默认</button>
-              <button className="btn hover" type="button">悬停</button>
-              <button className="btn pressed" type="button">按下</button>
-              <button className="btn focus" type="button">焦点</button>
+              <button className="btn primary" type="button">默认</button>
+              <button className="btn primary hover" type="button">悬停</button>
+              <button className="btn primary pressed" type="button">按下</button>
+              <button className="btn primary focus" type="button">焦点</button>
+              <button className="btn neutral" type="button">次级</button>
               <button className="btn" type="button" disabled>禁用</button>
             </div>
 

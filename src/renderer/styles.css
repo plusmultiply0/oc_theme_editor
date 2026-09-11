@@ -330,17 +330,27 @@ a:focus-visible {
   border-radius: var(--ui-radius);
   overflow: hidden;
   min-height: 24rem;
+  /* 自建层叠上下文，让背景两层用负 z-index 落在内容之后，不去改应用子元素的定位 */
   isolation: isolate;
 }
 
-.mock-bg {
+.mock-bg-image {
   position: absolute;
-  inset: 0;
-  background-image: linear-gradient(var(--p-overlay), var(--p-overlay)), var(--p-bg-image);
+  inset: var(--p-blur-inset, 0);
+  background-image: var(--p-bg-image);
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   filter: var(--p-blur);
-  z-index: 0;
+  z-index: -2;
+}
+
+/* 遮罩叠在图片之上：与归档输出里的 #root::after 同一顺序 */
+.mock-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--p-overlay);
+  z-index: -1;
 }
 
 .mock-body {
@@ -352,7 +362,8 @@ a:focus-visible {
 }
 
 .mock-sidebar {
-  background: var(--p-surface);
+  /* 与正文面板同层：侧栏曾经用 panelOpacity-0.06，导致报告与实际显示对不上 */
+  background: var(--p-panel);
   border-right: 1px solid var(--p-border);
   padding: 0.75rem;
   font-size: 0.75rem;
@@ -375,12 +386,17 @@ a:focus-visible {
 }
 
 .mock-item.active {
-  background: var(--p-selection);
+  background: var(--p-selected-overlay);
   color: var(--p-text);
 }
 
-.mock-item.muted {
-  opacity: 0.6;
+/*
+ * 普通导航项不再额外淡化（R4）。
+ * 之前「设置」这类普通条目被套了 opacity:.6，报告却按不透明算，于是报告说达标、实际读不清。
+ * 真正的禁用项才允许降透明度，而且对比度要求按无障碍惯例豁免。
+ */
+.mock-item.disabled {
+  opacity: 0.55;
 }
 
 .mock-main {
@@ -389,7 +405,7 @@ a:focus-visible {
   flex-direction: column;
   gap: 0.625rem;
   min-width: 0;
-  background: var(--p-surface);
+  background: var(--p-panel);
   color: var(--p-text);
 }
 
@@ -399,7 +415,8 @@ a:focus-visible {
   font-size: 0.8125rem;
   line-height: 1.6;
   border: 1px solid var(--p-border);
-  background: var(--p-panel);
+  /* 气泡是叠在正文面板之上的第二层面板，报告按同样的等效不透明度计算 */
+  background: var(--p-bubble);
 }
 
 .msg p {
@@ -407,7 +424,7 @@ a:focus-visible {
 }
 
 .msg.user {
-  background: var(--p-selection);
+  background: var(--p-user-bubble);
   align-self: flex-end;
   max-width: 80%;
 }
@@ -424,7 +441,8 @@ a:focus-visible {
 }
 
 .link {
-  color: var(--p-primary);
+  /* 链接按正文尺寸的强调色，不是按钮主色（两者要求不同目标） */
+  color: var(--p-accent-text);
   margin-left: 0.25rem;
 }
 
@@ -444,12 +462,12 @@ a:focus-visible {
 }
 
 .mock-menu-item.hover {
-  background: var(--p-selection);
+  background: var(--p-hover-overlay);
 }
 
-.mock-menu-item.muted {
+.mock-menu-item.disabled {
   color: var(--p-muted);
-  opacity: 0.7;
+  opacity: 0.55;
 }
 
 .input {
@@ -469,7 +487,7 @@ a:focus-visible {
   align-items: center;
 }
 
-.msg-row .btn {
+.msg-row .btn.primary {
   background: var(--p-primary);
   border-color: var(--p-primary);
   color: var(--p-on-primary);
@@ -481,23 +499,32 @@ a:focus-visible {
   flex-wrap: wrap;
 }
 
-.states .btn {
+.states .btn.primary {
   background: var(--p-primary);
-  border-color: var(--p-border);
+  border-color: var(--p-primary);
   color: var(--p-on-primary);
 }
 
-.states .btn.hover {
+.states .btn.primary.hover {
   background: var(--p-hover);
+  border-color: var(--p-hover);
 }
 
-.states .btn.pressed {
+.states .btn.primary.pressed {
   background: var(--p-pressed);
+  border-color: var(--p-pressed);
 }
 
-.states .btn.focus {
+.states .btn.primary.focus {
   outline: 2px solid var(--p-focus);
   outline-offset: 2px;
+}
+
+/* 次级按钮：中性底，文字仍是正文色（与报告里的「次级按钮文字」同层） */
+.states .btn.neutral {
+  background: var(--p-neutral-surface);
+  border-color: var(--p-border);
+  color: var(--p-text);
 }
 
 .states .btn:disabled {

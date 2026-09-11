@@ -27,6 +27,8 @@ export const ERROR_CODES = [
   'PERMISSION_DENIED',
   'DISK_FULL',
   'FILE_LOCKED',
+  /** 运行时无法按物理文件访问归档（Electron 未提供 original-fs）；工具自身问题，不得当成目标不受支持 */
+  'RUNTIME_IO_UNAVAILABLE',
 
   // 事务
   'TRANSACTION_IN_PROGRESS',
@@ -41,6 +43,8 @@ export const ERROR_CODES = [
   // 主题
   'CONTRAST_BELOW_TARGET',
   'THEME_GENERATION_FAILED',
+  /** 目标里存在来源不明的第三方主题层；默认拒绝叠加，不自动覆盖 */
+  'THEME_CONFLICT',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

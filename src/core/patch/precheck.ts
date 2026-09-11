@@ -8,7 +8,6 @@
  * - 不修改可执行文件、不改安全开关；遇到签名/完整性保护只上报不绕过。
  */
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -16,6 +15,7 @@ import { fail, ok, type Result } from '../../shared/errors';
 import type { TargetInfo } from '../../shared/schema';
 import { adapterById } from '../../adapters/registry';
 import { canonicalize } from './paths';
+import { physicalFsp, physicalStat } from './physical-fs';
 
 const execFileAsync = promisify(execFile);
 
@@ -68,7 +68,7 @@ export function requiredBytes(archiveSize: number): number {
 
 export async function freeBytesOf(dir: string): Promise<number> {
   try {
-    const st = await fs.statfs(dir);
+    const st = await physicalFsp.statfs(dir);
     return Number(st.bavail) * Number(st.bsize);
   } catch {
     return 0;
@@ -79,8 +79,8 @@ export async function freeBytesOf(dir: string): Promise<number> {
 export async function canWriteDir(dir: string): Promise<boolean> {
   const probe = path.join(dir, `.ts-probe-${process.pid}-${Date.now()}`);
   try {
-    await fs.writeFile(probe, '');
-    await fs.rm(probe, { force: true });
+    await physicalFsp.writeFile(probe, '');
+    await physicalFsp.rm(probe, { force: true });
     return true;
   } catch {
     return false;
@@ -112,7 +112,7 @@ export async function precheckTarget(
   let archiveSize = opts.archiveSize ?? 0;
   if (archiveSize === 0) {
     try {
-      archiveSize = (await fs.stat(archivePath)).size;
+      archiveSize = (await physicalStat(archivePath)).size;
     } catch {
       return fail('TARGET_NOT_FOUND', '未找到应用归档', '请重新检测安装目标。');
     }

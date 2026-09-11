@@ -38,10 +38,11 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:e2e": "playwright test --pass-with-no-tests",
+    "test:e2e": "playwright test",
+    "test:e2e:electron": "node tools/run-electron-e2e.cjs",
+    "verify": "npm run typecheck && npm run lint && npm run test:unit && npm run test:integration && npm run build && npm run test:e2e",
     "dist": "npm run build && electron-builder --win --dir",
     "smoke": "electron tools/smoke-main.cjs",
-    "audit": "node tools/audit.cjs",
     "audit": "node tools/audit.cjs"
   },
   "dependencies": {

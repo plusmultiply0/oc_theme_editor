@@ -4,6 +4,7 @@ import type {
   BackupInfo,
   DiscoveredTargets,
   GenerateThemeOutput,
+  RecoveryStatus,
   StageSummary,
   TargetInfo,
 } from '../shared/types';
@@ -12,6 +13,7 @@ import Preview from './components/Preview';
 import ContrastPanel from './components/ContrastPanel';
 import ApplyDialog from './components/ApplyDialog';
 import RestorePanel from './components/RestorePanel';
+import RecoveryPanel from './components/RecoveryPanel';
 import {
   blockedReason,
   canStage,
@@ -20,8 +22,10 @@ import {
   formatDateTime,
   isBusy,
   makeSpec,
+  readyText,
   resetSpec,
   scopeText,
+  type GateInput,
   type UiState,
 } from './logic';
 
@@ -72,19 +76,24 @@ function detectReducedTransparency(): boolean {
 }
 
 export default function App() {
-  const [spec, setSpec] = useState<ThemeSpec>(loadSpec);
+  const [spec, setSpec] = useState<ThemeSpec>(() => {
+    const stored = loadSpec();
+    // 首次启动时跟随系统的「减少透明度」偏好；之后以用户勾选为准（这个值会写进主题参数）
+    return stored.reducedTransparency ? stored : { ...stored, reducedTransparency: detectReducedTransparency() };
+  });
   const [imageName, setImageName] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<GenerateThemeOutput | null>(null);
   const [discovered, setDiscovered] = useState<DiscoveredTargets | null>(null);
   const [targetId, setTargetId] = useState<string>('');
   const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [recovery, setRecovery] = useState<RecoveryStatus | null>(null);
   const [ui, setUi] = useState<UiState>({ kind: 'empty' });
   const [summary, setSummary] = useState<StageSummary | null>(null);
   const [scale, setScale] = useState<number>(loadScale);
-  const [reducedTransparency, setReducedTransparency] = useState<boolean>(detectReducedTransparency);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const genRef = useRef(0);
 
   const targets = useMemo(() => discovered?.targets ?? [], [discovered]);
@@ -94,6 +103,17 @@ export default function App() {
   );
   const targetSupported = target?.support === 'supported';
   const reportPassed = result?.report.passed ?? false;
+  const recoveryBlocking = (recovery?.blockingCount ?? 0) > 0;
+
+  const gate: GateInput = {
+    hasImage: Boolean(spec.imageId),
+    hasPreview: Boolean(result),
+    targetCount: targets.length,
+    targetSupported,
+    ...(target?.rejectReason ? { targetRejectReason: target.rejectReason } : {}),
+    reportPassed,
+    recoveryBlocking,
+  };
 
   // 缩放：改根字号，布局用 rem，125% / 150% 下不裁切（T56）
   useEffect(() => {
@@ -114,16 +134,57 @@ export default function App() {
     );
   }, []);
 
+  const refreshRecovery = useCallback(async () => {
+    const r = await window.themeSwitcher.getRecoveryStatus();
+    if (r.success) setRecovery(r.data);
+  }, []);
+
   const refreshTargets = useCallback(async () => {
-    const r = await window.themeSwitcher.discoverTargets();
-    if (!r.success) {
-      fail(r.error);
-      return;
+    setScanning(true);
+    try {
+      // R7：每次刷新目标都顺带看一次未完成事务，避免「有事务在身还继续写」
+      const [r] = await Promise.all([window.themeSwitcher.discoverTargets(), refreshRecovery()]);
+      if (!r.success) {
+        fail(r.error);
+        return;
+      }
+      setDiscovered(r.data);
+      setTargetId((prev) => {
+        if (prev && r.data.targets.some((t) => t.targetId === prev)) return prev;
+        const first = r.data.targets.find((t) => t.support === 'supported') ?? r.data.targets[0];
+        return first?.targetId ?? '';
+      });
+    } finally {
+      setScanning(false);
     }
-    setDiscovered(r.data);
-    const first = r.data.targets.find((t) => t.support === 'supported') ?? r.data.targets[0];
-    if (first) setTargetId((prev) => prev || first.targetId);
-  }, [fail]);
+  }, [fail, refreshRecovery]);
+
+  /** R6：手动选择安装目录。目录由主进程的对话框选出，renderer 不传路径。 */
+  const chooseTargetDirectory = useCallback(async () => {
+    setScanning(true);
+    try {
+      const r = await window.themeSwitcher.chooseTargetDirectory();
+      if (!r.success) {
+        fail(r.error);
+        return;
+      }
+      if (r.data.rejected) {
+        setUi({
+          kind: 'error',
+          message: `该目录无法作为目标：${r.data.rejected.message}`,
+          hint: r.data.rejected.recoveryHint,
+          scope: 'unmodified',
+        });
+        return;
+      }
+      if (r.data.target) {
+        setTargetId(r.data.target.targetId);
+        await refreshTargets();
+      }
+    } finally {
+      setScanning(false);
+    }
+  }, [fail, refreshTargets]);
 
   const refreshBackups = useCallback(async (id: string) => {
     if (!id) return;
@@ -131,6 +192,8 @@ export default function App() {
     if (r.success) setBackups(r.data);
   }, []);
 
+  // refreshTargets 依赖 fail / refreshRecovery，两者都是稳定引用，
+  // 因此这个 effect 只会在挂载时跑一次；之后由「重新检测」按钮驱动。
   useEffect(() => {
     void refreshTargets();
   }, [refreshTargets]);
@@ -246,14 +309,7 @@ export default function App() {
 
   const stage = useCallback(async () => {
     if (!target) return;
-    const can = canStage({
-      hasImage: Boolean(spec.imageId),
-      hasPreview: Boolean(result),
-      targetSupported,
-      reportPassed,
-      busy: isBusy(ui),
-    });
-    if (!can) return;
+    if (!canStage({ ...gate, busy: isBusy(ui) })) return;
     setUi({ kind: 'staging' });
     const r = await window.themeSwitcher.stageTheme({
       targetId: target.targetId,
@@ -261,12 +317,13 @@ export default function App() {
       spec,
     });
     if (!r.success) {
+      await refreshRecovery();
       fail(r.error);
       return;
     }
     setSummary(r.data.summary);
     setUi({ kind: 'confirming' });
-  }, [fail, reportPassed, result, spec, target, targetSupported, ui]);
+  }, [fail, gate, refreshRecovery, spec, target, ui]);
 
   const apply = useCallback(async () => {
     if (!summary) return;
@@ -274,37 +331,46 @@ export default function App() {
     const r = await window.themeSwitcher.applyTheme({ operationId: summary.operationId });
     setSummary(null);
     if (!r.success) {
+      await refreshRecovery();
       fail(r.error);
       return;
     }
     setUi({ kind: 'success', message: `已应用（${formatDateTime(r.data.createdAt)}）。请重新启动 OpenCode 查看效果。` });
     await refreshBackups(target?.targetId ?? '');
-  }, [fail, refreshBackups, summary, target?.targetId]);
+  }, [fail, refreshBackups, refreshRecovery, summary, target?.targetId]);
 
   const restore = useCallback(
-    async (kind: 'original' | 'previous') => {
+    async (kind: 'original' | 'previous' | 'takeover') => {
       if (!target) return;
       setUi({ kind: 'applying', phase: '正在恢复…' });
       const r = await window.themeSwitcher.restoreTheme({ targetId: target.targetId, kind });
       if (!r.success) {
+        await refreshRecovery();
         fail(r.error);
         return;
       }
-      setUi({
-        kind: 'success',
-        message: kind === 'original' ? '已恢复原版。' : '已恢复上一主题。',
-      });
-      await refreshBackups(target.targetId);
+      const label =
+        kind === 'original' ? '已恢复原版。' : kind === 'takeover' ? '已恢复到首次接管时的状态。' : '已恢复上一主题。';
+      setUi({ kind: 'success', message: label });
+      await Promise.all([refreshBackups(target.targetId), refreshRecovery()]);
     },
-    [fail, refreshBackups, target],
+    [fail, refreshBackups, refreshRecovery, target],
   );
 
-  const blocked = blockedReason({
-    hasImage: Boolean(spec.imageId),
-    hasPreview: Boolean(result),
-    targetSupported,
-    reportPassed,
-  });
+  const resolveRecovery = useCallback(
+    async (operationId: string, action: 'mark-applied' | 'mark-failed' | 'acknowledge') => {
+      const r = await window.themeSwitcher.resolveRecovery({ operationId, action });
+      if (!r.success) {
+        fail(r.error);
+        return;
+      }
+      setRecovery(r.data);
+      setNotice('待处理事务状态已更新。');
+    },
+    [fail],
+  );
+
+  const blocked = blockedReason(gate);
 
   return (
     <div className="app">
@@ -381,6 +447,7 @@ export default function App() {
             <input
               type="range" min={0} max={1} step={0.01}
               value={spec.panelOpacity}
+              disabled={spec.reducedTransparency}
               onChange={(e) => updateSpec({ panelOpacity: Number(e.target.value) })}
             />
           </label>
@@ -425,8 +492,8 @@ export default function App() {
           <label className="check">
             <input
               type="checkbox"
-              checked={reducedTransparency}
-              onChange={(e) => setReducedTransparency(e.target.checked)}
+              checked={spec.reducedTransparency}
+              onChange={(e) => updateSpec({ reducedTransparency: e.target.checked })}
             />
             <span>减少透明度（面板用纯色）</span>
           </label>
@@ -450,12 +517,7 @@ export default function App() {
 
         <section className="panel preview-panel">
           {result ? (
-            <Preview
-              tokens={result.tokens}
-              imageUrl={previewUrl}
-              spec={spec}
-              reducedTransparency={reducedTransparency}
-            />
+            <Preview tokens={result.tokens} imageUrl={previewUrl} spec={spec} />
           ) : (
             <div className="empty-preview">
               <p className="muted">
@@ -467,50 +529,89 @@ export default function App() {
 
         <div className="side-column">
           <ContrastPanel report={result?.report ?? null} effectiveBackground={result?.effectiveBackground ?? null} />
+
+          <section className="panel">
+            <div className="panel-head">
+              <h2>目标</h2>
+              <div className="panel-actions">
+                <button
+                  className="btn small"
+                  type="button"
+                  onClick={() => void refreshTargets()}
+                  disabled={scanning || isBusy(ui)}
+                >
+                  {scanning ? '检测中…' : '重新检测'}
+                </button>
+                <button
+                  className="btn small"
+                  type="button"
+                  onClick={() => void chooseTargetDirectory()}
+                  disabled={scanning || isBusy(ui)}
+                >
+                  选择安装目录
+                </button>
+              </div>
+            </div>
+
+            {targets.length > 1 ? (
+              <label className="field">
+                <span>检测到多个安装，选择要操作的目标</span>
+                <select value={target?.targetId ?? ''} onChange={(e) => setTargetId(e.target.value)}>
+                  {targets.map((t) => (
+                    <option key={t.targetId} value={t.targetId}>
+                      {t.installPath}（{t.version} · {t.support}）
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {targets.length === 0 ? (
+              <p className="scope">
+                未发现 OpenCode 安装。请点「重新检测」；若仍找不到，用「选择安装目录」手动指定安装目录
+                （目录里应有 resources 文件夹）。
+              </p>
+            ) : null}
+
+            {discovered && discovered.rejected.length > 0 ? (
+              <ul className="entries">
+                {discovered.rejected.map((r) => (
+                  <li key={r.path} className="fail">
+                    <span className="entry-name">
+                      [{r.code}] {r.message}
+                    </span>
+                    <span className="mono">{r.path}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {discovered && discovered.scanned.length > 0 ? (
+              <details className="scan-details">
+                <summary>已检查 {discovered.scanned.length} 个登记位置（不做全盘搜索）</summary>
+                <ul className="entries">
+                  {discovered.scanned.map((p) => (
+                    <li key={p} className="mono">{p}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </section>
+
+          <RecoveryPanel status={recovery} busy={isBusy(ui)} onResolve={resolveRecovery} />
+
           <RestorePanel
             backups={backups}
             busy={isBusy(ui)}
             onRestore={(kind) => void restore(kind)}
             onRefresh={() => void refreshBackups(target?.targetId ?? '')}
           />
-          {discovered && (discovered.rejected.length > 0 || targets.length === 0) ? (
-            <section className="panel">
-              <h2>目标检查</h2>
-
-              {discovered.rejected.length > 0 ? (
-                <ul className="entries">
-                  {discovered.rejected.map((r) => (
-                    <li key={r.path} className="fail">
-                      <span className="entry-name">{r.message}</span>
-                      <span className="mono">{r.path}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              {targets.length === 0 ? (
-                <p className="scope">未发现可用的 OpenCode 安装。</p>
-              ) : null}
-
-              {discovered.scanned.length > 0 ? (
-                <details className="scan-details">
-                  <summary>已检查 {discovered.scanned.length} 个登记位置（不做全盘搜索）</summary>
-                  <ul className="entries">
-                    {discovered.scanned.map((p) => (
-                      <li key={p} className="mono">{p}</li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
-            </section>
-          ) : null}
         </div>
       </main>
 
       <footer className={`status ${ui.kind}`}>
-        {ui.kind === 'empty' ? '请选择一张本地图片开始。' : null}
+        {ui.kind === 'empty' || ui.kind === 'ready' ? readyText(gate) : null}
         {ui.kind === 'analyzing' ? '正在提取配色…' : null}
-        {ui.kind === 'ready' ? '配色已生成，可继续调节或直接应用。' : null}
         {ui.kind === 'staging' ? '正在检查目标与生成准备内容…' : null}
         {ui.kind === 'confirming' ? '请确认应用信息。' : null}
         {ui.kind === 'applying' ? (
@@ -531,7 +632,7 @@ export default function App() {
           <>
             <strong>{ui.message}</strong>
             <span>{ui.hint}</span>
-            <span>请使用「恢复」入口处理；不要手动替换应用文件。</span>
+            <span>请先在上方「待恢复」面板处理；不要手动替换应用文件。</span>
           </>
         ) : null}
         {notice ? <span className="notice">{notice}</span> : null}

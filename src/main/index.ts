@@ -5,6 +5,7 @@ import { ImageStore } from './services/image-store';
 import { TargetService } from './services/target-service';
 import { ThemeService } from './services/theme-service';
 import { OperationService } from './services/operation-service';
+import { RecoveryService } from './services/recovery-service';
 import { OperationEventBus } from './services/events';
 import { runtimeRoot as resolveRuntimeRoot } from '../core/patch/precheck';
 
@@ -43,6 +44,21 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+/**
+ * 测试/自动化用的环境开关。
+ * GUI 端到端测试必须保证「只看得见合成安装」，否则一旦误选真实安装，
+ * 点一下应用就会改写用户的 OpenCode。因此禁用注册表扫描、把候选根目录限定在临时目录。
+ */
+function targetServiceOptions(): ConstructorParameters<typeof TargetService>[0] {
+  const extraRaw = process.env.THEME_SWITCHER_EXTRA_ROOTS ?? '';
+  const extraRoots = extraRaw
+    .split(path.delimiter)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const useRegistry = process.env.THEME_SWITCHER_NO_REGISTRY !== '1';
+  return { useRegistry, ...(extraRoots.length > 0 ? { extraRoots } : {}) };
+}
+
 function bootstrap(): void {
   const runtimeRoot = process.env.THEME_SWITCHER_DATA_DIR || resolveRuntimeRoot();
   const bus = new OperationEventBus();
@@ -64,18 +80,39 @@ function bootstrap(): void {
     },
   });
 
-  const targets = new TargetService({ useRegistry: true });
+  const targets = new TargetService(targetServiceOptions());
   const themes = new ThemeService(images);
-  const operations = new OperationService({ runtimeRoot, targets, images, bus });
+  const recovery = new RecoveryService({ runtimeRoot });
+  const operations = new OperationService({
+    runtimeRoot,
+    targets,
+    images,
+    bus,
+    // R7：有待人工处理的未完成事务时，后端直接拒绝继续写入
+    recoveryGuard: () => recovery.assertClear(),
+  });
 
   registerHandlers(ipcMain, {
     images,
     targets,
     themes,
     operations,
+    recovery,
     bus,
     openExternal: async (url) => {
       await shell.openExternal(url);
+    },
+    pickDirectory: async () => {
+      const win = BrowserWindow.getFocusedWindow();
+      const options: Electron.OpenDialogOptions = {
+        title: '选择 OpenCode 安装目录（应包含 resources 文件夹）',
+        properties: ['openDirectory'],
+      };
+      const res = win
+        ? await dialog.showOpenDialog(win, options)
+        : await dialog.showOpenDialog(options);
+      if (res.canceled || res.filePaths.length === 0) return null;
+      return res.filePaths[0] ?? null;
     },
   });
 
@@ -85,6 +122,10 @@ function bootstrap(): void {
       w.webContents.send('operation-event', event);
     }
   });
+
+  // R7：启动即扫描本工具登记过的未完成事务，并清理残留准备区。
+  // 界面在挂载时通过 getRecoveryStatus 读取，不依赖这条广播。
+  void recovery.bootstrap().catch(() => undefined);
 
   createWindow();
 }

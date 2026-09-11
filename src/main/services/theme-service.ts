@@ -12,6 +12,7 @@ import { ThemeSpecSchema, ThemeTokensSchema } from '../../shared/schema';
 import { generateTheme } from '../../core/theme/generate';
 import { buildContrastReport } from '../../core/theme/report';
 import { effectiveBackground, hexToRgb, rgbToHex } from '../../core/theme/contrast';
+import { panelAlpha } from '../../core/theme/surfaces';
 import { OPENCODE_DESKTOP_ADAPTER } from '../../adapters/opencode-desktop';
 import type { ImageStore } from './image-store';
 
@@ -54,8 +55,9 @@ export class ThemeService {
   }
 
   /**
-   * 用界面当前 token 重算报告。
-   * 不重新解码图片：代表色来自 spec.palette，合成只依赖 spec 的两个不透明度。
+   * 用界面当前 token 与参数重算报告。
+   * 不重新解码图片：代表色来自 spec.palette，合成只依赖 spec 的不透明度参数，
+   * 与生成阶段用的是同一套层级模型（surfaces.ts）。
    */
   async analyze(input: AnalyzeContrastInput): Promise<Result<ContrastReport>> {
     const specParsed = ThemeSpecSchema.safeParse(input?.spec);
@@ -73,10 +75,17 @@ export class ThemeService {
         hexToRgb(tokens.background),
         spec.overlayOpacity,
         hexToRgb(tokens.panel),
-        spec.panelOpacity,
+        panelAlpha(spec),
       ),
     );
 
-    return ok(buildContrastReport({ tokens, effective, background: tokens.background }));
+    return ok(
+      buildContrastReport({
+        tokens,
+        spec,
+        imageSamples: spec.palette.map((c) => hexToRgb(c)),
+        effective,
+      }),
+    );
   }
 }

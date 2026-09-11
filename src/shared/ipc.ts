@@ -7,7 +7,7 @@
  * - 所有 token、枚举、数值范围在主进程用 schema.ts 复验。
  * - 本文件只声明形状，不含实现。
  */
-import type { Result } from './errors';
+import type { ErrorCode, Result } from './errors';
 import type {
   ContrastReport,
   OperationManifest,
@@ -24,12 +24,15 @@ export const IPC_CHANNELS = [
   'generateTheme',
   'analyzeContrast',
   'discoverTargets',
+  'chooseTargetDirectory',
   'inspectTarget',
   'stageTheme',
   'applyTheme',
   'listBackups',
   'restoreTheme',
   'getOperation',
+  'getRecoveryStatus',
+  'resolveRecovery',
   'openExternal',
 ] as const;
 
@@ -76,10 +79,12 @@ export interface AnalyzeContrastInput {
   tokens: ThemeTokens;
 }
 
-/** 未通过识别的候选目录；界面要显示原因，不能默默吞掉（T51） */
+/** 未通过识别的候选目录；界面要显示原因，不能默默吞掉（T51、R6） */
 export interface RejectedTargetInfo {
   path: string;
   support: 'unsupported' | 'unknown';
+  /** 具体原因码，界面据此分类展示「未发现 / 读取失败 / 版本未验证 / 主题冲突」 */
+  code: ErrorCode;
   message: string;
   recoveryHint: string;
 }
@@ -89,6 +94,41 @@ export interface DiscoveredTargets {
   rejected: RejectedTargetInfo[];
   /** 实际扫描过的候选位置，便于用户核对「没扫到」而不是工具瞎猜 */
   scanned: string[];
+}
+
+/** 用户手动选择安装目录的结果（R6）：要么登记成功，要么带着具体原因返回 */
+export interface RegisterDirectoryResult {
+  target?: TargetInfo;
+  rejected?: RejectedTargetInfo;
+}
+
+/** 未完成事务在磁盘上的判定结果（R7） */
+export type RecoveryState = 'applied' | 'unchanged' | 'needs_recovery';
+
+export type RecoveryAction = 'mark-applied' | 'mark-failed' | 'acknowledge';
+
+export interface PendingRecoveryItem {
+  operationId: string;
+  instanceId: string;
+  state: RecoveryState;
+  advice: string;
+  themeSummary: string;
+  status: string;
+  createdAt: string;
+  /** 目标归档路径（本机信息，仅用于让用户知道去哪看） */
+  targetPath: string;
+  /** true 表示在人工处理前不允许继续 apply */
+  blocking: boolean;
+  /** 该状态下允许的落账动作 */
+  actions: RecoveryAction[];
+}
+
+export interface RecoveryStatus {
+  items: PendingRecoveryItem[];
+  /** 需要人工处理的数量；> 0 时 apply 被阻断 */
+  blockingCount: number;
+  /** 启动时清理掉的残留准备区数量 */
+  stagesCleaned: number;
 }
 
 export interface StageThemeInput {
@@ -118,6 +158,13 @@ export interface StageSummary {
   beforeHash: string;
   themeSummary: string;
   createdAt: string;
+  /**
+   * 本次会撤下的、已确认来源与指纹的旧主题层（R3）。
+   * 必须在确认对话框里如实列出——用户是在「撤下这些旧主题」的前提下授权的。
+   */
+  legacyThemes: { id: string; label: string; entry: string }[];
+  /** 留在归档里没动过的旧主题配套资源（不删，只说明） */
+  keptAssets: string[];
 }
 
 export interface StagedTheme {
@@ -133,19 +180,26 @@ export interface BackupInfo {
   /** 备份记录标识，用于选择恢复到哪一个上一主题 */
   backupId: string;
   createdAt: string;
-  /** 「原版」或「上一主题」，UI 必须区分（T41） */
-  kind: 'original' | 'previous';
+  /**
+   * 三个语义不能合并（T41、R2）：
+   * - original：已证明是出厂原版
+   * - takeover：首次接管快照（无法证明是原版）
+   * - previous：上一主题
+   */
+  kind: 'original' | 'previous' | 'takeover';
   themeSummary: string;
   applicableVersion: string;
   /** false 表示无法确认为出厂原版，界面必须禁用并说明原因 */
   pristine: boolean;
+  /** 原版判定依据；kind 为 takeover 时说明为什么不能当原版 */
+  evidenceNote?: string;
   sizeBytes: number;
 }
 
 export interface RestoreThemeInput {
   targetId: string;
-  /** 恢复原版还是上一主题；两个入口语义不同，不能合并（T41） */
-  kind: 'original' | 'previous';
+  /** 三个入口语义不同，不能合并（T41、R2） */
+  kind: 'original' | 'previous' | 'takeover';
 }
 
 /** 桥接方法签名：全部返回 Result，不允许抛异常给 renderer */
@@ -162,7 +216,16 @@ export interface ThemeSwitcherApi {
   generateTheme(input: GenerateThemeInput): Promise<Result<GenerateThemeOutput>>;
   analyzeContrast(input: AnalyzeContrastInput): Promise<Result<ContrastReport>>;
   discoverTargets(): Promise<Result<DiscoveredTargets>>;
+  /**
+   * 让用户手动指定安装目录（R6）。目录由主进程的系统对话框选出，
+   * renderer 既拿不到也不传路径，只拿到登记结果。
+   */
+  chooseTargetDirectory(): Promise<Result<RegisterDirectoryResult>>;
   inspectTarget(targetId: string): Promise<Result<TargetInfo>>;
+  /** 启动恢复状态：有待人工处理的未完成事务时，apply 会被后端阻断（R7） */
+  getRecoveryStatus(): Promise<Result<RecoveryStatus>>;
+  /** 对未完成事务落账；方向由磁盘事实决定，不允许把 needs_recovery 写成 applied */
+  resolveRecovery(input: { operationId: string; action: RecoveryAction }): Promise<Result<RecoveryStatus>>;
   stageTheme(input: StageThemeInput): Promise<Result<StagedTheme>>;
   applyTheme(input: ApplyThemeInput): Promise<Result<OperationManifest>>;
   listBackups(targetId: string): Promise<Result<BackupInfo[]>>;

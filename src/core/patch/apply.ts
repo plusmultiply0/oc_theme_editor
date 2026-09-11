@@ -10,15 +10,16 @@
  * - 重复应用同一主题直接返回已应用，不重复写盘。
  */
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { adapterById } from '../../adapters/registry';
 import type { TargetAdapter } from '../../adapters/types';
 import { fail, ok, type Result } from '../../shared/errors';
 import type { OperationEvent, OperationManifest, TargetInfo } from '../../shared/schema';
-import { readAsar, listAsarFiles } from './asar';
+import { readAsar, readAsarText } from './asar';
+import { physicalFsp } from './physical-fs';
 import { ensureDirs, originalDir, previousDir, runtimeDirs, type RuntimeLayout } from './layout';
 import { ensureOriginalBackup, createBackup } from './backup';
+import { assessOriginalEvidence } from './original-evidence';
 import { stageChanges, type StageResult } from './stage';
 import { commitStaged, type CommitHooks } from './commit';
 import { withLock } from './lock';
@@ -132,6 +133,7 @@ async function runApply(
         removed: [],
         unpackedPreserved: true,
         fileCount: 0,
+        themeLayers: { removedLegacy: [], keptAssets: [], selfPresent: true },
       },
       noop: true,
     });
@@ -160,7 +162,6 @@ async function runApply(
   const operationId = newOpId(input.now);
   emit('inspected', '已确认目标版本与资源', 5);
 
-  const alreadyPatched = listAsarFiles(snapshot.data.header).includes(adapter.injection.cssFile);
   const workDir = path.join(layout.stageDir, operationId);
 
   if (input.hooks?.failBeforeStage) {
@@ -215,12 +216,26 @@ async function runApply(
   record = toStaged.data;
   emit('staged', '准备区校验通过', 40);
 
-  // T36：先保住原版语义，再备份上一主题
+  // T36 / R2：先保住「首次接管快照」语义，再备份上一主题。
+  // 是否原版由证据判定，不再靠「看不到本工具标记」反推。
+  const htmlText = await readAsarText(snapshot.data, adapter.injection.htmlEntry);
+  const assessment = await assessOriginalEvidence({
+    version: input.target.version,
+    sha256: beforeHash,
+    html: htmlText.success ? htmlText.data : '',
+    adapter,
+    readEntry: async (entry) => {
+      const r = await readAsarText(snapshot.data, entry);
+      return r.success ? r.data : null;
+    },
+  });
+
   const original = await ensureOriginalBackup(originalDir(layout), {
     archivePath,
     expectedHash: beforeHash,
     version: input.target.version,
-    alreadyPatched,
+    evidence: assessment.evidence,
+    note: assessment.note,
   });
   if (!original.success) return original;
 
@@ -283,7 +298,7 @@ async function runApply(
   record = done.data;
   emit('applied', '应用完成，已通过 hash 复核', 100);
 
-  await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+  await physicalFsp.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
 
   const { phases: _p, targetPath: _t, ...manifest } = record;
   return ok({ manifest, staged: staged.data, noop: false });
@@ -298,11 +313,11 @@ async function latestApplied(layout: RuntimeLayout): Promise<TxRecord | undefine
 /** 只保留最近 N 份备份，避免 150MB 级归档无限堆积 */
 async function pruneBackups(dir: string, keep: number): Promise<void> {
   try {
-    const files = (await fs.readdir(dir))
+    const files = (await physicalFsp.readdir(dir))
       .filter((n) => n.endsWith('.asar'))
       .sort();
     for (const f of files.slice(0, Math.max(0, files.length - keep))) {
-      await fs.rm(path.join(dir, f), { force: true });
+      await physicalFsp.rm(path.join(dir, f), { force: true });
     }
   } catch {
     // 清理失败不影响主流程

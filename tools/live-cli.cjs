@@ -145,7 +145,7 @@ async function main() {
       overlayOpacity: Number(args.flags.overlay ?? 0.35),
       panelOpacity: Number(args.flags.panel ?? 0.86),
       blurPx: Number(args.flags.blur ?? 0),
-      backgroundPosition: 'cover',
+      reducedTransparency: Boolean(args.flags['reduce-transparency']),
       ...(args.flags.primary ? { primary: args.flags.primary } : {}),
     };
 

@@ -5,8 +5,8 @@
  * - 任何来自 manifest / 用户输入的路径都必须先过包含性检查，拒绝越界。
  */
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import { fail, ok, type Result } from '../../shared/errors';
+import { physicalFsp } from './physical-fs';
 
 /** 判断字符串中是否含控制字符，避免使用带控制字符的正则字面量 */
 function hasControlChar(s: string): boolean {
@@ -21,7 +21,7 @@ function hasControlChar(s: string): boolean {
 export async function canonicalize(p: string): Promise<Result<string>> {
   const abs = path.resolve(p);
   try {
-    return ok(await fs.realpath(abs));
+    return ok(await physicalFsp.realpath(abs));
   } catch (e) {
     return fail(
       'TARGET_NOT_FOUND',

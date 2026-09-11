@@ -1,16 +1,21 @@
 /**
- * 主题 CSS 生成（T23、T24、T27）。
+ * 主题 CSS 生成（T23、T24、T27；R3、R5）。
  *
  * 原则：
  * - 以 token 模板生成，不从旧 CSS 做字符串替换。
- * - 只使用已核实的目标变量与选择器（见 docs/discovery.md 的原型取证）。
+ * - token 名取自真实安装 1.18.29 的官方 CSS（见 tokens.ts 的说明），不是猜的。
+ * - 层级只有一份描述（图片 → 遮罩 → 面板 → 叠加 → 文字），与预览、对比度报告共用，
+ *   避免「预览半透明、输出实底」这类不一致。
  * - 只引用工具自己的本地图片引用，拒绝远程 URL、@import 与用户代码。
- * - 终端（.xterm）与代码语法高亮不在覆盖范围内，保持原渲染（T27）。
- * - 不使用 `* { ... !important }` 这类全局覆盖。
+ * - 终端（.xterm）与 `--syntax-*` / `--markdown-*` 语法色不在覆盖范围内（T27）。
+ * - 不叠加 `!important`：本表在 `<head>` 最后加载，同特异性下后者胜出；
+ *   旧主题那种 `#root { --x: … !important }` 由迁移预检先行撤下（见 legacy-theme.ts）。
  */
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
 import { fail, ok, type Result } from '../../shared/errors';
-import { rgbToHex, hexToRgb, composite } from './contrast';
+import { hexToRgb, composite, rgbToHex } from './contrast';
+import { bubbleAlpha, overlayAlpha, panelAlpha, REGION_ALPHAS } from './surfaces';
+import { renderTokenCss } from './tokens';
 
 export interface RenderCssInput {
   tokens: ThemeTokens;
@@ -47,138 +52,149 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** 把面板色与背景色按不透明度合成，得到实际面板底色（T26） */
-function panelColorOver(tokens: ThemeTokens, panelOpacity: number): string {
-  return rgbToHex(composite(hexToRgb(tokens.panel), panelOpacity, hexToRgb(tokens.background)));
+/** 面板色按不透明度合成到图片遮罩之上，得到实际面板底色（报告与输出共用这一口径） */
+export function panelColorOver(tokens: ThemeTokens, alpha: number, under: string): string {
+  return rgbToHex(composite(hexToRgb(tokens.panel), alpha, hexToRgb(under)));
 }
 
 export function renderThemeCss(input: RenderCssInput): string {
   const { tokens, spec, imageRef, resolvedMode } = input;
   const ref = imageRef;
-  const overlay = rgba(tokens.background, spec.overlayOpacity);
+  const overlay = rgba(tokens.background, overlayAlpha(spec));
   const blur = spec.blurPx > 0 ? spec.blurPx : 0;
-  const panel = panelColorOver(tokens, spec.panelOpacity);
+  const panel = panelAlpha(spec);
+  const bubble = bubbleAlpha(spec);
 
-  const backgroundBlock = blur > 0
-    ? /* 模糊只作用于背景层，正文不被模糊（T24） */
-      `#root {
-  background: ${overlay} !important;
+  /*
+   * 背景层始终是「图片层 + 遮罩层」两个独立伪元素：
+   * - ::before 画图片（模糊只作用在它身上，正文不受影响）
+   * - ::after 画遮罩，顺序在 ::before 之后，因此叠在图片**之上**
+   *   （旧实现把遮罩当 #root 背景、图片画在 ::before 上，遮罩被压到图片下面，等于没生效）
+   * - #root 用 isolation 自建层叠上下文，两层用负 z-index 落到内容之后，
+   *   不需要去改应用自己子元素的 position/z-index
+   */
+  const backgroundBlock = `html, body {
+  background-color: ${tokens.background};
 }
+
+#root {
+  position: relative;
+  isolation: isolate;
+  background-color: transparent;
+}
+
 #root::before {
   content: '';
   position: fixed;
-  inset: -${blur * 2}px;
+  inset: ${blur > 0 ? `-${blur * 2}px` : '0'};
   background-image: url('${ref}');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(${blur}px);
-  pointer-events: none;
-  z-index: 0;
+  ${blur > 0 ? `filter: blur(${blur}px);\n  ` : ''}pointer-events: none;
+  z-index: -2;
 }
-#root > * {
-  position: relative;
-  z-index: 1;
-}`
-    : `#root {
-  background-image: linear-gradient(${overlay}, ${overlay}), url('${ref}');
-  background-size: cover;
-  background-position: ${spec.backgroundPosition === 'cover' ? 'center' : spec.backgroundPosition};
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+
+#root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: ${overlay};
+  pointer-events: none;
+  z-index: -1;
 }`;
 
-  return `/* 由 OpenCode 换肤助手生成；非官方本地资源定制，应用更新后可能失效。 */
+  return `/* 由 OpenCode 换肤助手生成；非官方本地资源定制，应用更新后可能失效。
+   token 名依据 OpenCode 1.18.29 官方 main CSS 的语义变量清单，不含终端与语法高亮。 */
 ${backgroundBlock}
-
-body {
-  background-image: none;
-  background-color: ${tokens.background};
-}
 
 :root {
   color-scheme: ${resolvedMode};
 
-  --background-base: ${tokens.background};
-  --surface-interactive-weak: ${rgba(tokens.primary, 0.14)};
-  --surface-interactive-hover: ${rgba(tokens.hover, 0.22)};
-  --text-interactive-base: ${tokens.primary};
-
-  --v2-background-bg-base: ${tokens.background};
-  --v2-background-bg-layer-01: ${panel};
-  --v2-background-bg-layer-02: ${panel};
-  --v2-background-bg-contrast: ${rgba(tokens.text, 0.08)};
-  --v2-background-bg-accent: ${tokens.primary};
-  --v2-background-bg-button-neutral: ${rgba(tokens.text, 0.06)};
-
-  --v2-border-border-focus: ${tokens.focus};
-
-  --v2-icon-icon-accent: ${tokens.primary};
-  --v2-icon-icon-accent-hover: ${tokens.hover};
-
-  --v2-text-text-accent: ${tokens.primary};
-  --v2-text-text-accent-hover: ${tokens.hover};
-  --v2-text-text-code-accent: ${tokens.muted};
-
-  --v2-overlay-simple-overlay-hover: ${rgba(tokens.hover, 0.12)};
-  --v2-overlay-simple-overlay-pressed: ${rgba(tokens.pressed, 0.18)};
-  --v2-overlay-simple-tab-active-scrim: ${rgba(tokens.primary, 0.16)};
-  --v2-overlay-simple-tab-hover-scrim: ${rgba(tokens.hover, 0.10)};
+${renderTokenCss(tokens, spec)}
 }
 
-/* 半透明面板：聊天容器、菜单、对话框、输入区 */
+/* 面板与容器：半透明真实透出背景图片，与预览、对比度报告同一口径 */
 [data-component="dialog"],
+[data-component="dialog-v2"],
 [data-component="menu-v2-content"],
+[data-component="dropdown-menu-content"],
 [data-component="dropdown-menu-sub-content"],
+[data-component="context-menu-content"],
+[data-component="context-menu-sub-content"],
+[data-component="tooltip"],
 [data-component="tooltip-v2"],
+[data-component="session-tab-popover"],
 [data-component="dock-prompt"],
-[data-slot="session-turn-assistant-content"] {
-  background-color: ${panel} !important;
+[data-component="prompt-input"],
+[data-component="prompt-input-v2"] {
+  background-color: ${rgba(tokens.panel, panel)} !important;
   border-color: ${rgba(tokens.border, 0.9)} !important;
   color: ${tokens.text} !important;
 }
 
-[data-slot="user-message-text"] {
-  background-color: ${rgba(tokens.selection, 0.9)} !important;
+[data-slot="session-turn-assistant-content"] {
+  background-color: ${rgba(tokens.panel, bubble)} !important;
   color: ${tokens.text} !important;
 }
 
-/* 按钮三态：默认 / 悬停 / 按下 */
-[data-component="button"] {
-  background-color: ${tokens.primary} !important;
-  color: ${tokens.onPrimary} !important;
-  border-color: ${tokens.border} !important;
+[data-slot="user-message-text"] {
+  background-color: ${rgba(tokens.selection, REGION_ALPHAS.userBubble)} !important;
+  color: ${tokens.text} !important;
 }
-[data-component="button"]:hover {
-  background-color: ${tokens.hover} !important;
+
+[data-component="markdown-code"],
+[data-component="code"] {
+  background-color: ${rgba(tokens.panel, panel)} !important;
 }
-[data-component="button"]:active {
-  background-color: ${tokens.pressed} !important;
+
+/*
+ * 按钮按 variant 分开处理（R3）：早先不分 primary / secondary / ghost / destructive
+ * 就把所有按钮染成同一个主色，把危险按钮也变成「确认」。现在只碰能确定语义的部分：
+ * - primary：底色与文字由本工具决定（要保证对比度）
+ * - secondary / ghost：只给 hover 叠加，底色交给应用自己的 token
+ * - destructive 与 disabled：完全交给应用，避免把危险操作化装成普通按钮
+ */
+[data-component="button"][data-variant="primary"] {
+  background-color: ${tokens.primary};
+  border-color: ${tokens.primary};
+  color: ${tokens.onPrimary};
+}
+[data-component="button"][data-variant="primary"] [data-slot="icon-svg"] {
+  color: ${tokens.onPrimary};
+}
+[data-component="button"][data-variant="primary"]:hover:not(:disabled),
+[data-component="button"][data-variant="primary"]:focus-visible:not(:disabled) {
+  background-color: ${tokens.hover};
+  border-color: ${tokens.hover};
+}
+[data-component="button"][data-variant="primary"]:active:not(:disabled) {
+  background-color: ${tokens.pressed};
+  border-color: ${tokens.pressed};
+}
+[data-component="button"][data-variant="primary"]:disabled {
+  background-color: ${rgba(tokens.text, 0.06)};
+  border-color: ${rgba(tokens.border, 0.5)};
+  color: ${tokens.muted};
+}
+[data-component="button"][data-variant="secondary"]:hover:not(:disabled) {
+  background-color: ${rgba(tokens.hover, 0.16)};
+}
+[data-component="button"][data-variant="ghost"]:hover:not(:disabled) {
+  background-color: ${rgba(tokens.hover, REGION_ALPHAS.hover)};
 }
 [data-component="button"]:focus-visible {
-  outline: 2px solid ${tokens.focus} !important;
+  outline: 2px solid ${tokens.focus};
   outline-offset: 1px;
 }
 
-/* 选中与焦点 */
 ::selection {
-  background: ${tokens.selection};
+  background: ${rgba(tokens.selection, 0.9)};
+  color: ${tokens.text};
 }
 
-/* 语义状态色：错误 / 警告 / 成功 / 信息，与 diff 分开表达（T27） */
-:root {
-  --ts-status-error: ${tokens.status.error};
-  --ts-status-warning: ${tokens.status.warning};
-  --ts-status-success: ${tokens.status.success};
-  --ts-status-info: ${tokens.status.info};
-  --ts-diff-added: ${tokens.diff.added};
-  --ts-diff-removed: ${tokens.diff.removed};
-  --ts-diff-context: ${tokens.diff.context};
-}
-
-/* 代码块：只改容器底色，不动语法高亮 token（T27） */
-[data-component="markdown-code"] {
-  background-color: ${panel} !important;
+:focus-visible {
+  outline-color: ${tokens.focus};
 }
 `;
 }

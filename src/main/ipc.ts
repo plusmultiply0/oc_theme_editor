@@ -11,6 +11,7 @@ import { errorResult, fail, ok, type Result } from '../shared/errors';
 import type {
   AnalyzeContrastInput,
   ApplyThemeInput,
+  RecoveryAction,
   RestoreThemeInput,
   StageThemeInput,
   GenerateThemeInput,
@@ -19,6 +20,7 @@ import type { ImageStore } from './services/image-store';
 import type { TargetService } from './services/target-service';
 import type { ThemeService } from './services/theme-service';
 import type { OperationService } from './services/operation-service';
+import type { RecoveryService } from './services/recovery-service';
 import type { OperationEventBus } from './services/events';
 
 export interface HandlerDeps {
@@ -26,8 +28,11 @@ export interface HandlerDeps {
   targets: TargetService;
   themes: ThemeService;
   operations: OperationService;
+  recovery: RecoveryService;
   bus: OperationEventBus;
   openExternal(url: string): Promise<void>;
+  /** 主进程的目录选择框；测试可注入。返回 null 表示用户取消 */
+  pickDirectory(): Promise<string | null>;
 }
 
 function requireString(v: unknown, name: string): Result<string> {
@@ -82,6 +87,27 @@ export function registerHandlers(ipcMain: IpcMain, deps: HandlerDeps): void {
   );
 
   ipcMain.handle('discoverTargets', () => wrap(() => deps.targets.discover()));
+
+  /**
+   * 手动选择安装目录（R6）。
+   * 路径只存在于主进程：对话框选完直接登记，renderer 只收到 targetId 与识别结果。
+   */
+  ipcMain.handle('chooseTargetDirectory', () =>
+    wrap(async () => {
+      const dir = await deps.pickDirectory();
+      if (!dir) return ok({});
+      return deps.targets.registerDirectory(dir);
+    }),
+  );
+
+  ipcMain.handle('getRecoveryStatus', () => wrap(async () => ok(await deps.recovery.scan())));
+
+  ipcMain.handle('resolveRecovery', (_e, input: { operationId?: unknown; action?: unknown }) =>
+    wrap(async () => deps.recovery.resolve({
+      operationId: typeof input?.operationId === 'string' ? input.operationId : undefined,
+      action: typeof input?.action === 'string' ? (input.action as RecoveryAction) : undefined,
+    })),
+  );
 
   ipcMain.handle('inspectTarget', (_e, targetId: unknown) =>
     wrap(async () => {

@@ -4,6 +4,86 @@
 
 ## 未发布（当前）
 
+### 按 P0 审查报告 R1–R8 的修复（2026-09-11 第三轮）
+
+审查报告见 `handoff/review-2026-09-11/REVIEW.md`。本轮按「先修识别 → 修备份语义与旧主题冲突 →
+统一预览与可读性 → 补 GUI 闭环测试」的顺序处理，**没有**用「把应用按钮强行启用」的方式绕过任何一条。
+
+**R1 识别失败：Electron 把 ASAR 当目录**
+
+- 新增 `src/core/patch/physical-fs.ts`：物理文件系统访问层。Electron 主进程的 `fs` 被包装过，
+  路径含 `.asar` 的会被当虚拟目录（`isFile=false`、`size=0`）；识别、stat、hash、备份、复制、
+  替换、恢复一律改走 `original-fs`。
+- 新增 `src/core/patch/archive-io.ts`：归档库 I/O 隔离层。`@electron/asar` 内部直接 `require('fs')`，
+  无法注入；改为在调用归档库时**临时**打开 `process.noAsar` 并串行执行，用完立刻恢复
+  （不设全局长期开关，否则工具自身从 app.asar 加载模块会一起坏掉）。
+- 新增 `tools/electron-fixture-e2e.cjs` + `tests/integration/electron-runtime.test.ts`：
+  在**真实 Electron 主进程**里对合成安装跑 识别 → 生成 → 准备 → 应用 → 恢复 → 启动恢复扫描，35 项断言全过。
+  这是 Node 测试永远抓不到的一类缺陷。
+
+**R2 备份语义：已修改的安装被当成原版**
+
+- `alreadyPatched`（只看有没有本工具的注入条目）**删除**。新增 `src/core/patch/original-evidence.ts`：
+  原版必须由「已登记的出厂指纹」证明，指纹表默认为空（诚实边界，补录办法见 `docs/original-evidence.md`）。
+- `BackupRecord` 增加 `evidence` 字段；旧元数据读取时自动迁移：靠标记缺失推断的 `original` 记录
+  降级为「未验证」，备份文件本体不动，迁移前留 `meta.json.pre-r2.bak`。命中指纹时会自动升级。
+- 恢复入口拆成三个：`previous`（上一主题）/ `original`（**仅在有出厂证据时可用**）/
+  `takeover`（首次接管快照，界面写明它不是出厂界面）。IPC、界面、测试同步更新。
+
+**R3 旧主题与新主题同时加载**
+
+- 新增 `src/core/patch/legacy-theme.ts`：识别 HTML 里活跃的主题层，按「来源标记 + 内容指纹」
+  区分「本工具的层 / 已确认的原型旧主题 / 来源不明」。
+- 准备阶段会撤下已确认的旧主题链接（文件本体留在归档里可恢复），遇到来源不明的第三方样式层
+  直接以 `THEME_CONFLICT` 拒绝，不自动覆盖。确认对话框列明「会撤下哪些旧主题层」。
+- 真机取证发现：`snow-theme.css` 的内容其实已被后续的粉彩主题**原地覆盖**过，
+  因此标记与内容指纹要分开看——标记证明来源，内容用来说明撤下的到底是哪一套。
+
+**R4 可读性报告没有检查实际显示状态**
+
+- 报告从 12 条扩到 28 条：侧栏、选中项、对话气泡（双层）、用户消息气泡、输入区、菜单、
+  次级按钮、主按钮 default/hover/pressed、边框、焦点环、状态色、diff 色。
+- 底色改为对**多个图片采样点逐点合成取最差**，条目上标 `estimated` 与采样点数；
+  界面不再把估算说成「实际底色」。
+- 修掉侧栏 `panelOpacity-0.06` 与报告口径不一致、普通导航项被 `opacity:.6` 额外淡化两处缺陷。
+- 连带修了三个真实的对比度缺陷：链接（主色当正文用只有 3.1）、主按钮 pressed（3.77）、
+  焦点环（2.26）。新增 `accentText` token；token 推导改为对候选底色的最差值做保障。
+
+**R5 预览、输出、参数生效范围不一致**
+
+- 新增 `src/core/theme/surfaces.ts`：唯一的层级模型（图片 → 遮罩 → 面板 → 叠加 → 文字），
+  预览、对比度计算、写入归档的 CSS 三处共用同一组不透明度函数。
+- 面板在输出里改成真正的 `rgba()`（原来被合成成 HEX 实底，透明度变成「改色」）。
+- 「减少透明度」进入 `ThemeSpec`，成为真实主题参数（原来只存在于 React 预览状态）。
+- 模糊分支修正：遮罩改成叠在图片**之上**的独立层（原来遮罩被压在图片下面，等于没生效）。
+- 从 schema 移除从未支持、却被输出成非法值的 `backgroundPosition`。
+- 按钮按 `data-variant` 分开处理，不再把 destructive / ghost 一起染成主色。
+
+**R6 识别失败后没有恢复路径**
+
+- 新增 `chooseTargetDirectory` IPC：目录由主进程对话框选出并登记，renderer 仍拿不到也不传路径。
+- 界面增加「重新检测」「选择安装目录」与多目标选择；未通过项显示具体错误码与原因。
+- 底部就绪文案改由「目标 + 对比度 + 待恢复状态」共同决定，不再与禁用原因互相矛盾。
+
+**R7 启动恢复扫描没接到实际流程**
+
+- 新增 `src/main/services/recovery-service.ts`，并在 `src/main/index.ts` 启动时 `bootstrap()`：
+  清理残留准备区 + 扫描所有实例的未完成事务。
+- 落账方向由磁盘事实校验（`needs_recovery` 不允许写成 `applied`）；
+  有阻断性事务时 `OperationService.apply` 在进入事务之前就被拒绝。
+- 界面新增「待恢复」面板。
+
+**R8 发布门禁**
+
+- `test:e2e` 去掉 `--pass-with-no-tests`：零用例不再返回 0。
+- 新增真实窗口的 Playwright 用例 `tests/e2e/theme-switcher.spec.ts`（8 项，含拖拽导入、
+  确认框披露、真实改写合成归档、恢复闭环）。隔离手段：`LOCALAPPDATA` 指向临时目录、
+  关掉注册表扫描、开工前断言目标在临时目录内。
+- 新增 `npm run test:e2e:electron` 与 `npm run verify`（类型 + lint + 单测 + 集成 + 构建 + E2E）。
+- `tools/audit.cjs` 区分交付内容与本地诊断产物：`tools/*result*.json`、`tools/*.png`、
+  `handoff/**` 豁免路径/用户名规则（它们故意记录本机路径），**凭证规则不豁免**，
+  并在输出里显式列出豁免清单。
+
 ### 修复 — 目标发现扫出满屏无关软件（2026-09-11）
 
 - **现象**：界面「未通过的候选」列出 Fiddler、Postman、VS Code、zotero、Trae、Bandizip 等一屏无关目录。

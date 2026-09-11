@@ -31,7 +31,8 @@ import { restoreTarget, newOpId } from '../../core/patch/restore';
 import { runtimeDirs, ensureDirs, originalDir, previousDir } from '../../core/patch/layout';
 import { listBackupRecords } from '../../core/patch/backup';
 import { precheckTarget, type ProcessProbe } from '../../core/patch/precheck';
-import { readAsar } from '../../core/patch/asar';
+import { readAsar, readAsarText } from '../../core/patch/asar';
+import { analyzeThemeLayers } from '../../core/patch/legacy-theme';
 import { instanceIdFromPath } from '../../core/patch/paths';
 import { readTx } from '../../core/patch/txlog';
 import { generateTheme } from '../../core/theme/generate';
@@ -61,6 +62,11 @@ export interface OperationServiceOptions {
   bus: OperationEventBus;
   /** 进程探针可注入，测试不需要真的启停应用 */
   probe?: ProcessProbe;
+  /**
+   * R7 闸门：进入 apply 之前检查是否存在待人工处理的未完成事务。
+   * 由主进程注入 RecoveryService.assertClear；测试可省略。
+   */
+  recoveryGuard?: () => Promise<Result<void>>;
   now?: () => string;
 }
 
@@ -148,6 +154,33 @@ export class OperationService {
     const snapshot = await readAsar(archivePath);
     if (!snapshot.success) return snapshot;
 
+    // R3：准备阶段就把旧主题冲突查清楚，别等到确认对话框之后才失败。
+    const htmlText = await readAsarText(snapshot.data, adapter.injection.htmlEntry);
+    if (!htmlText.success) return htmlText;
+    const layers = await analyzeThemeLayers({
+      html: htmlText.data,
+      adapter,
+      readEntry: async (entry) => {
+        const r = await readAsarText(snapshot.data, entry);
+        return r.success ? r.data : null;
+      },
+    });
+    if (layers.unknown.length > 0) {
+      return fail(
+        'THEME_CONFLICT',
+        `目标里已有来源不明的样式层：${layers.unknown.map((l) => l.entry).join('、')}`,
+        '请先在原工具中移除该主题，或确认其来源后再重试；本工具不会覆盖未知样式。',
+        layers.unknown.map((l) => `${l.entry}：${l.reason ?? '来源不明'}`).join('；'),
+      );
+    }
+    const legacyThemes = layers.knownLegacy.map((l) => ({
+      id: l.source?.id ?? 'unknown',
+      label: l.observedVariant
+        ? `${l.source?.label ?? '旧主题'}：${l.observedVariant.label}${l.fingerprint === 'drifted' ? '（链接标记与文件内容不一致，说明被后续主题覆盖过）' : ''}`
+        : `${l.source?.label ?? '旧主题'}：内容特征未知，按标记确认的来源处理`,
+      entry: l.entry,
+    }));
+
     const pre = await precheckTarget(target.data, {
       ...(this.opts.probe ? { probe: this.opts.probe } : {}),
       archiveSize: snapshot.data.size,
@@ -195,6 +228,8 @@ export class OperationService {
       beforeHash: snapshot.data.sha256,
       themeSummary,
       createdAt: staged.createdAt,
+      legacyThemes,
+      keptAssets: layers.knownLegacy.flatMap((l) => l.source?.assets ?? []),
     };
     return ok({ operationId, summary });
   }
@@ -207,10 +242,27 @@ export class OperationService {
     if (this.inFlight.has(operationId)) {
       return fail('TRANSACTION_IN_PROGRESS', '该操作正在执行中', '请勿重复点击；执行完成后再试。');
     }
+    // R7：待人工处理的未完成事务存在时，不允许继续写
+    if (this.opts.recoveryGuard) {
+      const clear = await this.opts.recoveryGuard();
+      if (!clear.success) return clear;
+    }
+
+    // R7：待人工处理的未完成事务存在时，不允许继续写
+    if (this.opts.recoveryGuard) {
+      const clear = await this.opts.recoveryGuard();
+      if (!clear.success) return clear;
+    }
+
     // 同步占位：必须在任何 await 之前，否则两次点击会同时穿过检查（T54）
     this.inFlight.add(operationId);
 
     try {
+      // R7：存在待人工处理的未完成事务时，不允许继续写
+      if (this.opts.recoveryGuard) {
+        const clear = await this.opts.recoveryGuard();
+        if (!clear.success) return clear;
+      }
       return await this.runApply(operationId);
     } catch (e) {
       return errorResult(e, 'INTERNAL');
@@ -287,13 +339,18 @@ export class OperationService {
     const originals = await listBackupRecords(originalDir(layout));
     const latestOriginal = originals[originals.length - 1];
     if (latestOriginal) {
+      // 有原版证据才叫 original；否则如实呈现为「首次接管快照」（R2）
+      const isFactory = latestOriginal.evidence === 'factory';
       out.push({
         backupId: path.basename(latestOriginal.file, '.asar'),
         createdAt: latestOriginal.createdAt,
-        kind: 'original',
-        themeSummary: latestOriginal.note ?? '首次接管时的状态',
+        kind: isFactory ? 'original' : 'takeover',
+        themeSummary: isFactory
+          ? (latestOriginal.note ?? '首次接管时的状态（已证明为出厂原版）')
+          : '首次接管快照（无法证明是出厂原版）',
         applicableVersion: latestOriginal.version,
-        pristine: latestOriginal.pristine,
+        pristine: isFactory,
+        ...(latestOriginal.note ? { evidenceNote: latestOriginal.note } : {}),
         sizeBytes: latestOriginal.size,
       });
     }
@@ -324,7 +381,8 @@ export class OperationService {
     const r = await restoreTarget({
       target: target.data,
       layout,
-      kind: input.kind === 'original' ? 'original' : 'previous',
+      kind:
+        input.kind === 'original' ? 'original' : input.kind === 'takeover' ? 'takeover' : 'previous',
       ...(this.opts.probe ? { probe: this.opts.probe } : {}),
     });
     if (!r.success) return r;

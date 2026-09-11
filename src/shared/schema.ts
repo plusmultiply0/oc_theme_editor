@@ -39,20 +39,17 @@ export const ThemeTokensSchema = z.object({
   border: hexColor,
   focus: hexColor,
   selection: hexColor,
+  /**
+   * 用作正文尺寸的强调色（链接、强调文字）。
+   * 主色本身只需在控件层面达到 3:1，当正文链接用就必须到 4.5，
+   * 因此单列一个 token，避免「链接读不清但报告说通过」（R4）。
+   */
+  accentText: hexColor,
   status: StatusColorsSchema,
   diff: DiffColorsSchema,
 });
 
 export const ThemeModeSchema = z.enum(['light', 'dark', 'auto']);
-export const BackgroundPositionSchema = z.enum([
-  'cover',
-  'contain',
-  'center',
-  'top',
-  'bottom',
-  'left',
-  'right',
-]);
 
 /** T24 参数范围 */
 export const PARAM_RANGES = {
@@ -73,7 +70,12 @@ export const ThemeSpecSchema = z.object({
   overlayOpacity: z.number().min(PARAM_RANGES.overlayOpacity.min).max(PARAM_RANGES.overlayOpacity.max),
   panelOpacity: z.number().min(PARAM_RANGES.panelOpacity.min).max(PARAM_RANGES.panelOpacity.max),
   blurPx: z.number().min(PARAM_RANGES.blurPx.min).max(PARAM_RANGES.blurPx.max),
-  backgroundPosition: BackgroundPositionSchema,
+  /**
+   * 减少透明度：开启后面板退化为纯色。
+   * 这是**真实主题参数**——预览、对比度报告与实际写入归档的 CSS 用的是同一个值；
+   * 早先只存在 React 预览状态里，用户勾了却不会生效。
+   */
+  reducedTransparency: z.boolean().default(false),
 });
 
 export const TargetSupportSchema = z.enum(['supported', 'unsupported', 'unknown']);
@@ -104,6 +106,10 @@ export const ContrastEntrySchema = z.object({
   required: z.number().min(0),
   target: ContrastTargetSchema,
   pass: z.boolean(),
+  /** 底色是否由代表色估算而来；true 表示不是真实界面像素采样（R4） */
+  estimated: z.boolean(),
+  /** 参与取最差的图片采样点数 */
+  samples: z.number().int().min(0),
 });
 
 export const ContrastReportSchema = z.object({
@@ -165,7 +171,6 @@ export type StatusColors = z.infer<typeof StatusColorsSchema>;
 export type DiffColors = z.infer<typeof DiffColorsSchema>;
 export type ThemeTokens = z.infer<typeof ThemeTokensSchema>;
 export type ThemeMode = z.infer<typeof ThemeModeSchema>;
-export type BackgroundPosition = z.infer<typeof BackgroundPositionSchema>;
 export type ThemeSpec = z.infer<typeof ThemeSpecSchema>;
 export type TargetSupport = z.infer<typeof TargetSupportSchema>;
 export type TargetInfo = z.infer<typeof TargetInfoSchema>;

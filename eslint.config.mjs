@@ -10,6 +10,10 @@ export default tseslint.config(
       // 旧原型，仅作历史参考，不纳入 lint
       'OpenCode/**',
       'tools/**',
+      // 交接与审查留档：诊断脚本与记录，不是产品代码
+      'handoff/**',
+      'test-results/**',
+      'playwright-report/**',
     ],
   },
   ...tseslint.configs.recommended,

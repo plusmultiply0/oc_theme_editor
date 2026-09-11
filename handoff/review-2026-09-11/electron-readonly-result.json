@@ -1,0 +1,27 @@
+{
+  "electron": "36.9.5",
+  "node": "22.19.0",
+  "wrappedFs": {
+    "isFile": false,
+    "isDirectory": true,
+    "size": 0
+  },
+  "originalFs": {
+    "isFile": true,
+    "isDirectory": false,
+    "size": 150584833
+  },
+  "inspection": {
+    "success": true,
+    "data": {
+      "kind": "rejected",
+      "rejected": {
+        "path": "C:\\Users\\ylzho\\AppData\\Local\\Programs\\@opencode-aidesktop",
+        "support": "unknown",
+        "code": "TARGET_NOT_FOUND",
+        "message": "该目录没有可识别的应用归档",
+        "recoveryHint": "请手动选择 OpenCode 的安装目录（应包含 resources 文件夹）。"
+      }
+    }
+  }
+}

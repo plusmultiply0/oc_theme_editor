@@ -60,11 +60,35 @@ export default function ApplyDialog({ summary, busy, onCancel, onConfirm }: Appl
           <dd>约 {formatBytes(summary.requiredBytes)}（当前可用 {formatBytes(summary.freeBytes)}）</dd>
           <dt>主题</dt>
           <dd>{summary.themeSummary}</dd>
+          <dt>旧主题层</dt>
+          <dd>
+            {summary.legacyThemes.length > 0 ? (
+              <>
+                <ul className="tight">
+                  {summary.legacyThemes.map((l) => (
+                    <li key={l.entry}>
+                      {l.label}
+                      <span className="mono">（{l.entry}）</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="scope">
+                  这些旧主题层的样式链接会从 HTML 中撤下，只保留本工具这一层；
+                  它们的文件本体保留在归档里，随时可以恢复。
+                  {summary.keptAssets.length > 0
+                    ? `配套资源不动：${summary.keptAssets.join('、')}。`
+                    : ''}
+                </p>
+              </>
+            ) : (
+              <span>未发现需要撤下的旧主题层。</span>
+            )}
+          </dd>
         </dl>
 
         <p className="risk">
           这是<strong>非官方的本地资源定制</strong>，会改写应用归档内的上述条目。
-          应用更新或修复安装后定制会失效，需要重新应用；卸载前请先恢复原版。
+          应用更新或修复安装后定制会失效，需要重新应用；卸载前请先恢复。
         </p>
 
         <div className="modal-actions">

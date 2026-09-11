@@ -1,5 +1,5 @@
 /**
- * 界面纯逻辑测试（T51、T54、T55）。
+ * 界面纯逻辑测试（T51、T54、T55；R6）。
  * 状态判定写错最容易造成「明明不能应用却放行」或「失败后不说清有没有改过安装」，
  * 这部分规则必须可测，不能只靠肉眼看界面。
  */
@@ -13,20 +13,25 @@ import {
   formatDateTime,
   isBusy,
   makeSpec,
+  readyText,
   resetSpec,
   scopeText,
+  type GateInput,
 } from '../../src/renderer/logic';
 import { ERROR_CODES } from '../../src/shared/errors';
 
-const readyArgs = {
+const readyGate: GateInput = {
   hasImage: true,
   hasPreview: true,
+  targetCount: 1,
   targetSupported: true,
   reportPassed: true,
-  busy: false,
+  recoveryBlocking: false,
 };
 
-describe('参数（T52）', () => {
+const readyArgs = { ...readyGate, busy: false };
+
+describe('参数（T52、R5）', () => {
   it('默认参数落在允许范围内', () => {
     const spec = makeSpec('img-1');
     expect(spec.overlayOpacity).toBeGreaterThanOrEqual(0);
@@ -51,9 +56,16 @@ describe('参数（T52）', () => {
     expect(spec.panelOpacity).toBe(0);
     expect(spec.blurPx).toBe(20);
   });
+
+  it('「减少透明度」是真实主题参数，缺省为关（老 localStorage 数据也能读）', () => {
+    expect(makeSpec().reducedTransparency).toBe(false);
+    const legacy = clampSpec({ ...makeSpec(), reducedTransparency: undefined as unknown as boolean });
+    expect(legacy.reducedTransparency).toBe(false);
+    expect(clampSpec({ ...makeSpec(), reducedTransparency: true }).reducedTransparency).toBe(true);
+  });
 });
 
-describe('应用按钮可用条件（T54）', () => {
+describe('应用按钮可用条件（T54、R6、R7）', () => {
   it('条件齐备才允许进入准备阶段', () => {
     expect(canStage(readyArgs)).toBe(true);
   });
@@ -63,16 +75,28 @@ describe('应用按钮可用条件（T54）', () => {
     ['配色尚未生成', { hasPreview: false }],
     ['目标未验证', { targetSupported: false }],
     ['可读性未达标', { reportPassed: false }],
+    ['存在待处理事务', { recoveryBlocking: true }],
     ['正在忙', { busy: true }],
   ])('%s 时一律不允许应用', (_name, patch) => {
     expect(canStage({ ...readyArgs, ...patch })).toBe(false);
   });
 
-  it('被阻断时给出可行动的中文原因', () => {
-    expect(blockedReason({ hasImage: false, hasPreview: false, targetSupported: true, reportPassed: true })).toContain('图片');
-    expect(blockedReason({ hasImage: true, hasPreview: true, targetSupported: false, reportPassed: true })).toContain('预览');
-    expect(blockedReason({ hasImage: true, hasPreview: true, targetSupported: true, reportPassed: false })).toContain('遮罩');
-    expect(blockedReason({ hasImage: true, hasPreview: true, targetSupported: true, reportPassed: true })).toBeNull();
+  it('被阻断时给出具体、可行动的中文原因', () => {
+    expect(blockedReason({ ...readyGate, hasImage: false, hasPreview: false })).toContain('图片');
+    expect(blockedReason({ ...readyGate, targetCount: 0, targetSupported: false })).toContain('重新检测');
+    expect(
+      blockedReason({ ...readyGate, targetSupported: false, targetRejectReason: '版本 9.9.9 未经验证' }),
+    ).toContain('9.9.9');
+    expect(blockedReason({ ...readyGate, reportPassed: false })).toContain('遮罩');
+    expect(blockedReason({ ...readyGate, recoveryBlocking: true })).toContain('待处理');
+    expect(blockedReason(readyGate)).toBeNull();
+  });
+
+  it('就绪文案与禁用原因一致，不说「可直接应用」', () => {
+    expect(readyText(readyGate)).toContain('可以应用');
+    expect(readyText({ ...readyGate, targetCount: 0, targetSupported: false })).toContain('选择安装目录');
+    expect(readyText({ ...readyGate, recoveryBlocking: true })).toContain('暂停写入');
+    expect(readyText({ ...readyGate, hasImage: false, hasPreview: false })).toContain('选择一张本地图片');
   });
 });
 
@@ -95,6 +119,9 @@ describe('失败状态判定（T55）', () => {
     }
     // 只有 INTERNAL / MANIFEST_CORRUPT 这类无法判定的才允许 unknown
     expect(errorScope('INTERNAL')).toBe('unknown');
+    // R1/R3 新增的两类失败都不会改动安装，必须归到 unmodified
+    expect(errorScope('RUNTIME_IO_UNAVAILABLE')).toBe('unmodified');
+    expect(errorScope('THEME_CONFLICT')).toBe('unmodified');
   });
 
   it('状态文案说明「有没有改过安装」', () => {

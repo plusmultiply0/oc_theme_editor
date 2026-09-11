@@ -122,3 +122,52 @@
    那只是注册表顺带带来的无关目录，现在只计入「已检查位置」，界面默认折叠。
 
 补了 4 项回归测试，用贴近 `reg query` 实际输出的样本喂给解析器，断言 Fiddler/Postman/VS Code 一个都不会成为候选。
+
+---
+
+## 更新（2026-09-11）：主题层的真机取证与 token 清单来源
+
+### 当前补丁状态（修正上一节结论）
+
+上一节写「当前安装处于未打补丁状态」，那是当时的只读结论；到第三轮审查时，
+`out/renderer/index.html` 里已经同时挂着**三层**样式表：
+
+1. `<link rel="stylesheet" crossorigin href="./assets/main-C-FJvlHS.css">`（官方）
+2. `<link rel="stylesheet" href="./snow-theme.css" data-local-theme="snowfield">`（原型注入）
+3. `<link rel="stylesheet" href="./oc-theme-custom.css">`（本工具）
+
+且归档内同时存在 `snow-theme.css` / `snow-background.jpg` / `pastel-background.png` /
+`oc-theme-custom.css` / `oc-theme-background.jpg`（条目数 6996 = 基线 6994 + 2）。
+
+**关键发现**：`out/renderer/snow-theme.css` 的开头是
+`/* Pastel wallpaper with black interface text. … */` —— 文件名与内容对不上，
+是后续的粉彩工具**原地覆盖**了同一个文件、没有再动 HTML。
+所以「链接上的标记」只能证明来源，不能证明内容；
+`src/core/patch/legacy-theme.ts` 据此把「来源标记」与「内容指纹」分开判定。
+
+原型注入语句的证据在 `OpenCode/_Theme/_Switcher/theme-tool.cjs:98`：
+`html.replace('</head>', '<link … href="./snow-theme.css" data-local-theme="snowfield">\n  </head>')`。
+
+### 语义 token 清单的来源
+
+`src/core/theme/tokens.ts` 覆盖的变量名不是凭命名猜的，而是从
+`out/renderer/assets/main-C-FJvlHS.css`（614,146 字节）只读提取的
+OpenCode **1.18.29** 语义层清单：
+
+- 基础层（266 项）：`--background-*`、`--surface-*`、`--input-*`、`--text-*`、
+  `--button-*`、`--border-*`、`--icon-*`、`--surface-diff-*`、`--text-diff-*`、`--icon-diff-*`
+- v2 层（94 项）：`--v2-background-*`、`--v2-text-*`、`--v2-icon-*`、`--v2-border-*`、
+  `--v2-overlay-*`、`--v2-state-*`
+
+官方把它们定义在 `:root`（外加一个 `@media (prefers-color-scheme: dark) { :root { … } }`），
+并通过 `--color-background-base: var(--background-base)` 这类别名暴露给 Tailwind 层。
+本工具的 `<link>` 在 `<head>` 最后加载，同特异性下后者胜出，
+所以用普通 `:root` 声明即可覆盖，**不需要** `!important`
+（旧主题那种 `#root` 级 `!important` 由迁移预检先行撤下）。
+
+提取工具：`node tools/dump-official-css.cjs [归档内路径]`（只读，写到系统临时目录）。
+
+### 终端与语法高亮
+
+官方 CSS 里同时有 `--syntax-*`（28 项）与 `--markdown-*`（15 项）。
+这两组**不在**本工具覆盖范围内（T27 的边界），`tokens.ts` 里有单测守住这条边界。

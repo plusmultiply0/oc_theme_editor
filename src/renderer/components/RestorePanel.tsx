@@ -1,8 +1,13 @@
 /**
- * 恢复面板（T55）。
+ * 恢复面板（T55；R2）。
  *
- * 「原版」与「上一主题」是两个不同的语义，必须分开陈列：
- * 原版不可确认时直接禁用并说明原因，不能把一份改过的状态冒充出厂原版。
+ * 三个入口语义不同，必须分开陈列：
+ * - 「上一主题」：应用前的状态
+ * - 「原版」：**只在有出厂指纹证据时**出现；没有证据就不给这个按钮
+ * - 「首次接管快照」：无法证明是原版时的诚实入口，明确写出它不是出厂界面
+ *
+ * 早先的缺陷：只检查「本工具的注入条目在不在」，不在就标成原版，
+ * 于是真机上那份被原型改过的安装被当成原版，「恢复原版」实际恢复的是旧定制。
  */
 import type { BackupInfo } from '../../shared/ipc';
 import { formatBytes, formatDateTime } from '../logic';
@@ -10,12 +15,13 @@ import { formatBytes, formatDateTime } from '../logic';
 export interface RestorePanelProps {
   backups: BackupInfo[];
   busy: boolean;
-  onRestore: (kind: 'original' | 'previous') => void;
+  onRestore: (kind: 'original' | 'previous' | 'takeover') => void;
   onRefresh: () => void;
 }
 
 export default function RestorePanel({ backups, busy, onRestore, onRefresh }: RestorePanelProps) {
   const original = backups.find((b) => b.kind === 'original');
+  const takeover = backups.find((b) => b.kind === 'takeover');
   const previous = backups.find((b) => b.kind === 'previous');
 
   return (
@@ -30,9 +36,7 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
       <div className="backup">
         <div className="backup-head">
           <span className="tag">上一主题</span>
-          {previous ? (
-            <span className="muted">{formatDateTime(previous.createdAt)}</span>
-          ) : null}
+          {previous ? <span className="muted">{formatDateTime(previous.createdAt)}</span> : null}
         </div>
         {previous ? (
           <>
@@ -49,28 +53,39 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
       <div className="backup">
         <div className="backup-head">
           <span className="tag">原版</span>
-          {original ? (
-            <span className="muted">{formatDateTime(original.createdAt)}</span>
-          ) : null}
+          {original ? <span className="muted">{formatDateTime(original.createdAt)}</span> : null}
         </div>
         {original ? (
           <>
             <p className="scope">适用版本 {original.applicableVersion}　·　{formatBytes(original.sizeBytes)}</p>
-            {original.pristine ? (
-              <button className="btn" type="button" disabled={busy} onClick={() => onRestore('original')}>
-                恢复原版
-              </button>
-            ) : (
-              <>
-                <button className="btn" type="button" disabled>
-                  恢复原版
-                </button>
-                <p className="warn-line">{original.themeSummary}</p>
-              </>
-            )}
+            <button className="btn" type="button" disabled={busy} onClick={() => onRestore('original')}>
+              恢复原版
+            </button>
+            <p className="scope">{original.evidenceNote}</p>
           </>
         ) : (
-          <p className="muted">尚未接管过该安装，没有原版备份。</p>
+          <p className="warn-line">
+            没有可证明的出厂原版：本工具没有登记过该版本的出厂指纹，
+            因此不提供「恢复原版」入口。可用的诚实入口见下面的「首次接管快照」。
+          </p>
+        )}
+      </div>
+
+      <div className="backup">
+        <div className="backup-head">
+          <span className="tag">首次接管快照</span>
+          {takeover ? <span className="muted">{formatDateTime(takeover.createdAt)}</span> : null}
+        </div>
+        {takeover ? (
+          <>
+            <p className="scope">适用版本 {takeover.applicableVersion}　·　{formatBytes(takeover.sizeBytes)}</p>
+            <button className="btn" type="button" disabled={busy} onClick={() => onRestore('takeover')}>
+              恢复到首次接管时
+            </button>
+            <p className="warn-line">{takeover.evidenceNote}</p>
+          </>
+        ) : (
+          <p className="muted">尚未接管过该安装，没有快照。</p>
         )}
       </div>
     </section>

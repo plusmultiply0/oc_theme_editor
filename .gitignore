@@ -16,3 +16,10 @@ playwright-report/
 *.log
 probe.log
 release2/
+
+# 本地诊断产物：跑一次生成一份，内容是本机路径，不入库
+tools/*result*.json
+tools/*.png
+
+# 本地界面截图：可用 node tools/capture-ui.cjs 重新生成，不入库
+handoff/images/

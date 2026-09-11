@@ -30,7 +30,7 @@ function spec(imageId: string, over: Partial<ThemeSpec> = {}): ThemeSpec {
     overlayOpacity: 0.35,
     panelOpacity: 0.86,
     blurPx: 0,
-    backgroundPosition: 'cover',
+    reducedTransparency: false,
     ...over,
   };
 }
@@ -168,7 +168,11 @@ describe('主进程服务：识别 → 生成 → 准备 → 应用 → 恢复',
     if (!picked.success) throw new Error('pick failed');
     await c.images.import(picked.data.imageId);
 
-    // 与底色明度几乎一致的主色：工具不偷偷改掉用户的选择，而是判定不合格
+    /*
+     * 与底色明度几乎一致的主色：工具不偷偷改掉用户的选择，而是如实判不合格。
+     * R4 之后按钮文字覆盖 default/hover/pressed 三态，主色读不清会先在
+     * 「主按钮文字」上暴露出来（不再有笼统的「主色控件」条目）。
+     */
     const r = await c.themes.generate({
       imageId: picked.data.imageId,
       spec: spec(picked.data.imageId, { primary: '#6a6a6a' }),
@@ -247,9 +251,13 @@ describe('主进程服务：识别 → 生成 → 准备 → 应用 → 恢复',
     expect(backups.success).toBe(true);
     if (!backups.success) return;
     const kinds = backups.data.map((b) => b.kind);
-    expect(kinds).toContain('original');
+    // 没有出厂指纹证据时不能叫「原版」，只能作为首次接管快照呈现（R2）
+    expect(kinds).toContain('takeover');
     expect(kinds).toContain('previous');
-    expect(backups.data.find((b) => b.kind === 'original')?.pristine).toBe(true);
+    expect(kinds).not.toContain('original');
+    const takeover = backups.data.find((b) => b.kind === 'takeover');
+    expect(takeover?.pristine).toBe(false);
+    expect(takeover?.evidenceNote ?? '').toContain('不能当作出厂原版');
 
     const restored = await c.operations.restore({ targetId: target.targetId, kind: 'previous' });
     expect(restored.success).toBe(true);

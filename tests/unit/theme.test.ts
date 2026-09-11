@@ -6,7 +6,21 @@ import { DEFAULT_LIMITS, looksLikeSvg, sniffFormat, validateImage } from '../../
 import { validateImageRef } from '../../src/core/theme/css';
 import { ensureContrast } from '../../src/core/theme/color';
 import { analyzeImage, deriveTokens, generateTheme } from '../../src/core/theme/generate';
-import { SCHEMA_VERSION, type ThemeSpec } from '../../src/shared/schema';
+import { buildContrastReport } from '../../src/core/theme/report';
+import { bubbleAlpha, overlayAlpha, panelAlpha } from '../../src/core/theme/surfaces';
+import { renderTokenDeclarations as tokenDeclarations } from '../../src/core/theme/tokens';
+import { renderThemeCss } from '../../src/core/theme/css';
+import { SCHEMA_VERSION, type ThemeSpec, type ThemeTokens } from '../../src/shared/schema';
+
+/** 直接渲染 CSS，跳过图片解码：层级与 token 的正确性不该依赖抓图 */
+function generateCss(tokens: ThemeTokens, spec: ThemeSpec): string {
+  return renderThemeCss({
+    tokens,
+    spec,
+    imageRef: './bg.jpg',
+    resolvedMode: spec.mode === 'light' ? 'light' : 'dark',
+  });
+}
 
 async function solid(width: number, height: number, color: { r: number; g: number; b: number; alpha?: number }) {
   return sharp({ create: { width, height, channels: 4, background: color } }).png().toBuffer();
@@ -21,7 +35,7 @@ function makeSpec(overrides: Partial<ThemeSpec> = {}): ThemeSpec {
     overlayOpacity: 0.35,
     panelOpacity: 0.86,
     blurPx: 0,
-    backgroundPosition: 'cover',
+    reducedTransparency: false,
     ...overrides,
   };
 }
@@ -211,7 +225,7 @@ describe('主题生成', () => {
         expect(e.ratio).toBeGreaterThan(0);
       }
       expect(r.data.report.verified).toBe(false);
-      expect(r.data.report.scope).toContain('不含应用自带的终端配色');
+      expect(r.data.report.scope).toContain('不含终端配色');
     }
   });
 
@@ -267,5 +281,143 @@ describe('中间调底色上的可读性（真实数据回归）', () => {
     const r = ensureContrast('#ffffff', mid, 'text');
     expect(r.pass).toBe(true);
     expect(r.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('层级模型与报告覆盖（R4、R5）', () => {
+  it('面板/气泡/遮罩的不透明度只有一份定义，预览、输出与报告共用', () => {
+    const spec = makeSpec({ panelOpacity: 0.5, overlayOpacity: 0.4 });
+    expect(panelAlpha(spec)).toBe(0.5);
+    expect(overlayAlpha(spec)).toBe(0.4);
+    // 两层同样不透明度的面板叠加，等效不透明度是 1-(1-a)²
+    expect(bubbleAlpha(spec)).toBeCloseTo(0.75, 6);
+  });
+
+  it('「减少透明度」直接决定面板不透明度，不再是仅预览的装饰', () => {
+    const spec = makeSpec({ panelOpacity: 0.2, reducedTransparency: true });
+    expect(panelAlpha(spec)).toBe(1);
+    expect(bubbleAlpha(spec)).toBe(1);
+  });
+
+  it('报告覆盖侧栏、输入、菜单、选中项与按钮三态，且不再只测 default', () => {
+    const tokens = deriveTokens(['#404558'], 'dark', undefined, '#1b1f27');
+    const report = buildContrastReport({
+      tokens,
+      spec: makeSpec({ mode: 'dark' }),
+      imageSamples: [hexToRgb('#404558'), hexToRgb('#787e9f')],
+      effective: '#1b1f27',
+    });
+    const keys = report.entries.map((e) => `${e.element}:${e.state}`);
+    for (const want of [
+      '侧栏文字:default',
+      '侧栏选中项:default',
+      '对话气泡正文:default',
+      '输入占位文字:default',
+      '菜单项悬停:hover',
+      '次级按钮文字:default',
+      '主按钮文字:default',
+      '主按钮文字:hover',
+      '主按钮文字:pressed',
+      '焦点环:focus',
+      'diff 新增:default',
+    ]) {
+      expect(keys).toContain(want);
+    }
+  });
+
+  it('多采样点取最差：同一主题在不同底图上不会因为只测一个代表色而误判通过', () => {
+    const tokens = deriveTokens(['#404558'], 'light', undefined, '#f2f2f4');
+    const report = buildContrastReport({
+      tokens,
+      spec: makeSpec({ panelOpacity: 0, mode: 'light' }),
+      imageSamples: [hexToRgb('#ffffff'), hexToRgb('#000000')],
+      effective: '#ffffff',
+    });
+    const body = report.entries.find((e) => e.element === '正文');
+    expect(body).toBeDefined();
+    expect(body?.samples).toBe(2);
+    // 底色取到最差的黑色，白色正文不可能达标
+    expect(body?.pass).toBe(false);
+    expect(body?.estimated).toBe(true);
+  });
+
+  it('条目上标明是否为估算，不把代表色结果说成「实际底色」', () => {
+    const tokens = deriveTokens(['#404558'], 'dark', undefined, '#1b1f27');
+    const report = buildContrastReport({
+      tokens,
+      spec: makeSpec(),
+      imageSamples: [hexToRgb('#404558')],
+      effective: '#1b1f27',
+    });
+    for (const e of report.entries) expect(typeof e.estimated).toBe('boolean');
+    // 主按钮底色是不透明的 token 自身，不依赖图片，因此不是估算
+    const button = report.entries.find((e) => e.element === '主按钮文字' && e.state === 'default');
+    expect(button?.estimated).toBe(false);
+  });
+});
+
+describe('token 映射与输出一致性（R3、R5）', () => {
+  const tokens = deriveTokens(['#404558'], 'dark', undefined, '#1b1f27');
+
+  it('映射到 1.18.29 真实存在的语义 token，不再自造 --ts-* 变量', () => {
+    const names = tokenDeclarations(tokens, makeSpec({ mode: 'dark' })).map((d) => d.name);
+    for (const must of [
+      '--background-base',
+      '--surface-base',
+      '--text-base',
+      '--text-weak',
+      '--icon-base',
+      '--icon-weak-base',
+      '--border-base',
+      '--border-focus',
+      '--button-primary-base',
+      '--button-ghost-hover',
+      '--input-base',
+      '--v2-background-bg-layer-01',
+      '--v2-text-text-muted',
+      '--v2-icon-icon-accent',
+      '--v2-border-border-focus',
+      '--v2-state-fg-danger',
+      '--text-diff-add-base',
+      '--surface-diff-delete-base',
+    ]) {
+      expect(names).toContain(must);
+    }
+    expect(names.some((n) => n.startsWith('--ts-'))).toBe(false);
+  });
+
+  it('语法高亮与终端 token 不在覆盖范围内（T27 的边界仍然成立）', () => {
+    const names = tokenDeclarations(tokens, makeSpec()).map((d) => d.name);
+    expect(names.some((n) => n.startsWith('--syntax-'))).toBe(false);
+    expect(names.some((n) => n.startsWith('--markdown-'))).toBe(false);
+  });
+
+  it('面板用真实 rgba，透明度不再是「改色」', () => {
+    const css = generateCss(tokens, makeSpec({ panelOpacity: 0.5 }));
+    const { r, g, b } = hexToRgb(tokens.panel);
+    expect(css).toContain(`rgba(${r}, ${g}, ${b}, 0.5)`);
+  });
+
+  it('减少透明度开启后，输出的面板必须是实底', () => {
+    const css = generateCss(tokens, makeSpec({ panelOpacity: 0.2, reducedTransparency: true }));
+    const { r, g, b } = hexToRgb(tokens.panel);
+    expect(css).toContain(`rgba(${r}, ${g}, ${b}, 1)`);
+    expect(css).not.toContain(`rgba(${r}, ${g}, ${b}, 0.2)`);
+  });
+
+  it('模糊只作用图片层，遮罩是叠在图片之上的独立层', () => {
+    const css = generateCss(tokens, makeSpec({ blurPx: 10 }));
+    expect(css).toContain('filter: blur(10px)');
+    // 图片在 ::before，遮罩在 ::after —— 后画的叠在上面
+    expect(css.indexOf('#root::before')).toBeLessThan(css.indexOf('#root::after'));
+  });
+
+  it('按钮按 variant 分开处理，不再把危险/次级按钮一起染成主色', () => {
+    const css = generateCss(tokens, makeSpec());
+    expect(css).toContain('[data-component="button"][data-variant="primary"]');
+    expect(css).toContain('[data-component="button"][data-variant="secondary"]');
+    expect(css).toContain('[data-component="button"][data-variant="ghost"]');
+    // 不存在不分 variant 的粗放规则
+    expect(css).not.toMatch(/\[data-component="button"\]\s*\{/);
   });
 });

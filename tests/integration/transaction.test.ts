@@ -19,8 +19,13 @@ import { restoreTarget } from '../../src/core/patch/restore';
 import { scanPending } from '../../src/core/patch/recovery';
 import { acquireLock } from '../../src/core/patch/lock';
 import { listTx, readTx, writeTx, type TxRecord } from '../../src/core/patch/txlog';
-import { ensureDirs, runtimeDirs } from '../../src/core/patch/layout';
-import { readAsar, sha256File, listAsarFiles, toArchivePath } from '../../src/core/patch/asar';
+import { ensureDirs, originalDir, runtimeDirs } from '../../src/core/patch/layout';
+import { listBackupRecords } from '../../src/core/patch/backup';
+import {
+  KNOWN_FACTORY_FINGERPRINTS,
+  matchFactoryFingerprint,
+} from '../../src/core/patch/original-evidence';
+import { readAsar, readAsarText, sha256File, listAsarFiles, toArchivePath } from '../../src/core/patch/asar';
 import { collectUnpacked } from '../../src/core/patch/stage';
 import { instanceIdFromPath } from '../../src/core/patch/paths';
 import type { TargetInfo } from '../../src/shared/schema';
@@ -161,7 +166,7 @@ describe('正常闭环（T34–T42）', () => {
     expect(await sha256File(inst.archivePath)).toBe(hashAfterFirst);
   });
 
-  it('应用 → 换主题 → 恢复上一主题 → 恢复原版，逐步核对 hash', async () => {
+  it('应用 → 换主题 → 恢复上一主题 → 恢复首次接管快照，逐步核对 hash', async () => {
     const { inst, target } = await makeTarget();
     const runtime = newRuntime();
     const original = await sha256File(inst.archivePath);
@@ -192,12 +197,26 @@ describe('正常闭环（T34–T42）', () => {
     expect(back.success).toBe(true);
     expect(await sha256File(inst.archivePath)).toBe(hashA);
 
+    // R2：没有出厂指纹证据时「恢复原版」必须拒绝，并指向诚实的快照入口
     const toOriginal = await restoreTarget({
       target,
       layout: runtimeLayout(inst.root, runtime),
       kind: 'original',
     });
-    expect(toOriginal.success).toBe(true);
+    expect(toOriginal.success).toBe(false);
+    if (!toOriginal.success) {
+      expect(toOriginal.error.code).toBe('BACKUP_MISSING');
+      expect(toOriginal.error.recoveryHint).toContain('首次接管快照');
+    }
+    expect(await sha256File(inst.archivePath)).toBe(hashA);
+
+    const toSnapshot = await restoreTarget({
+      target,
+      layout: runtimeLayout(inst.root, runtime),
+      kind: 'takeover',
+    });
+    expect(toSnapshot.success).toBe(true);
+    if (toSnapshot.success) expect(toSnapshot.data.manifest.themeSummary).toBe('恢复首次接管快照');
     expect(await sha256File(inst.archivePath)).toBe(original);
   });
 
@@ -476,7 +495,7 @@ describe('故障注入（7.3）', () => {
     if (!r.success) expect(r.error.code).toBe('TARGET_VERSION_MISMATCH');
   });
 
-  it('首次接管时目标已被改动 → 原版不可确认，恢复原版被禁用', async () => {
+  it('首次接管时目标已被改动 → 原版不可确认，原版入口被禁用', async () => {
     const { inst, target } = await makeTarget({
       files: { 'out/renderer/oc-theme-custom.css': '/* injected before */' },
     });
@@ -496,11 +515,200 @@ describe('故障注入（7.3）', () => {
     if (!r.success) expect(r.error.code).toBe('BACKUP_MISSING');
   });
 
+  it('首次接管时目标「没有本工具标记」也不等于原版：证据不足一律降级（R2 回归）', async () => {
+    // 这一条是审查里真机复现的场景：归档里没有 oc-theme-custom.css，
+    // 但挂着一层原型时代的 snow-theme.css，旧实现据此标成 pristine=true。
+    const legacyCss = [
+      /* 内容指纹必须与 KNOWN_LEGACY_THEMES 对得上 */
+      'html, body, #root { --snow-primary: #a0a7c9; --background-base: #404558; }',
+    ].join('\n');
+    const htmlWithLegacyTheme = [
+      '<!doctype html><html><head>',
+      '<link rel="stylesheet" href="./assets/main-x.css">',
+      '<link rel="stylesheet" href="./snow-theme.css" data-local-theme="snowfield">',
+      '</head><body><div id="root"></div></body></html>',
+    ].join('\n');
+    const { inst, target } = await makeTarget({
+      files: {
+        'out/renderer/index.html': htmlWithLegacyTheme,
+        'out/renderer/snow-theme.css': legacyCss,
+        'out/renderer/snow-background.jpg': 'fake-jpg',
+      },
+    });
+    const runtime = newRuntime();
+    const layout = runtimeLayout(inst.root, runtime);
+
+    const applied = await doApply({
+      target,
+      runtimeRoot: runtime,
+      css: css('#151515'),
+      imageBytes: Buffer.from('y'),
+      themeSummary: 'A',
+    });
+    expect(applied.success).toBe(true);
+
+    // 原版备份被记录为「未验证」
+    const records = await listBackupRecords(originalDir(layout));
+    expect(records).toHaveLength(1);
+    expect(records[0].evidence).toBe('unverified');
+    expect(records[0].pristine).toBe(false);
+    expect(records[0].note ?? '').toContain('旧主题层');
+
+    // 因此「恢复原版」被禁用
+    const r = await restoreTarget({ target, layout, kind: 'original' });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.code).toBe('BACKUP_MISSING');
+      expect(r.error.message).toContain('无法确认为出厂原版');
+    }
+
+    // 旧主题层已被撤下，新主题是唯一的活动主题层；旧文件留在归档里可恢复
+    const snapAfter = await readAsar(inst.archivePath);
+    if (!snapAfter.success) throw new Error('read asar failed');
+    const files = listAsarFiles(snapAfter.data.header);
+    expect(files).toContain('out/renderer/snow-theme.css');
+    const htmlRead = await readAsarText(snapAfter.data, 'out/renderer/index.html');
+    if (!htmlRead.success) throw new Error('read html failed');
+    expect(htmlRead.data).not.toContain('snow-theme.css');
+    expect(htmlRead.data).toContain('oc-theme-custom.css');
+
+    // 快照入口仍然可用
+    const snap = await restoreTarget({ target, layout, kind: 'takeover' });
+    expect(snap.success).toBe(true);
+  });
+
+  it('旧元数据里「靠标记缺失推断的原版」会被迁移降级，并留一份 .bak（R2 迁移）', async () => {
+    const { inst, target } = await makeTarget();
+    const runtime = newRuntime();
+    const layout = runtimeLayout(inst.root, runtime);
+    await ensureDirs(layout);
+
+    const dir = originalDir(layout);
+    fs.mkdirSync(dir, { recursive: true });
+    const fakeFile = path.join(dir, 'original-legacy.asar');
+    fs.copyFileSync(inst.archivePath, fakeFile);
+    const legacyRecord = {
+      kind: 'original',
+      file: fakeFile,
+      sha256: await sha256File(fakeFile),
+      size: fs.statSync(fakeFile).size,
+      createdAt: '2026-09-11T00:00:00.000Z',
+      version: target.version,
+      pristine: true,
+    };
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify([legacyRecord], null, 2), 'utf8');
+
+    const records = await listBackupRecords(dir);
+    expect(records[0].evidence).toBe('unverified');
+    expect(records[0].pristine).toBe(false);
+    expect(records[0].note ?? '').toContain('旧版本创建');
+    // 备份文件本体没有被删，恢复能力保留
+    expect(fs.existsSync(fakeFile)).toBe(true);
+    // 迁移前的元数据留档
+    const bak = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json.pre-r2.bak'), 'utf8')) as {
+      pristine: boolean;
+    }[];
+    expect(bak[0].pristine).toBe(true);
+
+    // 迁移幂等：再读一次不会再写一遍
+    const again = await listBackupRecords(dir);
+    expect(again[0].evidence).toBe('unverified');
+  });
+
+  it('来源不明的第三方主题层：准备阶段直接拒绝，不自动覆盖（R3）', async () => {
+    const htmlWithUnknownTheme = [
+      '<!doctype html><html><head>',
+      '<link rel="stylesheet" href="./assets/main-x.css">',
+      '<link rel="stylesheet" href="./my-own-theme.css">',
+      '</head><body><div id="root"></div></body></html>',
+    ].join('\n');
+    const { inst, target } = await makeTarget({
+      files: {
+        'out/renderer/index.html': htmlWithUnknownTheme,
+        'out/renderer/my-own-theme.css': ':root { --background-base: #123456; }',
+      },
+    });
+    const before = await sha256File(inst.archivePath);
+    const r = await doApply({
+      target,
+      runtimeRoot: newRuntime(),
+      css: css('#161616'),
+      imageBytes: Buffer.from('y'),
+      themeSummary: 'A',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.code).toBe('THEME_CONFLICT');
+      expect(r.error.message).toContain('my-own-theme.css');
+    }
+    expect(await sha256File(inst.archivePath)).toBe(before);
+  });
+
   it('主题内容指纹可用于重复应用判定', () => {
     const a = computeThemeHash('x', Buffer.from('1'));
     const b = computeThemeHash('x', Buffer.from('1'));
     const c = computeThemeHash('x', Buffer.from('2'));
     expect(a).toBe(b);
     expect(a).not.toBe(c);
+  });
+});
+
+describe('原版证据的登记与迁移（R2）', () => {
+  it('登记出厂指纹后，命中指纹的旧记录会被升级为有证据的原版', async () => {
+    const { inst, target } = await makeTarget();
+    const runtime = newRuntime();
+    const layout = runtimeLayout(inst.root, runtime);
+    await ensureDirs(layout);
+
+    const dir = originalDir(layout);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'original-factory.asar');
+    fs.copyFileSync(inst.archivePath, file);
+    const sha = await sha256File(file);
+    fs.writeFileSync(
+      path.join(dir, 'meta.json'),
+      JSON.stringify(
+        [
+          {
+            kind: 'original',
+            file,
+            sha256: sha,
+            size: fs.statSync(file).size,
+            createdAt: '2026-09-11T00:00:00.000Z',
+            version: target.version,
+            pristine: true,
+          },
+        ],
+        null,
+        2,
+      ),
+      'utf8',
+    );
+
+    // 先登记一条出厂指纹，再读元数据
+    KNOWN_FACTORY_FINGERPRINTS.push({
+      version: target.version,
+      sha256: sha,
+      source: '测试用：模拟维护者核实过的官方安装包',
+      recordedAt: '2026-09-11',
+    });
+    try {
+      const records = await listBackupRecords(dir);
+      expect(records[0].evidence).toBe('factory');
+      expect(records[0].pristine).toBe(true);
+      expect(records[0].note ?? '').toContain('出厂指纹');
+
+      // 有证据时才允许「恢复原版」，并且真的回到那份快照
+      const r = await restoreTarget({ target, layout, kind: 'original' });
+      expect(r.success).toBe(true);
+      expect(await sha256File(inst.archivePath)).toBe(sha);
+    } finally {
+      KNOWN_FACTORY_FINGERPRINTS.pop();
+    }
+  });
+
+  it('指纹表为空时不冒充原版（默认行为）', () => {
+    expect(KNOWN_FACTORY_FINGERPRINTS).toHaveLength(0);
+    expect(matchFactoryFingerprint('1.18.29', '0'.repeat(64))).toBeUndefined();
   });
 });

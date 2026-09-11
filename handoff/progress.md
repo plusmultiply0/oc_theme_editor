@@ -254,3 +254,52 @@
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。
+
+## P5c：按 P0 审查 R1–R8 的修复（2026-09-11）
+
+审查报告：`handoff/review-2026-09-11/REVIEW.md`。执行顺序按报告建议：
+**先修识别 → 修备份语义与旧主题冲突 → 统一预览与可读性 → 补 GUI 闭环测试**。
+没有用「把应用按钮强行启用」绕过任何一条。
+
+### 改动文件（按问题编号）
+
+| 问题 | 改动 |
+|---|---|
+| R1 | 新增 `src/core/patch/physical-fs.ts`、`src/core/patch/archive-io.ts`；`asar.ts`、`discover.ts`、`paths.ts`、`backup.ts`、`stage.ts`、`commit.ts`、`recovery.ts`、`precheck.ts`、`apply.ts` 全部切到物理 I/O；新增 `tools/electron-asar-probe.cjs`、`tools/electron-fixture-e2e.cjs`、`tools/run-electron-e2e.cjs`、`tests/integration/electron-runtime.test.ts` |
+| R2 | 新增 `src/core/patch/original-evidence.ts`、`docs/original-evidence.md`；`backup.ts` 增加 `evidence` 与自动迁移（含 `meta.json.pre-r2.bak`）；`apply.ts` 用证据判定；`restore.ts` 拆出 `takeover`；`shared/ipc.ts`、`operation-service.ts`、`RestorePanel.tsx` 同步 |
+| R3 | 新增 `src/core/patch/legacy-theme.ts`、`src/core/theme/tokens.ts`；`stage.ts` 撤下已确认旧主题层、拒绝来源不明层；`css.ts` 改用真实 token 映射并按 `data-variant` 处理按钮；`ApplyDialog.tsx` 披露撤下清单 |
+| R4 | 新增 `src/core/theme/surfaces.ts` 的层级模型；`report.ts` 扩到 28 条并按多采样点取最差、标 `estimated`；`generate.ts` 修链接 / 主按钮 pressed / 焦点环 / 选区气泡四个真实缺陷并新增 `accentText` token；`styles.css` 修侧栏 `.06` 偏差与 `opacity:.6` |
+| R5 | `surfaces.ts` 供三处共用；`css.ts` 面板改真 `rgba()`、遮罩改到图片之上；`schema.ts` 增加 `reducedTransparency`、移除 `backgroundPosition`；`Preview.tsx` 双层背景；`App.tsx` 把开关接进参数 |
+| R6 | `target-service.ts` 增加 `registerDirectory()`；新增 `chooseTargetDirectory` IPC 与「重新检测 / 选择安装目录 / 多目标选择」界面；`logic.ts` 的 `GateInput` 细化禁用原因与就绪文案 |
+| R7 | 新增 `src/main/services/recovery-service.ts`、`RecoveryPanel.tsx`；`src/main/index.ts` 启动 `bootstrap()`；`operation-service.ts` 增加 `recoveryGuard`；`scanAllPending` / `cleanAllStages` / 落账方向校验 |
+| R8 | `tests/e2e/theme-switcher.spec.ts`（真实窗口 8 项）、`playwright.config.ts`（去掉 `--pass-with-no-tests`）、`tests/e2e/README.md`、`tools/capture-ui*.cjs`、`tools/audit.cjs`（区分交付内容与本地诊断产物） |
+
+### 关键取证
+
+- `tools/asar-probe-result.json`：Electron 36.9.5 下 `statSync('…/app.asar')` 返回
+  `isFile=false / size=0`；`original-fs` 返回真实文件；临时打开 `process.noAsar` 可恢复物理语义且无泄漏。
+- 真机 `out/renderer/index.html`：同时挂着官方主 CSS、`snow-theme.css`（标记 `data-local-theme="snowfield"`）
+  与本工具的 `oc-theme-custom.css`；且 `snow-theme.css` 的内容是**粉彩主题**（原型原地覆盖过）。
+  这就是「旧主题 `#root` 级 `!important` 变量盖不住新主题」的实证。
+- 真机备份 `original` 与 `previous` 的哈希相同、`pristine=true` —— 证明「靠标记缺失推断原版」确实错了。
+
+### 命令与退出码
+
+| 命令 | 退出码 | 结果 |
+|---|---|---|
+| `npx tsc --noEmit -p tsconfig.json` | 0 | 无输出 |
+| `npx eslint .` | 0 | 无告警 |
+| `npx vitest run tests/unit` | 0 | 4 文件 / 96 项 |
+| `npx vitest run tests/integration/{discover,transaction,main-services,main-recovery}.test.ts` | 0 | 4 文件 / 51 项 |
+| `npm run build` | 0 | 主进程 + renderer |
+| `npx vitest run tests/integration/electron-runtime.test.ts` | 0 | 真实 Electron 主进程 35 项断言（结果文件 `tools/electron-fixture-e2e-result.json`） |
+| `npx playwright test` | 0 | 8 项真实窗口闭环 |
+| `npm run audit` | 0 | FAIL 0 / WARN 0（豁免清单见输出） |
+| `npm run verify` | 见下 | 一条命令串起以上全部 |
+
+### 未完成（需要 jc）
+
+- **真机视觉走查（T64）**：当前真机安装处于「本工具 + 旧雪景主题层」的混合状态。
+  下一次应用的确认框会列明会撤下的旧主题层；确认后即可回到单一主题层。
+- 干净环境启动验证（T65）。
+- 出厂指纹登记（可选）：按 `docs/original-evidence.md` 补录后「恢复原版」入口才会出现。

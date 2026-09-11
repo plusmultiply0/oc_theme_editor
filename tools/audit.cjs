@@ -65,6 +65,21 @@ const files = [
   ...SCAN_FILES.map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f)),
 ];
 
+/**
+ * 路径/用户名规则的豁免清单（凭证规则一律照查，不豁免）。
+ *
+ * 理由：这两类内容**故意**记录真实路径，而且不随交付物分发——
+ * - tools/ 下的诊断结果 JSON 与截图：本地跑一次就生成一份，内容就是本机路径；
+ * - handoff/：内部交接与审查留档，审查本来就要求写明实际项目位置。
+ * 把它们当成泄漏只会让这条规则淹没在噪声里，真正的泄漏反而看不见。
+ */
+const LOCAL_ONLY_ARTIFACTS = [/^tools\/[^/]*result[^/]*\.json$/i, /^tools\/[^/]*\.png$/i];
+const AUDIT_TRAIL = [/^handoff\//];
+const exemptFromPathRules = (r) =>
+  LOCAL_ONLY_ARTIFACTS.some((re) => re.test(r)) || AUDIT_TRAIL.some((re) => re.test(r));
+
+const exemptions = new Set();
+
 for (const file of files) {
   let text;
   try {
@@ -72,9 +87,15 @@ for (const file of files) {
   } catch {
     continue;
   }
+  const r = rel(file);
+  const skipPathRules = exemptFromPathRules(r);
+  if (skipPathRules) exemptions.add(r);
+  const patterns = skipPathRules
+    ? SECRET_PATTERNS
+    : [...PATH_PATTERNS, ...USER_PATTERNS, ...SECRET_PATTERNS];
   text.split(/\r?\n/).forEach((line, i) => {
-    for (const p of [...PATH_PATTERNS, ...USER_PATTERNS, ...SECRET_PATTERNS]) {
-      if (p.re.test(line)) add('FAIL', p.id, `${rel(file)}:${i + 1} → ${line.trim().slice(0, 120)}`);
+    for (const p of patterns) {
+      if (p.re.test(line)) add('FAIL', p.id, `${r}:${i + 1} → ${line.trim().slice(0, 120)}`);
     }
   });
 }
@@ -147,6 +168,10 @@ console.log(`\n== IPC 通道（${channels.length}）==`);
 console.log(`  ${channels.join('、')}`);
 console.log('\n== 结论 ==');
 for (const f of findings) console.log(`  [${f.level}] ${f.id}: ${f.detail}`);
+if (exemptions.size > 0) {
+  console.log('\n== 路径/用户名规则豁免（本地诊断产物与内部交接留档，凭证规则仍照查）==');
+  for (const e of [...exemptions].sort()) console.log(`  ~ ${e}`);
+}
 console.log(`\nFAIL ${fails.length} 项，WARN ${warns.length} 项`);
 
 process.exit(fails.length === 0 ? 0 : 1);

@@ -10,7 +10,6 @@
  * 现在必须先按 DisplayName 过滤，只保留名字与本工具目标相关的登记项。
  */
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { ADAPTERS, adapterForPackage, knownInstallDirNames } from '../../adapters/registry';
 import type { TargetAdapter } from '../../adapters/types';
@@ -18,6 +17,7 @@ import type { TargetInfo, TargetSupport } from '../../shared/schema';
 import { ok, type ErrorCode, type Result } from '../../shared/errors';
 import { canonicalize, instanceIdFromPath } from './paths';
 import { readAsar, readAsarPackage } from './asar';
+import { physicalIsDir, physicalIsFile } from './physical-fs';
 
 /** 只保留名称与本工具目标相关的登记项；其余软件一律不扫 */
 const TARGET_NAME_RE = /opencode/i;
@@ -300,17 +300,10 @@ export function onlySupported(outcomes: InspectOutcome[]): TargetInfo[] {
 }
 
 async function isFile(p: string): Promise<boolean> {
-  try {
-    return (await fs.stat(p)).isFile();
-  } catch {
-    return false;
-  }
+  // 必须走物理层：Electron 包装 fs 会把 app.asar 当虚拟目录，isFile 恒为 false（R1）
+  return physicalIsFile(p);
 }
 
 async function isDir(p: string): Promise<boolean> {
-  try {
-    return (await fs.stat(p)).isDirectory();
-  } catch {
-    return false;
-  }
+  return physicalIsDir(p);
 }

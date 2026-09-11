@@ -151,3 +151,62 @@ inspected → staged → backed_up → committing → applied
 
 锁文件用 `wx` 独占创建 + 进程内持有集合。同进程内二次操作同样被拒：
 只靠「pid 是自己就当残留锁清理」会把并发保护整个绕过。
+
+---
+
+## 更新（2026-09-11）：物理归档 I/O 层与统一的主题层级模型
+
+第三轮审查（`handoff/review-2026-09-11/REVIEW.md`）暴露了两处架构级缺口，本轮补上。
+
+### 新增的一层：物理归档 I/O
+
+```
+main / core ──▶ physical-fs.ts   所有涉及应用归档的真实读写（original-fs）
+            ├▶ archive-io.ts     @electron/asar 的薄封装（Electron 下临时关 asar 解释，串行执行）
+            └▶ patch/*           识别、备份、打包、提交、恢复
+```
+
+原因：Electron 主进程的 `require('fs')` 被包装过，路径里出现 `.asar` 的会被当虚拟目录
+（`isFile=false / size=0`），同一份代码在 Node 测试里全绿、在真机上一跑就「找不到归档」。
+因此**规则是：凡涉及应用归档的 I/O 一律走 physical-fs / archive-io，不得直接 `import fs from 'node:fs'`。**
+
+`archive-io.ts` 的三条纪律（为什么不全局关 asar）：
+
+1. 只在调用归档库那一小段时间内打开 `process.noAsar`，用完立刻恢复——
+   工具自身模块也在归档里，全局关掉会破坏模块加载；
+2. 所有物理归档操作**串行**执行，进程级开关不允许并发交叉；
+3. `try/finally` 保证恢复，归档库抛错也不会把开关漏在打开状态。
+
+### 新增的一层：统一主题层级模型（surfaces.ts）
+
+```
+图片层 ─▶ 图片遮罩层 ─▶ 区域面板层 ─▶（可选）区域叠加层 ─▶ 文字
+```
+
+预览、对比度报告、写入归档的 CSS 三处**共用**同一组不透明度函数
+（`panelAlpha` / `bubbleAlpha` / `overlayAlpha` / `REGION_ALPHAS`）。
+这是修「预览半透明、输出实底、报告第三种口径」这类缺陷的唯一办法：
+不是让三处「恰好一致」，而是让它们没有第二种算法。
+
+### 恢复入口的语义
+
+```
+restore(kind)
+  ├── previous   恢复上一主题（应用前的状态）
+  ├── original   恢复出厂原版   ← 仅当备份带 evidence='factory'（有出厂指纹证据）
+  └── takeover   恢复首次接管快照 ← 没有证据时的诚实入口，界面写明它不是出厂界面
+```
+
+判定逻辑在 `original-evidence.ts`，指纹表默认为空（见 `docs/original-evidence.md`）。
+
+### 启动流程
+
+```
+app.whenReady
+  └─▶ RecoveryService.bootstrap()
+        ├─ cleanAllStages()      清理各实例遗留的准备区
+        └─ scanAllPending()      按「磁盘事实」给未完成事务定性
+              └─ needs_recovery 的存在会让 OperationService.apply 在进入事务前被拒
+```
+
+之前 `scanPending` 只有函数与单测、没有任何调用点；现在它挂在启动流程上，并有闸门保护写入路径。

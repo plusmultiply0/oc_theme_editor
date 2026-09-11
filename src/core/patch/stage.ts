@@ -1,5 +1,5 @@
 /**
- * 准备区生成与校验（T35）。
+ * 准备区生成与校验（T35、R3）。
  *
  * 关键点：
  * - 目标归档里存在 unpacked 条目（本机实测 47 个原生模块）与 `app.asar.unpacked` 目录。
@@ -7,16 +7,22 @@
  *   因此这里按原始 header 的 unpacked 集合逐个条目重建，而不是无脑 createPackage。
  * - 只改白名单内的条目；其他条目必须逐字节不变，条目集合不得减少。
  * - HTML 注入幂等：重复换主题不会累积多条 link。
+ * - **旧主题层必须先撤下**（R3）：原型时代的 snow-theme 用的是
+ *   `html, body, #root { --x: … !important }`，只在后面追加新主题盖不住它。
+ *   只撤下能确认来源与指纹的旧层；来源不明的第三方层直接拒绝，不自动覆盖。
  * - 不修改可执行文件，不动安全开关。
+ *
+ * R1：读取/解包/重打包全部走 physical-fs 与 archive-io，避免 Electron
+ * 把 `*.asar` 当虚拟目录。
  */
 import path from 'node:path';
-import fs from 'node:fs/promises';
-import { createReadStream, statSync } from 'node:fs';
-import { createPackageFromStreams, extractAll } from '@electron/asar';
-import type { TargetAdapter } from '../../adapters/types';
 import { fail, ok, type Result } from '../../shared/errors';
-import { readAsar, sha256File } from './asar';
+import type { TargetAdapter } from '../../adapters/types';
+import { readAsar, readAsarText } from './asar';
+import { extractArchive, writeArchiveFromStreams, type ArchiveStreamEntry } from './archive-io';
+import { physicalFs, physicalFsp, physicalSha256File } from './physical-fs';
 import { isSafeArchiveEntry, safeJoin } from './paths';
+import { analyzeThemeLayers, stripLinks } from './legacy-theme';
 
 export interface StageLimits {
   maxFiles: number;
@@ -40,6 +46,15 @@ export interface StageInput {
   limits?: StageLimits;
 }
 
+export interface StageThemeLayers {
+  /** 已撤下的旧主题层（id 与归档内路径） */
+  removedLegacy: { id: string; entry: string }[];
+  /** 留在归档里、没有动过的旧主题配套资源 */
+  keptAssets: string[];
+  /** 本工具的层是否已存在（用于判断是首次注入还是换主题） */
+  selfPresent: boolean;
+}
+
 export interface StageResult {
   stagedArchive: string;
   afterHash: string;
@@ -49,6 +64,8 @@ export interface StageResult {
   /** 打包后复核：unpacked 标记是否与原始一致 */
   unpackedPreserved: boolean;
   fileCount: number;
+  /** 旧主题迁移预检的结果，供确认对话框展示 */
+  themeLayers: StageThemeLayers;
 }
 
 interface FileEntry {
@@ -68,7 +85,7 @@ async function walk(dir: string, limits: StageLimits): Promise<Result<Map<string
   async function rec(current: string, prefix: string): Promise<Result<true>> {
     let entries;
     try {
-      entries = await fs.readdir(current, { withFileTypes: true });
+      entries = await physicalFsp.readdir(current, { withFileTypes: true });
     } catch (e) {
       return fail('STAGE_FAILED', '准备区目录无法读取', '请重试。', String(e));
     }
@@ -88,12 +105,12 @@ async function walk(dir: string, limits: StageLimits): Promise<Result<Map<string
       if (count > limits.maxFiles) {
         return fail('STAGE_FAILED', '归档条目数量超限', '已中止，安装未被修改。');
       }
-      const st = await fs.stat(abs);
+      const st = await physicalFsp.stat(abs);
       total += st.size;
       if (st.size > limits.maxSingleFileBytes || total > limits.maxTotalBytes) {
         return fail('STAGE_FAILED', '归档体积超限，疑似归档炸弹', '已中止，安装未被修改。');
       }
-      out.set(rel, { rel, abs, size: st.size, sha256: await sha256File(abs) });
+      out.set(rel, { rel, abs, size: st.size, sha256: await physicalSha256File(abs) });
     }
     return ok(true);
   }
@@ -144,11 +161,11 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
   const unpackedOriginal = collectUnpacked(snapshot.data.header);
 
   const appDir = path.join(input.workDir, 'app');
-  await fs.rm(input.workDir, { recursive: true, force: true });
-  await fs.mkdir(appDir, { recursive: true });
+  await physicalFsp.rm(input.workDir, { recursive: true, force: true });
+  await physicalFsp.mkdir(appDir, { recursive: true });
 
   try {
-    extractAll(input.archivePath, appDir);
+    await extractArchive(input.archivePath, appDir);
   } catch (e) {
     return fail('STAGE_FAILED', '归档解包失败', '安装未被修改；请确认磁盘空间充足后重试。', String(e));
   }
@@ -169,17 +186,56 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
   const guard = safeJoin(appDir, adapter.injection.cssFile);
   if (!guard.success) return guard;
 
+  const readEntry = async (entry: string): Promise<string | null> => {
+    const r = await readAsarText(snapshot.data, entry);
+    return r.success ? r.data : null;
+  };
+
+  let themeLayers: StageThemeLayers = { removedLegacy: [], keptAssets: [], selfPresent: false };
+
+  let html: string;
   try {
-    await fs.mkdir(path.dirname(cssAbs), { recursive: true });
-    await fs.writeFile(cssAbs, input.css, 'utf8');
-    await fs.writeFile(imgAbs, input.imageBytes);
-    const html = await fs.readFile(htmlAbs, 'utf8');
-    const injected = injectLink(html, `./${path.basename(adapter.injection.cssFile)}`, adapter.injection.anchor);
-    if (!injected.success) return injected;
-    await fs.writeFile(htmlAbs, injected.data, 'utf8');
+    html = await physicalFsp.readFile(htmlAbs, 'utf8');
+  } catch (e) {
+    return fail('STAGE_FAILED', '读取 HTML 入口失败', '安装未被修改；请重试。', String(e));
+  }
+
+  const analysis = await analyzeThemeLayers({ html, adapter, readEntry });
+
+  // 来源不明的第三方主题层：拒绝叠加，不自动覆盖（R3）
+  if (analysis.unknown.length > 0) {
+    return fail(
+      'THEME_CONFLICT',
+      `目标里已有来源不明的样式层：${analysis.unknown.map((l) => l.entry).join('、')}`,
+      '请先在原工具中移除该主题，或确认其来源后再重试；本工具不会覆盖未知样式。',
+      analysis.unknown.map((l) => `${l.entry}：${l.reason ?? '来源不明'}`).join('；'),
+    );
+  }
+
+  const injected = injectLink(
+    stripLinks(html, analysis.removable),
+    `./${path.basename(adapter.injection.cssFile)}`,
+    adapter.injection.anchor,
+  );
+  if (!injected.success) return injected;
+
+  try {
+    await physicalFsp.mkdir(path.dirname(cssAbs), { recursive: true });
+    await physicalFsp.writeFile(cssAbs, input.css, 'utf8');
+    await physicalFsp.writeFile(imgAbs, input.imageBytes);
+    await physicalFsp.writeFile(htmlAbs, injected.data, 'utf8');
   } catch (e) {
     return fail('STAGE_FAILED', '写入主题资源失败', '安装未被修改；请重试。', String(e));
   }
+
+  themeLayers = {
+    removedLegacy: analysis.knownLegacy.map((l) => ({
+      id: l.source?.id ?? 'unknown',
+      entry: l.entry,
+    })),
+    keptAssets: analysis.knownLegacy.flatMap((l) => l.source?.assets ?? []),
+    selfPresent: analysis.self.length > 0,
+  };
 
   const after = await walk(appDir, limits);
   if (!after.success) return after;
@@ -216,7 +272,7 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
   const stagedArchive = path.join(input.workDir, 'staged.asar');
   try {
     const streams = await buildStreams(appDir, unpackedOriginal);
-    await createPackageFromStreams(stagedArchive, streams);
+    await writeArchiveFromStreams(stagedArchive, streams);
   } catch (e) {
     return fail('STAGE_FAILED', '归档重建失败', '安装未被修改；请重试。', String(e));
   }
@@ -242,7 +298,7 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
     }
   }
 
-  const afterHash = await sha256File(stagedArchive);
+  const afterHash = await physicalSha256File(stagedArchive);
   return ok({
     stagedArchive,
     afterHash,
@@ -251,6 +307,7 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
     removed,
     unpackedPreserved,
     fileCount: stagedFiles.size,
+    themeLayers,
   });
 }
 
@@ -269,18 +326,12 @@ function listPaths(header: Record<string, unknown>): string[] {
 }
 
 /** 按目录内容构造 asar 流；unpacked 标记来自原始归档 */
-async function buildStreams(appDir: string, unpacked: Set<string>) {
+async function buildStreams(appDir: string, unpacked: Set<string>): Promise<ArchiveStreamEntry[]> {
   // stat 必须是原始 fs.Stats：asar 内部直接取 stat.size / stat.mode
-  const streams: {
-    path: string;
-    unpacked: boolean;
-    stat: ReturnType<typeof statSync>;
-    type: 'directory' | 'file';
-    streamGenerator?: () => NodeJS.ReadableStream;
-  }[] = [];
+  const streams: ArchiveStreamEntry[] = [];
 
   const rec = async (current: string, prefix: string) => {
-    const entries = await fs.readdir(current, { withFileTypes: true });
+    const entries = await physicalFsp.readdir(current, { withFileTypes: true });
     entries.sort((a, b) => (a.name < b.name ? -1 : 1));
     for (const e of entries) {
       const rel = prefix ? `${prefix}/${e.name}` : e.name;
@@ -290,7 +341,7 @@ async function buildStreams(appDir: string, unpacked: Set<string>) {
           path: rel,
           type: 'directory',
           unpacked: false,
-          stat: statSync(abs),
+          stat: physicalFs.statSync(abs),
         });
         await rec(abs, rel);
         continue;
@@ -300,19 +351,19 @@ async function buildStreams(appDir: string, unpacked: Set<string>) {
         path: rel,
         type: 'file',
         unpacked: unpacked.has(rel),
-        stat: statSync(abs),
-        streamGenerator: () => createReadStream(abs),
+        stat: physicalFs.statSync(abs),
+        streamGenerator: () => physicalFs.createReadStream(abs),
       });
     }
   };
 
   await rec(appDir, '');
-  return streams as Parameters<typeof createPackageFromStreams>[1];
+  return streams;
 }
 
 async function exists(p: string): Promise<boolean> {
   try {
-    await fs.stat(p);
+    await physicalFsp.stat(p);
     return true;
   } catch {
     return false;
@@ -322,20 +373,20 @@ async function exists(p: string): Promise<boolean> {
 /** 把 unpacked 实体目录内容并入解包目录，不覆盖已存在文件 */
 async function copyDirInto(src: string, dst: string): Promise<void> {
   const rec = async (current: string, rel: string) => {
-    const entries = await fs.readdir(current, { withFileTypes: true });
+    const entries = await physicalFsp.readdir(current, { withFileTypes: true });
     for (const e of entries) {
       const r = rel ? `${rel}/${e.name}` : e.name;
       const s = path.join(current, e.name);
       const d = path.join(dst, r);
       if (e.isDirectory()) {
-        await fs.mkdir(d, { recursive: true });
+        await physicalFsp.mkdir(d, { recursive: true });
         await rec(s, r);
         continue;
       }
       if (!e.isFile()) continue;
       if (await exists(d)) continue;
-      await fs.mkdir(path.dirname(d), { recursive: true });
-      await fs.copyFile(s, d);
+      await physicalFsp.mkdir(path.dirname(d), { recursive: true });
+      await physicalFsp.copyFile(s, d);
     }
   };
   await rec(src, '');

@@ -13,7 +13,7 @@ export const DEFAULT_SPEC: Omit<ThemeSpec, 'imageId'> = {
   overlayOpacity: 0.35,
   panelOpacity: 0.86,
   blurPx: 0,
-  backgroundPosition: 'cover',
+  reducedTransparency: false,
 };
 
 export function makeSpec(imageId = ''): ThemeSpec {
@@ -33,6 +33,8 @@ export function clampSpec(spec: ThemeSpec): ThemeSpec {
     overlayOpacity: clamp(spec.overlayOpacity, 0, 1),
     panelOpacity: clamp(spec.panelOpacity, 0, 1),
     blurPx: clamp(Math.round(spec.blurPx), 0, 20),
+    // 老版本存在 localStorage 里的参数没有这个字段，缺省按「不减少透明度」处理
+    reducedTransparency: spec.reducedTransparency === true,
   };
 }
 
@@ -54,6 +56,8 @@ const UNMODIFIED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   'TARGET_RUNNING',
   'TARGET_VERSION_MISMATCH',
   'TARGET_SIGNATURE_PROTECTED',
+  'RUNTIME_IO_UNAVAILABLE',
+  'THEME_CONFLICT',
   'PERMISSION_DENIED',
   'DISK_FULL',
   'FILE_LOCKED',
@@ -115,31 +119,59 @@ export function isBusy(state: UiState): boolean {
   return state.kind === 'analyzing' || state.kind === 'staging' || state.kind === 'applying';
 }
 
-/** 应用按钮的可用条件：有图、有目标、目标已验证、报告通过、且当前不在忙（T54） */
-export function canStage(args: {
+/**
+ * 应用按钮的可用条件（T54、R6）。
+ * 目标与对比度共同决定：没有已验证目标、报告未通过、或有待人工处理的未完成事务时都不放行。
+ * 按钮禁用只是辅助，后端 precheck 同样会拦。
+ */
+export interface GateInput {
   hasImage: boolean;
   hasPreview: boolean;
+  /** 已识别到的目标数量 */
+  targetCount: number;
   targetSupported: boolean;
+  /** 目标存在但未验证时的原因 */
+  targetRejectReason?: string;
   reportPassed: boolean;
-  busy: boolean;
-}): boolean {
+  /** 存在待人工处理的未完成事务（R7），此时后端也会拒绝写入 */
+  recoveryBlocking: boolean;
+}
+
+export function canStage(args: GateInput & { busy: boolean }): boolean {
   return (
     args.hasImage &&
     args.hasPreview &&
     args.targetSupported &&
     args.reportPassed &&
+    !args.recoveryBlocking &&
     !args.busy
   );
 }
 
-export function blockedReason(args: {
-  hasImage: boolean;
-  hasPreview: boolean;
-  targetSupported: boolean;
-  reportPassed: boolean;
-}): string | null {
+/** 禁用原因必须具体，不能说「没有已验证目标」就完事（R6） */
+export function blockedReason(args: GateInput): string | null {
+  if (args.recoveryBlocking) {
+    return '存在待处理的未完成事务，请先在「待恢复」面板中处理后再应用。';
+  }
   if (!args.hasImage || !args.hasPreview) return '请先选择图片并等待配色生成完成。';
-  if (!args.targetSupported) return '当前没有已验证的目标，只能预览，不能应用。';
+  if (args.targetCount === 0) {
+    return '没有发现 OpenCode 安装：请点「重新检测」，或用「选择安装目录」手动指定（目录里应有 resources 文件夹）。';
+  }
+  if (!args.targetSupported) {
+    return args.targetRejectReason
+      ? `当前目标未经验证，只能预览不能应用：${args.targetRejectReason}`
+      : '当前目标未经验证，只能预览不能应用；请重新检测目标。';
+  }
   if (!args.reportPassed) return '存在未达标的可读性项，请先调高遮罩或面板不透明度。';
   return null;
+}
+
+/** 底部就绪文案：由目标与对比度共同决定，不能与禁用原因互相矛盾 */
+export function readyText(args: GateInput): string {
+  if (args.recoveryBlocking) return '待处理事务未清空，已暂停写入。';
+  if (!args.hasImage) return '请选择一张本地图片开始。';
+  if (!args.hasPreview) return '正在提取配色…';
+  const blocked = blockedReason(args);
+  if (blocked) return blocked;
+  return '配色与可读性均已通过，可以应用；应用前请先退出 OpenCode。';
 }

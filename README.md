@@ -157,13 +157,19 @@
 
 ## 已知限制
 
-- **真实安装验收未完成**：截至本次提交，只在临时目录的合成安装上跑通过完整闭环，
-  未在真实 OpenCode 安装上实测（详见 `docs/acceptance.md`）。
-- **E2E 未实现**：`tests/e2e` 下没有用例，`npm run test:e2e` 退出码 0 只代表「没有用例」。
-- 已验证版本只有 1.18.29；其他版本只能预览。
-- 备份是整档复制（150 MB 级），不是增量。
-- 便携包未签名；未做代码签名，不要对外声称已签名。
+- **真机视觉走查未完成**：功能闭环已在「真实 Electron 主进程 + 真实窗口 + 合成安装」上验证
+  （`npm run test:e2e:electron` 35 项、`npm run test:e2e` 8 项），
+  但 OpenCode 真实安装上的画面观感仍需人工逐项确认（详见 `docs/acceptance.md` 第 5.3、6.3 节）。
+- **没有「恢复原版」入口，除非登记出厂指纹**：原版必须由证据证明，不能靠「没看到本工具的标记」
+  推断（详见 `docs/original-evidence.md`）。没有证据时可用的是「恢复到首次接管时」。
+- 已验证版本只有 1.18.29；其他版本只能预览。token 映射取自该版本的官方 CSS，
+  应用升级后需要重新核对（见 `docs/discovery.md`）。
+- 来源不明的第三方主题层会**直接拒绝**应用（`THEME_CONFLICT`），工具不自动覆盖。
+- 备份是整档复制（150 MB 级），不是增量；保留最近 3 份。
+- 便携包未签名；未做代码签名，不要对外声称已签名。`release2/` 是旧构建，
+  本轮改动后需要重新打包。
 - 图片只支持 PNG / JPG / WebP，≤ 20 MiB，不支持 SVG。
+- 终端（.xterm）与 `--syntax-*` / `--markdown-*` 语法色不在覆盖范围内（有意为之）。
 
 ## 开发命令
 
@@ -173,8 +179,10 @@ npm run dev            # 起 Vite（界面热更新）
 npm run typecheck      # tsc --noEmit
 npm run lint           # eslint
 npm run test:unit      # 单元
-npm run test:integration   # 集成（合成安装 + 故障注入）
-npm run test:e2e       # 目前 0 用例
+npm run test:integration   # 集成（合成安装 + 故障注入 + 真实 Electron 主进程）
+npm run test:e2e       # 真实窗口闭环（Playwright + Electron）
+npm run test:e2e:electron   # 主进程闭环（不建窗口，无显示会话也能跑）
+npm run verify         # 类型 + lint + 单测 + 集成 + 构建 + E2E
 npm run build          # 构建主进程与界面到 out/
 npm run audit          # 交付前自检：路径/凭证/产物/许可/IPC
 npm run dist           # 便携包（dir 目标，见下方镜像说明）

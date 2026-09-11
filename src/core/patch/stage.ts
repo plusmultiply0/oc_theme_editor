@@ -84,6 +84,61 @@ interface FileEntry {
 
 const INJECT_COMMENT = '<!-- opencode-theme-switcher -->';
 
+/**
+ * 结构性校验 HTML 注入结果（事故 F3）。
+ *
+ * 旧门禁要求「HTML 必须出现在 touched 列表里」，但 injectLink 是幂等的：
+ * 换图时只有 CSS/图片变化，HTML 本来就应该保持不变，于是第二次换图被误判为
+ * 注入失败（STAGE_FAILED）。这里改成验证**结构**而不是「有没有变」：
+ *   - 本工具链接恰好一个（多了说明叠加，少了说明没注入）
+ *   - href 指向本工具的 CSS
+ *   - 链接位于 head 内（在锚点之前），不能掉到 body 里
+ *   - 工具标记唯一
+ * 归档完整性、白名单与字节一致性由 verifyPackedResult 负责，这里不重复也不放宽。
+ */
+export function verifyStagedHtml(html: string, adapter: TargetAdapter): Result<{ linkCount: number }> {
+  const anchor = adapter.injection.anchor;
+  const anchorAt = html.indexOf(anchor);
+  if (anchorAt < 0) {
+    return fail('STAGE_FAILED', `HTML 入口中找不到注入锚点 ${anchor}`, '该版本可能不兼容；安装未被修改。');
+  }
+
+  const href = `./${path.basename(adapter.injection.cssFile)}`;
+  const links = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
+  const mine = links.filter(
+    (tag) => tag.includes(`href="${href}"`) && /rel\s*=\s*"stylesheet"/i.test(tag),
+  );
+  if (mine.length === 0) {
+    return fail(
+      'STAGE_FAILED',
+      `HTML 入口中缺少本工具的样式链接（${href}）`,
+      '注入未生效；已中止，安装未被修改。',
+    );
+  }
+  if (mine.length > 1) {
+    return fail(
+      'STAGE_FAILED',
+      `HTML 入口中出现 ${mine.length} 个本工具样式链接`,
+      '重复注入会让样式互相覆盖；已中止，安装未被修改。',
+    );
+  }
+  const linkAt = html.indexOf(mine[0]);
+  if (linkAt < 0 || linkAt > anchorAt) {
+    return fail('STAGE_FAILED', '本工具样式链接不在 head 内', '注入位置异常；已中止，安装未被修改。');
+  }
+
+  const markers = html.split(INJECT_COMMENT).length - 1;
+  if (markers !== 1) {
+    return fail(
+      'STAGE_FAILED',
+      `HTML 入口中的工具标记出现 ${markers} 次`,
+      '标记必须唯一；已中止，安装未被修改。',
+    );
+  }
+
+  return ok({ linkCount: mine.length });
+}
+
 async function walk(dir: string, limits: StageLimits): Promise<Result<Map<string, FileEntry>>> {
   const out = new Map<string, FileEntry>();
   let total = 0;
@@ -271,8 +326,18 @@ export async function stageChanges(input: StageInput): Promise<Result<StageResul
       '已中止，安装未被修改。',
     );
   }
-  if (!touched.includes(adapter.injection.htmlEntry)) {
-    return fail('STAGE_FAILED', 'HTML 入口未被修改，注入可能失败', '已中止，安装未被修改。');
+  /*
+   * F3：HTML 不要求「必须变化」——换图时它本来就应该保持不变。
+   * 改为对**已写入的 HTML**做结构性校验（链接唯一、href 正确、在 head 内、标记唯一）。
+   */
+  const htmlAfter = await physicalFsp.readFile(htmlAbs, 'utf8');
+  const htmlGate = verifyStagedHtml(htmlAfter, adapter);
+  if (!htmlGate.success) {
+    return fail(
+      htmlGate.error.code as 'STAGE_FAILED',
+      htmlGate.error.message,
+      htmlGate.error.recoveryHint,
+    );
   }
 
   // 按原始 unpacked 集合重建归档。

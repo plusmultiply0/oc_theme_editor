@@ -190,11 +190,27 @@ describe('主题生成', () => {
     const r = await generateTheme({ buffer: buf, spec: makeSpec(), imageRef: './bg.jpg' });
     expect(r.success).toBe(true);
     if (r.success) {
-      expect(r.data.contrast.textOnPanel).toBeGreaterThanOrEqual(4.5);
-      expect(r.data.contrast.effectiveBackground).toMatch(/^#[0-9a-f]{6}$/);
+      const text = r.data.report.entries.find((e) => e.element === '正文');
+      expect(text?.pass).toBe(true);
+      expect(r.data.effectiveBackground).toMatch(/^#[0-9a-f]{6}$/);
       // 实际底色应当既不是纯图片色，也不是纯面板色
-      expect(r.data.contrast.effectiveBackground).not.toBe(r.data.contrast.imagePixel);
-      expect(r.data.contrast.effectiveBackground).not.toBe(r.data.tokens.panel);
+      expect(r.data.effectiveBackground).not.toBe(r.data.palette[0]);
+      expect(r.data.effectiveBackground).not.toBe(r.data.tokens.panel);
+    }
+  });
+
+  it('报告逐条给出元素、实测值与目标值，且未做真实采样时不得标记 verified', async () => {
+    const buf = await solid(48, 48, { r: 64, g: 96, b: 160 });
+    const r = await generateTheme({ buffer: buf, spec: makeSpec(), imageRef: './bg.jpg' });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.report.entries.length).toBeGreaterThan(5);
+      for (const e of r.data.report.entries) {
+        expect(e.required).toBeGreaterThan(0);
+        expect(e.ratio).toBeGreaterThan(0);
+      }
+      expect(r.data.report.verified).toBe(false);
+      expect(r.data.report.scope).toContain('不含应用自带的终端配色');
     }
   });
 
@@ -206,8 +222,27 @@ describe('主题生成', () => {
 
   it('状态色与 diff 色独立于主色，不被主题污染（T27）', () => {
     const tokens = deriveTokens(['#c0392b'], 'dark');
-    expect(tokens.status.error).toBe('#c0392b');
+    // 保持色相语义：错误偏红、成功偏绿，且两者不同
+    const err = hexToRgb(tokens.status.error);
+    const ok = hexToRgb(tokens.status.success);
+    expect(err.r).toBeGreaterThan(err.g);
+    expect(ok.g).toBeGreaterThan(ok.r);
+    expect(tokens.status.error).not.toBe(tokens.primary);
     expect(tokens.diff.added).not.toBe(tokens.diff.removed);
+  });
+
+  it('深色基调下状态色与 diff 色仍满足正文对比度', () => {
+    const tokens = deriveTokens(['#101418'], 'dark', undefined, '#1b1f27');
+    for (const c of [
+      tokens.status.error,
+      tokens.status.warning,
+      tokens.status.success,
+      tokens.status.info,
+      tokens.diff.added,
+      tokens.diff.removed,
+    ]) {
+      expect(contrastRatio(c, '#1b1f27')).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it('hex 解析正确', () => {

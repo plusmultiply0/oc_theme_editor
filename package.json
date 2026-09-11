@@ -12,7 +12,7 @@
     "dev": "vite",
     "start": "electron .",
     "build": "npm run build:main && npm run build:renderer",
-    "build:main": "tsc -p tsconfig.node.json",
+    "build:main": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && tsc -p tsconfig.node.json",
     "build:renderer": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",

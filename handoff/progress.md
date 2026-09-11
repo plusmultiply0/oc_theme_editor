@@ -105,6 +105,41 @@
 - 未执行：真实安装的应用/恢复、GUI 联调、便携包。
 - 下一任务：P4（T50–T56）桌面界面与真实联调。
 
+## P4a：主进程服务层与 IPC 接线（T50 数据侧、T53、T54、T55）
+
+- 任务 ID：T50（数据来源）、T53（预览与输出同源）、T54（准备/应用两段式）、T55（恢复语义）、T56（外链白名单，仅主进程侧）。
+- 完成状态：已完成；**未对真实安装做任何写入**，全部在临时目录的合成安装上验证。
+- 改动文件：
+  - 新增 `src/main/services/image-store.ts`（图片登记/导入/只读读取，路径不外传）、`target-service.ts`（识别与缓存）、`theme-service.ts`（生成与报告）、`operation-service.ts`（准备→应用→恢复）、`events.ts`（进度广播）
+  - 新增 `src/main/ipc.ts`（11 + 1 个通道注册，全部 try/catch 收敛为 AppError）
+  - 重写 `src/main/index.ts`：装配服务、注入系统选择框、事件推给所有窗口；删除 `handlers.mock.ts`
+  - 新增 `src/core/theme/report.ts`：逐条对比度报告，scope/sampling 写明范围与采样方法，`verified` 恒为 false
+  - 修改 `src/core/theme/generate.ts`：先合成实际底色再推导 token；语义色（状态/diff/边框/焦点/主色）按实测底色保障对比度
+  - 修改 `src/shared/schema.ts`：`ThemeSpec` 增加可选 `primary`；导出 `ContrastTarget`
+  - 修改 `src/shared/ipc.ts`：`discoverTargets` 返回 `{targets, rejected, scanned}`；`StagedTheme` 改为 `StageSummary`（提交前不存在 afterHash，不伪造）；`RestoreThemeInput` 增加 `kind`；新增 `openExternal`
+  - 修改 `src/shared/errors.ts`：新增 `errorResult()`
+  - 修改 `src/core/patch/backup.ts`：新增 `listBackupRecords()`
+  - 新增 `tests/integration/main-services.test.ts`（8 项）
+  - 修改 `package.json`：`build:main` 先清空 `out/`，避免旧的 `handlers.mock.js` 被打进产物
+- 测试命令与退出码：
+  - `npx tsc --noEmit` → 0
+  - `npx eslint .` → 0
+  - `npx vitest run` → 0，6 文件 / 102 项全部通过（新增 10 项）
+  - `npm run build` → 0（`out/main/index.js`、`out/renderer/index.html` 均产出）
+- 本轮设计决策（有取舍，记录在案）：
+  1. **准备阶段不返回完整 manifest**：`afterHash`/`backupHash` 在真正提交前并不存在，拿占位值冒充等于喂假数据给界面。改为返回 `StageSummary`（变更范围、备份位置、需要空间、目标指纹）。
+  2. **自动取的主色会按 3:1 校正，用户指定的主色原样保留**。读不清时由报告如实判定并阻断进入应用，不偷偷改掉用户的选择——否则「对比度不合格无法应用」这条状态永远不可达。
+  3. **语义色（状态/diff/边框/焦点）按三层合成后的实际底色保障**，不是按面板色。原 P2 测试断言深色下 `status.error === '#c0392b'`，该断言把「保持固定常量」误当成「独立于主色」，已改为断言色相语义与实测对比度。
+- 本轮修复的缺陷：
+  1. 并发占位在 `await` 之后才加，两次点击会同时穿过检查 → 改为同步占位（T54「双击不能启动第二事务」）。
+  2. Windows 上 `extractFile` 需要平台分隔符，测试改用 `toArchivePath()`。
+- 已知问题 / 边界：
+  - `systemProcessProbe` 仍未在真实环境运行过；服务层预留 `probe` 注入，测试注入 `idle`。
+  - 图片选择框（Electron `dialog`）未在自动化测试中覆盖，只覆盖了注入 picker 的路径。
+  - 准备记录里的 `imagePath` 是原图绝对路径，仅存于本机运行数据目录，不外传；若原图被移动，应用阶段会报 `IMAGE_NOT_FOUND` 并提示重新选图。
+- 未执行：GUI 九类状态与 E2E（P4b）、真实安装应用（需授权）。
+- 下一任务：P4b（T51、T52、T54 界面、T55 恢复界面、T56 键盘/焦点/缩放）。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

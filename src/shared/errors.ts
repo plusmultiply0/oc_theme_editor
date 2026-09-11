@@ -96,6 +96,11 @@ export function toAppError(e: unknown, fallback: ErrorCode = 'INTERNAL'): AppErr
   };
 }
 
+/** 把 try/catch 捕获到的未知异常直接包成一个失败的 Result。 */
+export function errorResult(e: unknown, fallback: ErrorCode = 'INTERNAL'): Result<never> {
+  return { success: false, error: toAppError(e, fallback) };
+}
+
 export function isOk<T>(r: Result<T>): r is { success: true; data: T } {
   return r.success;
 }

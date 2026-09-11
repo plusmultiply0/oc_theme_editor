@@ -17,6 +17,7 @@ const api: ThemeSwitcherApi = {
   listBackups: (targetId) => ipcRenderer.invoke('listBackups', targetId),
   restoreTheme: (input) => ipcRenderer.invoke('restoreTheme', input),
   getOperation: (operationId) => ipcRenderer.invoke('getOperation', operationId),
+  openExternal: (url) => ipcRenderer.invoke('openExternal', url),
   onOperationEvent: (listener) => {
     const handler = (_event: unknown, payload: Parameters<typeof listener>[0]) => listener(payload);
     ipcRenderer.on('operation-event', handler);

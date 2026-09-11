@@ -68,6 +68,8 @@ export const ThemeSpecSchema = z.object({
   mode: ThemeModeSchema,
   /** 从图片提取的代表色，作为生成与回显依据 */
   palette: z.array(hexColor).min(1).max(16),
+  /** 用户指定的主色；留空则按图片代表色自动推导并校正可读性 */
+  primary: hexColor.optional(),
   overlayOpacity: z.number().min(PARAM_RANGES.overlayOpacity.min).max(PARAM_RANGES.overlayOpacity.max),
   panelOpacity: z.number().min(PARAM_RANGES.panelOpacity.min).max(PARAM_RANGES.panelOpacity.max),
   blurPx: z.number().min(PARAM_RANGES.blurPx.min).max(PARAM_RANGES.blurPx.max),
@@ -167,6 +169,7 @@ export type BackgroundPosition = z.infer<typeof BackgroundPositionSchema>;
 export type ThemeSpec = z.infer<typeof ThemeSpecSchema>;
 export type TargetSupport = z.infer<typeof TargetSupportSchema>;
 export type TargetInfo = z.infer<typeof TargetInfoSchema>;
+export type ContrastTarget = z.infer<typeof ContrastTargetSchema>;
 export type ContrastEntry = z.infer<typeof ContrastEntrySchema>;
 export type ContrastReport = z.infer<typeof ContrastReportSchema>;
 export type OperationStatus = z.infer<typeof OperationStatusSchema>;

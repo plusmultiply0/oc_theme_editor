@@ -117,6 +117,11 @@ export async function createBackup(input: CreateBackupInput): Promise<Result<Bac
   return ok(record);
 }
 
+/** 列出某个备份目录下的全部记录，供界面区分「原版 / 上一主题」（T41） */
+export async function listBackupRecords(dir: string): Promise<BackupRecord[]> {
+  return readMeta(dir);
+}
+
 export async function latestBackup(dir: string): Promise<BackupRecord | null> {
   const all = await readMeta(dir);
   if (all.length === 0) return null;

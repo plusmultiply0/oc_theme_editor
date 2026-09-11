@@ -24,7 +24,7 @@ export default function App() {
   // 首次加载拉取目标列表；真实识别在 P3 实现（T50）
   useEffect(() => {
     void window.themeSwitcher.discoverTargets().then((r) => {
-      if (r.success) setTargets(r.data);
+      if (r.success) setTargets(r.data.targets);
       else setStatus({ kind: 'error', text: `${r.error.message}｜${r.error.recoveryHint}` });
     });
   }, []);
@@ -95,7 +95,7 @@ export default function App() {
     const target = targets[0];
     if (!target) return;
     setStatus({ kind: 'busy', text: '正在恢复…' });
-    const r = await window.themeSwitcher.restoreTheme({ targetId: target.targetId });
+    const r = await window.themeSwitcher.restoreTheme({ targetId: target.targetId, kind: 'previous' });
     setStatus(
       r.success
         ? { kind: 'ok', text: '已恢复。' }

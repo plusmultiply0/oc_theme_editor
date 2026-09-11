@@ -475,24 +475,32 @@ export default function App() {
           />
           {discovered && (discovered.rejected.length > 0 || targets.length === 0) ? (
             <section className="panel">
-              <h2>未通过的候选</h2>
-              <ul className="entries">
-                {discovered.rejected.map((r) => (
-                  <li key={r.path} className="fail">
-                    <span className="entry-name">{r.message}</span>
-                    <span className="mono">{r.path}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="scope">
-                扫过 {discovered.scanned.length} 个明确登记的位置；不做全盘搜索。
-              </p>
-              {discovered.scanned.length > 0 ? (
+              <h2>目标检查</h2>
+
+              {discovered.rejected.length > 0 ? (
                 <ul className="entries">
-                  {discovered.scanned.map((p) => (
-                    <li key={p} className="mono">{p}</li>
+                  {discovered.rejected.map((r) => (
+                    <li key={r.path} className="fail">
+                      <span className="entry-name">{r.message}</span>
+                      <span className="mono">{r.path}</span>
+                    </li>
                   ))}
                 </ul>
+              ) : null}
+
+              {targets.length === 0 ? (
+                <p className="scope">未发现可用的 OpenCode 安装。</p>
+              ) : null}
+
+              {discovered.scanned.length > 0 ? (
+                <details className="scan-details">
+                  <summary>已检查 {discovered.scanned.length} 个登记位置（不做全盘搜索）</summary>
+                  <ul className="entries">
+                    {discovered.scanned.map((p) => (
+                      <li key={p} className="mono">{p}</li>
+                    ))}
+                  </ul>
+                </details>
               ) : null}
             </section>
           ) : null}

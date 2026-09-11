@@ -229,6 +229,28 @@
 - 进程探针首次在真实环境跑通（此前只注入 `idle` 绕过）。
 - 未完成：第 2 次应用（换浅色主题）、恢复上一主题、恢复原版、T64 走查、T65 干净环境（等 jc）。
 
+## 维护：目标发现扫出满屏无关软件（2026-09-11，jc 反馈）
+
+- 任务 ID：无（T30/T31 的实现缺陷，jc 从真机截图发现）。
+- 现象：界面「未通过的候选」列出 Fiddler、ima.copilot、Postman、zotero、Trae、Telegram Desktop、
+  VS Code、origin、Quark、nvm、Bandizip、Everything、Git、Common Files… 一屏无关目录。
+- 根因：`registryRoots()` 用 `reg query <Uninstall 键> /s /v InstallLocation` 取**所有**卸载登记项的位置当候选。
+  装了 14 个软件就有 14 个「候选」，每个都扫不到归档 → 每个都报一条失败。
+  这与「只扫明确登记的位置」的设计意图相悖。
+- 改动文件：
+  - `src/core/patch/discover.ts`：新增 `parseRegDump()` / `UninstallEntry` / `RegRunner`；
+    改为先查 `DisplayName`、**只在命中 `/opencode/i` 时**才读该项的 `InstallLocation`；
+    登记值去引号与尾部分隔符；按小写路径去重；补 WOW6432Node 两个键；
+    `discoverTargets()` 不再把 `TARGET_NOT_FOUND` 当成「未通过」——
+    无关目录只计入 `scanned`（已检查位置），不再占列表。
+  - `src/renderer/App.tsx` + `styles.css`：面板改名「目标检查」，位置清单收进 `<details>` 默认折叠。
+  - `tests/integration/discover.test.ts`：补 4 项回归（含贴近 `reg query` 实际输出的样本断言）。
+  - `docs/discovery.md`：补本次取证与修法。
+- 命令与退出码：`npx tsc --noEmit` 0、`npx eslint .` 0、`npx vitest run` 0（7 文件 / **130 项**）、`npm run build` 0。
+- 真机只读复核：`node tools/live-cli.cjs status` → 目标 1.18.29 supported，备份 original/previous 各一份。
+  注：本会话沙箱已把 `reg.exe` 列入黑名单，注册表分支在此环境内不可复现，改由注入 `regRunner` 的单元测试覆盖。
+- 未执行：真机 GUI 复看（需 jc 打开界面确认列表已干净）。
+
 ## 交接填写模板
 
 每个执行 agent 提交：任务 ID、完成状态、改动文件、测试命令/退出码、证据位置、已知问题、下一任务。需要真人授权的操作单独列出，未执行测试明确写「未运行」。

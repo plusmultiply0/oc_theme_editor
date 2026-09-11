@@ -602,6 +602,28 @@ a:focus-visible {
   color: var(--ui-ok);
 }
 
+/* 已检查的位置清单：默认折叠，避免一屏无关路径 */
+.scan-details {
+  margin-top: 0.5rem;
+}
+
+.scan-details > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--ui-muted);
+  padding: 0.25rem 0;
+}
+
+.scan-details > summary:hover {
+  color: var(--ui-text);
+}
+
+.scan-details .entries li {
+  display: block;
+  word-break: break-all;
+  color: var(--ui-muted);
+}
+
 .fail {
   color: var(--ui-danger);
 }

@@ -12,6 +12,8 @@ import {
   discoverTargets,
   inspectRoot,
   onlySupported,
+  parseRegDump,
+  registryRoots,
   type InspectOutcome,
 } from '../../src/core/patch/discover';
 import { listAsarFiles, readAsar, sha256File } from '../../src/core/patch/asar';
@@ -120,6 +122,74 @@ describe('目标识别（T30、T31）', () => {
     expect(outcomes).toHaveLength(1);
     const t = await expectTarget(outcomes[0]);
     expect(t.support).toBe('supported');
+  });
+});
+
+describe('卸载登记表的过滤（回归：真机上扫出满屏无关软件）', () => {
+  /** 一段贴近 reg query 实际输出的样本 */
+  const DISPLAY_DUMP = [
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{FIDDLER}',
+    '    DisplayName    REG_SZ    Fiddler',
+    '',
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{POSTMAN}',
+    '    DisplayName    REG_SZ    Postman',
+    '',
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{VSC}',
+    '    DisplayName    REG_SZ    Microsoft VS Code',
+    '',
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{OC}',
+    '    DisplayName    REG_SZ    OpenCode',
+  ].join('\n');
+
+  const INSTALL_DUMP =
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{OC}\n' +
+    '    InstallLocation    REG_SZ    "C:\\Users\\someone\\AppData\\Local\\Programs\\@opencode-aidesktop\\"';
+
+  const runner = (args: string[]): string => {
+    if (args[args.length - 1] === 'DisplayName') return DISPLAY_DUMP;
+    return INSTALL_DUMP;
+  };
+
+  it('只把名称相关的登记项当候选，无关软件一个都不扫', () => {
+    const roots = candidateRoots({ localAppData: '', useRegistry: true, regRunner: runner });
+    expect(roots).toEqual(['C:\\Users\\someone\\AppData\\Local\\Programs\\@opencode-aidesktop']);
+  });
+
+  it('登记值里的引号与尾部反斜杠会被清掉', () => {
+    expect(registryRoots(runner)).toEqual([
+      'C:\\Users\\someone\\AppData\\Local\\Programs\\@opencode-aidesktop',
+    ]);
+  });
+
+  it('解析器按子键分组，认得出 DisplayName 与 InstallLocation', () => {
+    const entries = parseRegDump(DISPLAY_DUMP);
+    expect(entries).toHaveLength(4);
+    expect(entries[0]).toMatchObject({ displayName: 'Fiddler' });
+    expect(entries[3]).toMatchObject({ displayName: 'OpenCode' });
+  });
+
+  it('目录里没有归档的候选不算「未通过」，只计入已检查位置', async () => {
+    const inst = await fixture();
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-unrelated-'));
+    installs.push({
+      root: empty,
+      srcDir: empty,
+      archivePath: empty,
+      exePath: empty,
+      cleanup: () => fs.rmSync(empty, { recursive: true, force: true }),
+    });
+
+    const { outcomes, scanned } = await discoverTargets({
+      localAppData: '',
+      extraRoots: [empty, inst.root],
+      useRegistry: false,
+    });
+
+    // 只有真正的目标出现在结果里；无关目录不再刷屏
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0].kind).toBe('target');
+    // 但两个位置都确实被检查过
+    expect(scanned).toHaveLength(2);
   });
 });
 

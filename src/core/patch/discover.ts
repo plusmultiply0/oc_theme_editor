@@ -3,6 +3,11 @@
  *
  * 只扫「明确登记过」的候选位置，不做全盘搜索。
  * 认不出就是认不出：不允许因为目录里恰好有 app.asar 就认定兼容。
+ *
+ * 关于卸载登记表：Windows 上每个装过的软件都会在这里登记 InstallLocation。
+ * 早先的实现把**所有**登记项都拿来当候选，导致 Fiddler、Postman、VS Code
+ * 这些无关软件全被扫一遍并挂进「未通过」列表。
+ * 现在必须先按 DisplayName 过滤，只保留名字与本工具目标相关的登记项。
  */
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -14,12 +19,78 @@ import { ok, type ErrorCode, type Result } from '../../shared/errors';
 import { canonicalize, instanceIdFromPath } from './paths';
 import { readAsar, readAsarPackage } from './asar';
 
+/** 只保留名称与本工具目标相关的登记项；其余软件一律不扫 */
+const TARGET_NAME_RE = /opencode/i;
+
+/** 卸载登记表位置；64 位系统上还要看 WOW6432Node 分支 */
+const UNINSTALL_KEYS = [
+  'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+  'HKCU\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+  'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+  'HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+];
+
+export type RegRunner = (args: string[]) => string;
+
+function defaultRegRunner(args: string[]): string {
+  return execFileSync('reg', ['query', ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: 15000,
+    windowsHide: true,
+  });
+}
+
+export interface UninstallEntry {
+  key: string;
+  displayName?: string;
+  installLocation?: string;
+}
+
+/**
+ * 解析 `reg query ... /s` 的输出。
+ * 形如：
+ *   HKEY_CURRENT_USER\...\Uninstall\{GUID}
+ *       DisplayName    REG_SZ    OpenCode
+ *       InstallLocation    REG_SZ    D:\Apps\OpenCode
+ */
+export function parseRegDump(raw: string): UninstallEntry[] {
+  const entries: UninstallEntry[] = [];
+  let current: UninstallEntry | null = null;
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^HKEY_/i.test(line)) {
+      current = { key: line };
+      entries.push(current);
+      continue;
+    }
+    if (!current) continue;
+    const m = /^(\S+)\s+REG_SZ\s+(.*)$/i.exec(line);
+    if (!m) continue;
+    const value = unquote(m[2]);
+    const name = m[1].toLowerCase();
+    if (name === 'displayname') current.displayName = value;
+    else if (name === 'installlocation') current.installLocation = value;
+  }
+  return entries;
+}
+
+/** 去掉引号与尾部分隔符：登记值里这两种脏数据都见过 */
+function unquote(v: string): string {
+  const trimmed = v.trim();
+  const quoted = /^"(.*)"$/.exec(trimmed);
+  return (quoted ? quoted[1] : trimmed).replace(/[\\/]+$/, '');
+}
+
 export interface DiscoverOptions {
   localAppData?: string;
   /** 测试或用户手动指定的额外候选根目录 */
   extraRoots?: string[];
   /** 是否读取 Windows 卸载登记表；失败时静默忽略 */
   useRegistry?: boolean;
+  /** 注册表查询执行器，便于测试替换 */
+  regRunner?: RegRunner;
 }
 
 /** 明确的候选安装根目录，去重且保持顺序 */
@@ -32,35 +103,40 @@ export function candidateRoots(opts: DiscoverOptions = {}): string[] {
     }
   }
   for (const r of opts.extraRoots ?? []) roots.push(r);
-  if (opts.useRegistry) roots.push(...registryRoots());
+  if (opts.useRegistry) roots.push(...registryRoots(opts.regRunner ?? defaultRegRunner));
   return [...new Set(roots)];
 }
 
-/** 读卸载登记表里的 InstallLocation；属尽力而为，读不到就返回空 */
-export function registryRoots(): string[] {
+/**
+ * 读卸载登记表里与本工具目标相关的 InstallLocation。
+ * 属尽力而为：某个键读不到就跳过，不影响其余候选。
+ */
+export function registryRoots(runner: RegRunner = defaultRegRunner): string[] {
   if (process.platform !== 'win32') return [];
   const out: string[] = [];
-  try {
-    // 同步读取，候选枚举本身很短；失败一律返回空，不影响主流程
-    for (const key of [
-      'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
-      'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
-    ]) {
-      const raw = execFileSync('reg', ['query', key, '/s', '/v', 'InstallLocation'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 5000,
-      });
-      for (const line of raw.split(/\r?\n/)) {
-        const m = /InstallLocation\s+REG_SZ\s+(.+)$/.exec(line.trim());
-        if (m) {
-          const v = m[1].trim();
-          if (v) out.push(v);
-        }
+  // 同一个安装常常在 HKCU/HKLM 与 WOW6432Node 视图里各登记一次，按小写路径去重
+  const seen = new Set<string>();
+  for (const key of UNINSTALL_KEYS) {
+    let entries: UninstallEntry[];
+    try {
+      entries = parseRegDump(runner([key, '/s', '/v', 'DisplayName']));
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (!e.displayName || !TARGET_NAME_RE.test(e.displayName)) continue;
+      try {
+        const detail = parseRegDump(runner([e.key, '/v', 'InstallLocation']));
+        const loc = detail[0]?.installLocation;
+        if (!loc) continue;
+        const dedupKey = loc.toLowerCase();
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
+        out.push(loc);
+      } catch {
+        // 单个登记项读失败不影响其余候选
       }
     }
-  } catch {
-    return [];
   }
   return out;
 }
@@ -186,23 +262,34 @@ export async function inspectRoot(root: string): Promise<Result<InspectOutcome>>
   return ok({ kind: 'target', target });
 }
 
-/** 扫描全部候选位置，返回存在的目标；不存在的目录不出现在结果里 */
+/**
+ * 扫描全部候选位置。
+ *
+ * 返回的 `scanned` 是**实际检查过**的目录（存在且已尝试识别），
+ * `outcomes` 只包含真正需要用户知道的结果：
+ *   - 识别成功的目标；
+ *   - 有归档但适配/版本/读取有问题的目录。
+ * 「这目录里压根没有应用归档」不算失败——那只是注册表里顺带带来的无关目录，
+ * 不该占着「未通过」列表刷屏。
+ */
 export async function discoverTargets(
   opts: DiscoverOptions = {},
 ): Promise<{ outcomes: InspectOutcome[]; scanned: string[] }> {
   const roots = candidateRoots(opts);
   const outcomes: InspectOutcome[] = [];
+  const scanned: string[] = [];
   for (const root of roots) {
     if (!(await isDir(root))) continue;
+    scanned.push(root);
     const r = await inspectRoot(root);
-    if (r.success) outcomes.push(r.data);
-    else {
-      outcomes.push(
-        reject(root, 'unknown', r.error.code, r.error.message, r.error.recoveryHint),
-      );
+    if (!r.success) {
+      outcomes.push(reject(root, 'unknown', r.error.code, r.error.message, r.error.recoveryHint));
+      continue;
     }
+    if (r.data.kind === 'rejected' && r.data.rejected.code === 'TARGET_NOT_FOUND') continue;
+    outcomes.push(r.data);
   }
-  return { outcomes, scanned: roots };
+  return { outcomes, scanned };
 }
 
 export function onlySupported(outcomes: InspectOutcome[]): TargetInfo[] {

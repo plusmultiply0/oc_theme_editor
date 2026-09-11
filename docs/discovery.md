@@ -103,3 +103,22 @@
 | `node tools/inspect-asar.cjs --list out/renderer` | 956 条目，无主题/背景文件 |
 | `node tools/inspect-asar.cjs --read out/renderer/index.html` | 含 `oc-theme-preload.js` 引用，无注入样式 |
 | `node tools/inspect-asar.cjs --read out/renderer/oc-theme-preload.js` | 官方 preload 逻辑，见上 |
+
+---
+
+## 更新（2026-09-11）：卸载登记表的扫描范围收紧
+
+真机界面上出现过一屏无关目录（Fiddler、Postman、VS Code、zotero、Trae…）被列进「未通过的候选」。
+
+原因：`registryRoots()` 原先用 `reg query <Uninstall 键> /s /v InstallLocation`
+把**所有**卸载登记项的位置都当候选，于是每装过的软件都成了「候选」，扫不到归档就报一条失败。
+
+修法（`src/core/patch/discover.ts`）：
+
+1. 先 `reg query <键> /s /v DisplayName`，**只在 DisplayName 命中 `/opencode/i` 时**才去读该子键的 `InstallLocation`；
+2. 登记值统一去引号、去尾部分隔符（这两种脏数据在真机上都出现过）；
+3. 同一路径按小写去重（同一安装常在 HKCU/HKLM 与 WOW6432Node 视图里各登记一次）；
+4. `discoverTargets()` 不再把「这目录里没有应用归档」当成「未通过」——
+   那只是注册表顺带带来的无关目录，现在只计入「已检查位置」，界面默认折叠。
+
+补了 4 项回归测试，用贴近 `reg query` 实际输出的样本喂给解析器，断言 Fiddler/Postman/VS Code 一个都不会成为候选。

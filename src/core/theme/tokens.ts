@@ -61,7 +61,13 @@ export function renderTokenDeclarations(tokens: ThemeTokens, spec: ThemeSpec): T
     { name: '--background-base', value: rgba(tokens.panel, p), note: '主面板底色（透出背景图片）' },
     { name: '--background-weak', value: rgba(tokens.panel, weak), note: '更弱的面板底色' },
     { name: '--background-strong', value: rgba(tokens.panel, strong), note: '更强的面板底色' },
-    { name: '--background-stronger', value: tokens.panel, note: '实底面板色' },
+    /*
+     * stronger 必须跟随面板透明度（事故 F2）：官方旧布局的部分正文、输入外围、
+     * 审阅标签用的是 .bg-background-stronger，这里若是 HEX 实色，
+     * 即便根布局已经透明，这些区域仍会把背景图片整块挡住。
+     * 减少透明度时 panelAlpha 返回 1，自动退化为实底 —— 那是用户明确要的。
+     */
+    { name: '--background-stronger', value: rgba(tokens.panel, p), note: '正文强背景（随面板透明度）' },
 
     // ---------- 表面层 ----------
     { name: '--surface-base', value: rgba(tokens.text, 0.04), note: '表面底纹' },

@@ -146,6 +146,55 @@ async function openFixture(browser: Browser, cssText: string): Promise<Page> {
   return page;
 }
 
+test.describe('背景层叠：实色面板与多层外壳（F2）', () => {
+  let browser: Browser;
+
+  test.beforeAll(async () => {
+    browser = await chromium.launch(LAUNCH);
+  });
+
+  test.afterAll(async () => {
+    await browser?.close();
+  });
+
+  /** 官方运行时覆盖 + 合成 CSS，返回已就夹具页 */
+  async function prepared(): Promise<Page> {
+    const imageRef = await fixtureImage();
+    const s = spec();
+    const tokens = deriveTokens(s.palette, 'light', undefined, '#e8e8ea');
+    const cssText = renderThemeCss({ tokens, spec: s, imageRef, resolvedMode: 'light' });
+    const page = await openFixture(browser, cssText);
+    await insertOfficialRuntime(page);
+    return page;
+  }
+
+  test('使用 --background-stronger 的正文区域不是实色，能透出背景', async () => {
+    const page = await prepared();
+    // 官方运行时把 stronger 覆盖成实色 #fcfcfc；修好前这里会是 1
+    expect(await alphaOf(page, '#session')).toBeLessThan(1);
+    expect(await imageVisible(page, '#session')).toBe(true);
+    await page.close();
+  });
+
+  test('大面积 NewLayout 外壳不再额外叠一层底色', async () => {
+    const page = await prepared();
+    // 外壳是整屏容器，多叠一层 .6 底色就等于给整块区域加了滤镜
+    expect(await alphaOf(page, '#shell')).toBe(0);
+    await page.close();
+  });
+
+  test('减少透明度时面板退化为实底，这是设计如此而不是缺陷', async () => {
+    const imageRef = await fixtureImage();
+    const s = { ...spec(), reducedTransparency: true };
+    const tokens = deriveTokens(s.palette, 'light', undefined, '#e8e8ea');
+    const cssText = renderThemeCss({ tokens, spec: s, imageRef, resolvedMode: 'light' });
+    const page = await openFixture(browser, cssText);
+    await insertOfficialRuntime(page);
+    expect(await alphaOf(page, '#session')).toBe(1);
+    await page.close();
+  });
+});
+
 test.describe('背景层叠：官方运行时覆盖（F1）', () => {
   let browser: Browser;
 

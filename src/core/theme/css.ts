@@ -134,6 +134,20 @@ ${renderTokenCss(tokens, spec)}
 }
 
 /* 面板与容器：半透明真实透出背景图片，与预览、对比度报告同一口径 */
+/*
+ * 大面积 NewLayout 外壳不再额外叠一层底色（事故 F2）。
+ * 官方 main 里外壳是 relative + bg-v2-background-bg-deep + flex-1，
+ * 它铺满整屏、下面还有各自的面板，等于给整个内容区又盖了一层；
+ * 这里只让**这一处**外壳透明，保留标题栏、小控件、悬浮层各自的设计。
+ *
+ * 选择器取自本版本实际布局（1.18.29），升级后必须重新核对；
+ * 若不再匹配就停止自动应用并补适配器布局证据，
+ * 不能退化成 #root * { background: transparent !important } 这类全局清空。
+ */
+#root .bg-v2-background-bg-deep.flex-1 {
+  background-color: transparent;
+}
+
 [data-component="dialog"],
 [data-component="dialog-v2"],
 [data-component="menu-v2-content"],

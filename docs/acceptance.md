@@ -18,12 +18,12 @@
 |---|---|---|
 | `npm run typecheck` | 0 | 无输出，`tsc --noEmit` 通过 |
 | `npm run lint` | 0 | 无告警 |
-| `npm run test:unit` | 0 | 4 文件 / 76 项通过 |
-| `npm run test:integration` | 0 | 3 文件 / 44 项通过 |
+| `npm run test:unit` | 0 | 4 文件 / 82 项通过 |
+| `npm run test:integration` | 0 | 3 文件 / 48 项通过 |
 | `npm run test:e2e` | 0 | **0 个用例**（`--pass-with-no-tests`），E2E 未实现，见 `tests/e2e/README.md` |
-| `npm run build` | 0 | 产出 `out/main/index.js`、`out/renderer/index.html`（JS 246 KB / CSS 9.8 KB） |
+| `npm run build` | 0 | 产出 `out/main/index.js`、`out/renderer/index.html` |
 | `npm run audit` | 0 | 路径/凭证/产物/许可/IPC 五项检查全部通过（见下） |
-| `npm run dist` | 0 | 产出 `release/win-unpacked`（326 MB，dir 目标） |
+| 便携包构建 | 0 | 产出 `release2/win-unpacked`（325 MB，dir 目标）；指纹见 `docs/release-checklist.md` |
 
 `npm run dist` 需要下载 Electron 发行包与 electron-builder 二进制，**直连 GitHub 会 ETIMEDOUT**；本机构建时使用了镜像：
 

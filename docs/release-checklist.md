@@ -19,7 +19,7 @@
 **旧 `release/` 需要手动删除**——锁释放后直接删即可，它是构建产物，删掉不影响任何功能。
 
 本轮核对（新产物）：归档 952 条目，顶层只有 `node_modules` / `out` / `package.json`，
-`src/` 与 `tests/` 零命中，`zjcfile` / `ylzho` / `handoff` 等私有串零命中；
+`src/` 与 `tests/` 零命中，工作区绝对路径与作者用户名等私有串零命中；
 并抽查 `out/core/patch/discover.js` 已含本次修复（DisplayName 过滤、WOW6432Node、`TARGET_NOT_FOUND` 不再算未通过）。
 
 重新构建后哈希会变化，发布前请重新计算并替换本表。

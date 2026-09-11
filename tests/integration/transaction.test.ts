@@ -19,7 +19,7 @@ import { restoreTarget } from '../../src/core/patch/restore';
 import { scanPending } from '../../src/core/patch/recovery';
 import { acquireLock } from '../../src/core/patch/lock';
 import { listTx, readTx, writeTx, type TxRecord } from '../../src/core/patch/txlog';
-import { ensureDirs, originalDir, runtimeDirs } from '../../src/core/patch/layout';
+import { ensureDirs, originalDir, previousDir, runtimeDirs } from '../../src/core/patch/layout';
 import { listBackupRecords } from '../../src/core/patch/backup';
 import {
   KNOWN_FACTORY_FINGERPRINTS,
@@ -710,5 +710,93 @@ describe('原版证据的登记与迁移（R2）', () => {
   it('指纹表为空时不冒充原版（默认行为）', () => {
     expect(KNOWN_FACTORY_FINGERPRINTS).toHaveLength(0);
     expect(matchFactoryFingerprint('1.18.29', '0'.repeat(64))).toBeUndefined();
+  });
+});
+
+describe('备份健康标记与恢复（事故 F3）', () => {
+  it('恢复前会检查备份健康度，已知故障快照被拒绝且目标不变', async () => {
+    const { inst, target } = await makeTarget();
+    const runtime = newRuntime();
+    const layout = runtimeLayout(inst.root, runtime);
+    await doApply({
+      target,
+      runtimeRoot: runtime,
+      css: css('#171717'),
+      imageBytes: Buffer.from('y'),
+      themeSummary: 'A',
+    });
+
+    const dir = originalDir(layout);
+    const records = await listBackupRecords(dir);
+    expect(records[0].health).toBe('known-healthy');
+
+    // 事后把备份内容改坏（模拟备份文件本身损坏）
+    const raw = fs.readFileSync(records[0].file);
+    const dataStart = 8 + raw.readUInt32LE(4);
+    const fd = fs.openSync(records[0].file, 'r+');
+    try {
+      fs.writeSync(fd, Buffer.from('XXXX', 'utf8'), 0, 4, dataStart);
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    const before = await sha256File(inst.archivePath);
+    const r = await restoreTarget({ target, layout, kind: 'takeover' });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.code).toBe('BACKUP_UNHEALTHY');
+      expect(r.error.message).toContain('已损坏');
+    }
+    expect(await sha256File(inst.archivePath)).toBe(before);
+
+    // 健康标记已落盘，之后列表里能看到，不会再被当成可用项
+    const after = await listBackupRecords(dir);
+    expect(after[0].health).toBe('known-bad');
+  });
+
+  it('应用成功后创建的备份被标记为已知健康', async () => {
+    const { inst, target } = await makeTarget();
+    const runtime = newRuntime();
+    const layout = runtimeLayout(inst.root, runtime);
+    await doApply({
+      target,
+      runtimeRoot: runtime,
+      css: css('#181818'),
+      imageBytes: Buffer.from('y'),
+      themeSummary: 'A',
+    });
+    const originals = await listBackupRecords(originalDir(layout));
+    const previous = await listBackupRecords(previousDir(layout));
+    expect(originals[0].health).toBe('known-healthy');
+    expect(previous[0].health).toBe('known-healthy');
+  });
+
+  it('健康标记缺失的旧记录按 unverified 处理（迁移）', async () => {
+    const { inst } = await makeTarget();
+    const runtime = newRuntime();
+    const layout = runtimeLayout(inst.root, runtime);
+    await ensureDirs(layout);
+    const dir = originalDir(layout);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'original-legacy.asar');
+    fs.copyFileSync(inst.archivePath, file);
+    fs.writeFileSync(
+      path.join(dir, 'meta.json'),
+      JSON.stringify([
+        {
+          kind: 'original',
+          file,
+          sha256: await sha256File(file),
+          size: fs.statSync(file).size,
+          createdAt: '2026-09-11T00:00:00.000Z',
+          version: '1.18.29',
+          pristine: false,
+          evidence: 'unverified',
+        },
+      ]),
+      'utf8',
+    );
+    const records = await listBackupRecords(dir);
+    expect(records[0].health).toBe('unverified');
   });
 });

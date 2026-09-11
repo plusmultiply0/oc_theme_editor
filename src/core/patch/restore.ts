@@ -13,7 +13,13 @@ import type { OperationManifest, TargetInfo } from '../../shared/schema';
 import { readAsar, readAsarPackage, sha256File } from './asar';
 import { physicalFsp } from './physical-fs';
 import { preRestoreDir, type RuntimeLayout } from './layout';
-import { latestBackup, verifyBackup, createBackup, type BackupRecord } from './backup';
+import {
+  latestBackup,
+  verifyBackup,
+  verifyBackupHealth,
+  createBackup,
+  type BackupRecord,
+} from './backup';
 import { commitStaged, type CommitHooks } from './commit';
 import { withLock } from './lock';
 import { appendPhase, writeTx, type TxRecord } from './txlog';
@@ -84,6 +90,19 @@ export async function restoreTarget(input: RestoreInput): Promise<Result<Restore
           : '首次接管快照只在本工具第一次应用时创建；未创建过则没有可恢复的内容。',
       );
     }
+    // F3：已知故障的快照不得用于恢复 —— 恢复它只会把坏状态再写一遍
+    const health = await verifyBackupHealth(dir, record, (entry) =>
+      adapter.allowedChanges.includes(entry),
+    );
+    if (health === 'known-bad') {
+      return fail(
+        'BACKUP_UNHEALTHY',
+        '这份备份本身已损坏（完整性或脚本解析不通过）',
+        '恢复它只会把坏状态再写一遍；请改用其他备份或重新检测。',
+        record.note,
+      );
+    }
+
     if (input.kind === 'original' && record.evidence !== 'factory') {
       return fail(
         'BACKUP_MISSING',

@@ -21,9 +21,18 @@ import path from 'node:path';
 import { fail, ok, type Result } from '../../shared/errors';
 import { physicalFsp, physicalSha256File, physicalStat } from './physical-fs';
 import { matchFactoryFingerprint, type OriginalEvidence } from './original-evidence';
+import { checkScripts, scanArchive, verifyIntegrity } from './archive-verify';
 
 export type BackupKind = 'original' | 'previous' | 'pre-restore';
 export type { OriginalEvidence };
+
+/**
+ * 备份健康标记（事故 F3）。
+ * - known-healthy：已通过逐条完整性 + 脚本解析检查
+ * - unverified：尚未检查（旧记录或刚创建）
+ * - known-bad：检查不通过 —— 不得用它恢复
+ */
+export type BackupHealth = 'known-healthy' | 'unverified' | 'known-bad';
 
 export interface BackupRecord {
   kind: BackupKind;
@@ -36,6 +45,8 @@ export interface BackupRecord {
   pristine: boolean;
   /** 原版判定依据；旧记录缺这个字段，由迁移补成 'unverified' */
   evidence?: OriginalEvidence;
+  /** 健康标记；旧记录缺省按 'unverified' 处理 */
+  health?: BackupHealth;
   note?: string;
 }
 
@@ -79,6 +90,10 @@ function migrateRecords(records: BackupRecord[]): { records: BackupRecord[]; cha
   let changed = false;
   const out = records.map((r) => {
     const next: BackupRecord = { ...r };
+    if (!next.health) {
+      next.health = 'unverified';
+      changed = true;
+    }
     if (next.kind !== 'original') return next;
 
     const matched = matchFactoryFingerprint(next.version, next.sha256);
@@ -194,6 +209,7 @@ export async function createBackup(input: CreateBackupInput): Promise<Result<Bac
     createdAt: new Date().toISOString(),
     version: input.version,
     pristine: input.pristine ?? false,
+    health: 'unverified',
     ...(input.evidence ? { evidence: input.evidence } : {}),
     ...(input.note ? { note: input.note } : {}),
   };
@@ -201,6 +217,30 @@ export async function createBackup(input: CreateBackupInput): Promise<Result<Bac
   const existing = await readMeta(input.dir);
   await writeMeta(input.dir, [...existing, record]);
   return ok(record);
+}
+
+/** 更新某个备份记录的健康标记并落盘；找不到记录时静默返回（调用方自行处理失败） */
+export async function setBackupHealth(
+  dir: string,
+  file: string,
+  health: BackupHealth,
+  note?: string,
+): Promise<void> {
+  const records = await readMeta(dir);
+  const next = records.map((r) =>
+    r.file === file
+      ? {
+          ...r,
+          health,
+          note: note ? (r.note ? `${r.note} ${note}` : note) : r.note,
+        }
+      : r,
+  );
+  try {
+    await writeMeta(dir, next);
+  } catch {
+    // 落盘失败不影响本次判定结果
+  }
 }
 
 /** 列出某个备份目录下的全部记录，供界面区分「原版 / 首次接管快照 / 上一主题」（T41、R2） */
@@ -212,6 +252,31 @@ export async function latestBackup(dir: string): Promise<BackupRecord | null> {
   const all = await readMeta(dir);
   if (all.length === 0) return null;
   return all[all.length - 1];
+}
+
+/**
+ * 检查备份归档本身的健康度（事故 F3）。
+ *
+ * 逐条完整性 + 非白名单脚本解析；检查结果会写回元数据（known-healthy / known-bad），
+ * 这样「已知故障快照」不会在之后的恢复里被当成可用项。
+ */
+export async function verifyBackupHealth(
+  dir: string,
+  record: BackupRecord,
+  isAllowed: (entry: string) => boolean,
+): Promise<BackupHealth> {
+  const scanned = scanArchive(record.file);
+  const fail = async (note: string): Promise<BackupHealth> => {
+    await setBackupHealth(dir, record.file, 'known-bad', note);
+    return 'known-bad';
+  };
+  if (!scanned.success) return fail(scanned.error.message);
+  const integrity = await verifyIntegrity(scanned.data);
+  if (!integrity.success) return fail(integrity.error.message);
+  const scripts = await checkScripts(scanned.data, { isAllowed });
+  if (!scripts.success) return fail(scripts.error.message);
+  await setBackupHealth(dir, record.file, 'known-healthy');
+  return 'known-healthy';
 }
 
 /** 校验备份仍然存在且内容未被改动 */

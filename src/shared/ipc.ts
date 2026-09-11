@@ -193,6 +193,11 @@ export interface BackupInfo {
   pristine: boolean;
   /** 原版判定依据；kind 为 takeover 时说明为什么不能当原版 */
   evidenceNote?: string;
+  /**
+   * 备份健康标记（事故 F3）：known-bad 的备份不得用于恢复。
+   * known-healthy = 已通过逐条完整性与脚本解析检查。
+   */
+  health?: 'known-healthy' | 'unverified' | 'known-bad';
   sizeBytes: number;
 }
 

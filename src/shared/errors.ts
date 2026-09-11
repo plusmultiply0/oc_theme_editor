@@ -40,6 +40,8 @@ export const ERROR_CODES = [
   'BACKUP_FAILED',
   'BACKUP_HASH_MISMATCH',
   'BACKUP_MISSING',
+  /** 备份本身已损坏（完整性/脚本解析不通过）—— 不得用它恢复 */
+  'BACKUP_UNHEALTHY',
   'MANIFEST_CORRUPT',
   'NEEDS_RECOVERY',
   'ROLLBACK_FAILED',

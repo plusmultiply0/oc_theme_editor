@@ -351,6 +351,7 @@ export class OperationService {
         applicableVersion: latestOriginal.version,
         pristine: isFactory,
         ...(latestOriginal.note ? { evidenceNote: latestOriginal.note } : {}),
+        health: latestOriginal.health,
         sizeBytes: latestOriginal.size,
       });
     }
@@ -363,6 +364,7 @@ export class OperationService {
         themeSummary: rec.note ?? '应用前的上一状态',
         applicableVersion: rec.version,
         pristine: rec.pristine,
+        health: rec.health,
         sizeBytes: rec.size,
       });
     }

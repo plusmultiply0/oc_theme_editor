@@ -12,6 +12,21 @@
 import type { BackupInfo } from '../../shared/ipc';
 import { formatBytes, formatDateTime } from '../logic';
 
+const HEALTH_LABEL: Record<string, string> = {
+  'known-healthy': '已通过完整性检查',
+  unverified: '尚未检查',
+  'known-bad': '已损坏，不可用于恢复',
+};
+
+function HealthLine({ backup }: { backup: BackupInfo }): React.ReactNode | null {
+  if (!backup.health) return null;
+  return (
+    <p className={backup.health === 'known-bad' ? 'warn-line' : 'scope'}>
+      健康状态：{HEALTH_LABEL[backup.health] ?? backup.health}
+    </p>
+  );
+}
+
 export interface RestorePanelProps {
   backups: BackupInfo[];
   busy: boolean;
@@ -39,12 +54,23 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
           {previous ? <span className="muted">{formatDateTime(previous.createdAt)}</span> : null}
         </div>
         {previous ? (
-          <>
-            <p className="scope">适用版本 {previous.applicableVersion}　·　{formatBytes(previous.sizeBytes)}</p>
-            <button className="btn" type="button" disabled={busy} onClick={() => onRestore('previous')}>
-              恢复上一主题
-            </button>
-          </>
+          previous.health === 'known-bad' ? (
+            <>
+              <p className="scope">适用版本 {previous.applicableVersion}　·　{formatBytes(previous.sizeBytes)}</p>
+              <p className="warn-line">
+                这份备份已损坏（{previous.themeSummary}），不能用它恢复 ——
+                恢复它只会把坏状态再写一遍。
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="scope">适用版本 {previous.applicableVersion}　·　{formatBytes(previous.sizeBytes)}</p>
+              <HealthLine backup={previous} />
+              <button className="btn" type="button" disabled={busy} onClick={() => onRestore('previous')}>
+                恢复上一主题
+              </button>
+            </>
+          )
         ) : (
           <p className="muted">还没有可回退的上一主题；应用一次之后才会出现。</p>
         )}
@@ -56,13 +82,21 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
           {original ? <span className="muted">{formatDateTime(original.createdAt)}</span> : null}
         </div>
         {original ? (
-          <>
-            <p className="scope">适用版本 {original.applicableVersion}　·　{formatBytes(original.sizeBytes)}</p>
-            <button className="btn" type="button" disabled={busy} onClick={() => onRestore('original')}>
-              恢复原版
-            </button>
-            <p className="scope">{original.evidenceNote}</p>
-          </>
+          original.health === 'known-bad' ? (
+            <>
+              <p className="scope">适用版本 {original.applicableVersion}　·　{formatBytes(original.sizeBytes)}</p>
+              <p className="warn-line">这份备份已损坏，不能用于恢复。</p>
+            </>
+          ) : (
+            <>
+              <p className="scope">适用版本 {original.applicableVersion}　·　{formatBytes(original.sizeBytes)}</p>
+              <HealthLine backup={original} />
+              <button className="btn" type="button" disabled={busy} onClick={() => onRestore('original')}>
+                恢复原版
+              </button>
+              <p className="scope">{original.evidenceNote}</p>
+            </>
+          )
         ) : (
           <p className="warn-line">
             没有可证明的出厂原版：本工具没有登记过该版本的出厂指纹，
@@ -77,13 +111,21 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
           {takeover ? <span className="muted">{formatDateTime(takeover.createdAt)}</span> : null}
         </div>
         {takeover ? (
-          <>
-            <p className="scope">适用版本 {takeover.applicableVersion}　·　{formatBytes(takeover.sizeBytes)}</p>
-            <button className="btn" type="button" disabled={busy} onClick={() => onRestore('takeover')}>
-              恢复到首次接管时
-            </button>
-            <p className="warn-line">{takeover.evidenceNote}</p>
-          </>
+          takeover.health === 'known-bad' ? (
+            <>
+              <p className="scope">适用版本 {takeover.applicableVersion}　·　{formatBytes(takeover.sizeBytes)}</p>
+              <p className="warn-line">这份快照已损坏，不能用于恢复。</p>
+            </>
+          ) : (
+            <>
+              <p className="scope">适用版本 {takeover.applicableVersion}　·　{formatBytes(takeover.sizeBytes)}</p>
+              <HealthLine backup={takeover} />
+              <button className="btn" type="button" disabled={busy} onClick={() => onRestore('takeover')}>
+                恢复到首次接管时
+              </button>
+              <p className="warn-line">{takeover.evidenceNote}</p>
+            </>
+          )
         ) : (
           <p className="muted">尚未接管过该安装，没有快照。</p>
         )}

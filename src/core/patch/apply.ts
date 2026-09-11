@@ -18,7 +18,7 @@ import type { OperationEvent, OperationManifest, TargetInfo } from '../../shared
 import { readAsar, readAsarText } from './asar';
 import { physicalFsp } from './physical-fs';
 import { ensureDirs, originalDir, previousDir, runtimeDirs, type RuntimeLayout } from './layout';
-import { ensureOriginalBackup, createBackup } from './backup';
+import { ensureOriginalBackup, createBackup, setBackupHealth } from './backup';
 import { assessOriginalEvidence } from './original-evidence';
 import { stageChanges, type StageResult } from './stage';
 import {
@@ -273,6 +273,9 @@ async function runApply(
     if (!stored.success) return stored;
   }
 
+  // F3：这两份备份都来自已通过硬门禁的归档，如实标记为已知健康
+  await setBackupHealth(originalDir(layout), original.data.record.file, 'known-healthy');
+
   const prev = await createBackup({
     archivePath,
     dir: previousDir(layout),
@@ -285,6 +288,8 @@ async function runApply(
     await appendPhase(layout.txDir, record, 'failed', prev.error.message);
     return prev;
   }
+  // F3：上一主题备份同样来自已通过门禁的归档
+  await setBackupHealth(previousDir(layout), prev.data.file, 'known-healthy');
   await pruneBackups(previousDir(layout), 3);
 
   record = { ...record, backupHash: prev.data.sha256, backupPath: prev.data.file };

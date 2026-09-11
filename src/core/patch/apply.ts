@@ -269,7 +269,7 @@ async function runApply(
 
   // 首次接管：把接手时的基线与快照一起保存，之后每次应用都与它比对
   if (baselineGate.data.created) {
-    const stored = writeBaselineFile(originalDir(layout), baselineGate.data.baseline);
+    const stored = await writeBaselineFile(originalDir(layout), baselineGate.data.baseline);
     if (!stored.success) return stored;
   }
 
@@ -411,7 +411,7 @@ async function resolveBaselineGate(
 > {
   const isAllowed = (entry: string): boolean => adapter.allowedChanges.includes(entry);
 
-  const existing = readBaselineFile(originalBackupDir);
+  const existing = await readBaselineFile(originalBackupDir);
   if (!existing.success) return existing;
 
   if (existing.data) {

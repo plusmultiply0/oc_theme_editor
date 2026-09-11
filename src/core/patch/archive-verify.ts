@@ -22,11 +22,12 @@
  * 哈希是内容身份，不是有效性证明 —— 所以 1 和 2 缺一不可。
  */
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fail, ok, type Result } from '../../shared/errors';
-import { physicalFsp } from './physical-fs';
+// 注意：这里必须用物理 fs。Electron 主进程的 `node:fs` 被包装过，
+// `.asar` 路径会被当成虚拟目录，校验会直接 ENOENT（与事故 R1 同源）。
+import { physicalFs, physicalFsp } from './physical-fs';
 
 export interface ArchiveIntegrity {
   algorithm: string;
@@ -67,10 +68,10 @@ export function scanArchive(archivePath: string): Result<ArchiveScan> {
   let dataStart = 0;
   let archiveSize = 0;
   try {
-    const fd = fs.openSync(archivePath, 'r');
+    const fd = physicalFs.openSync(archivePath, 'r');
     try {
       const pre = Buffer.alloc(16);
-      fs.readSync(fd, pre, 0, 16, 0);
+      physicalFs.readSync(fd, pre, 0, 16, 0);
       if (pre.readUInt32LE(0) !== 4) {
         return fail(
       'ARCHIVE_CORRUPT',
@@ -81,7 +82,7 @@ export function scanArchive(archivePath: string): Result<ArchiveScan> {
       // ASAR 布局：[u32=4][u32=头 pickle 大小][u32=载荷长度][u32=JSON 长度][JSON…][数据区]
       const headerPickleSize = pre.readUInt32LE(4);
       const headerJsonSize = pre.readUInt32LE(12);
-      archiveSize = fs.fstatSync(fd).size;
+      archiveSize = physicalFs.fstatSync(fd).size;
       dataStart = 8 + headerPickleSize;
       // 边界检查：JSON 必须落在头部区之内，数据区起点必须落在文件之内
       if (16 + headerJsonSize > dataStart || dataStart > archiveSize) {
@@ -93,10 +94,10 @@ export function scanArchive(archivePath: string): Result<ArchiveScan> {
         );
       }
       const buf = Buffer.alloc(headerJsonSize);
-      fs.readSync(fd, buf, 0, headerJsonSize, 16);
+      physicalFs.readSync(fd, buf, 0, headerJsonSize, 16);
       header = JSON.parse(buf.toString('utf8')) as Record<string, unknown>;
     } finally {
-      fs.closeSync(fd);
+      physicalFs.closeSync(fd);
     }
   } catch (e) {
     return fail(
@@ -164,11 +165,11 @@ export function scanArchive(archivePath: string): Result<ArchiveScan> {
 
 function readEntryBytes(scan: ArchiveScan, entry: ArchiveEntry): Buffer {
   const buf = Buffer.alloc(entry.size);
-  const fd = fs.openSync(scan.archivePath, 'r');
+  const fd = physicalFs.openSync(scan.archivePath, 'r');
   try {
-    fs.readSync(fd, buf, 0, entry.size, scan.dataStart + entry.offset);
+    physicalFs.readSync(fd, buf, 0, entry.size, scan.dataStart + entry.offset);
   } finally {
-    fs.closeSync(fd);
+    physicalFs.closeSync(fd);
   }
   return buf;
 }
@@ -448,24 +449,29 @@ export async function compareWithBaseline(
   return ok({ compared });
 }
 
-/** 读写基线文件（存在首次接管备份目录下，与本机备份一起保存） */
-export function writeBaselineFile(dir: string, baseline: Map<string, EntryBaseline>): Result<void> {
+/** 把基线写进首次接管的备份目录（与备份一起保存）；先写临时文件再改名，避免半截 JSON */
+export async function writeBaselineFile(
+  dir: string,
+  baseline: Map<string, EntryBaseline>,
+): Promise<Result<void>> {
   try {
-    fs.mkdirSync(dir, { recursive: true });
     const payload = [...baseline.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
     const tmp = path.join(dir, `${BASELINE_FILENAME}.tmp`);
-    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf8');
-    fs.renameSync(tmp, path.join(dir, BASELINE_FILENAME));
+    await physicalFsp.mkdir(dir, { recursive: true });
+    await physicalFsp.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+    await physicalFsp.rename(tmp, path.join(dir, BASELINE_FILENAME));
     return ok(undefined);
   } catch (e) {
     return fail('BACKUP_FAILED', '基线文件写入失败', '未对安装产生任何改动。', String(e));
   }
 }
 
-export function readBaselineFile(dir: string): Result<Map<string, EntryBaseline> | null> {
+export async function readBaselineFile(
+  dir: string,
+): Promise<Result<Map<string, EntryBaseline> | null>> {
   const file = path.join(dir, BASELINE_FILENAME);
   try {
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as EntryBaseline[];
+    const raw = JSON.parse(await physicalFsp.readFile(file, 'utf8')) as EntryBaseline[];
     if (!Array.isArray(raw)) return ok(null);
     return ok(new Map(raw.map((r) => [r.path, r] as const)));
   } catch {

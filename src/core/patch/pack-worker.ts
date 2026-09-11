@@ -36,8 +36,21 @@ interface PackError {
   detail?: string;
 }
 
+/**
+ * 回消息给父进程。
+ * 两种派生方式的通道不同：
+ * - `child_process.fork`（普通 Node）→ process.send / process.on('message')
+ * - Electron `utilityProcess.fork`    → process.parentPort.postMessage / .on('message')
+ */
+const parentPort = (process as unknown as {
+  parentPort?: { postMessage: (m: unknown) => void; on: (e: string, l: (ev: { data: unknown }) => void) => void };
+}).parentPort;
+
 function reply(payload: { ok: true } | { ok: false; error: PackError }): void {
-  // utilityProcess 与 child_process.fork 都提供 send；没有 IPC 时（误直接执行）写到 stdout
+  if (parentPort) {
+    parentPort.postMessage(payload);
+    return;
+  }
   if (typeof process.send === 'function') {
     process.send(payload);
     return;
@@ -112,13 +125,7 @@ async function run(job: PackJob): Promise<void> {
   await createPackageFromStreams(job.stagedArchive, streams);
 }
 
-if (!process.send && process.argv.length <= 2) {
-  // 被直接执行而不是被 fork：明确报错，避免有人把它当 CLI 用
-  console.error('pack-worker 是打包专用工作进程，必须由 pack.ts 通过 IPC 派生，不要直接运行。');
-  process.exit(2);
-}
-
-process.on('message', (job: PackJob) => {
+function start(job: PackJob): void {
   run(job)
     .then(() => {
       reply({ ok: true });
@@ -128,7 +135,19 @@ process.on('message', (job: PackJob) => {
     .catch((e) => {
       fail('STAGE_FAILED', '打包工作进程失败', e && e.stack ? e.stack : String(e));
     });
-});
+}
+
+if (parentPort) {
+  // Electron utilityProcess
+  parentPort.on('message', (ev: { data: unknown }) => start(ev.data as PackJob));
+} else if (typeof process.send === 'function') {
+  // child_process.fork
+  process.on('message', (job: PackJob) => start(job));
+} else {
+  // 被直接执行而不是被派生：明确报错，避免有人把它当 CLI 用
+  console.error('pack-worker 是打包专用工作进程，必须由 pack.ts 通过 IPC 派生，不要直接运行。');
+  process.exit(2);
+}
 
 /**
  * 测试专用入口：让单元/集成测试能在当前进程里执行与 worker 完全相同的打包逻辑

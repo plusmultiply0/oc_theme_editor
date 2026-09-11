@@ -65,17 +65,30 @@ export function lastArchiveOpLabel(): string {
   return lastLabel;
 }
 
-function insideWindow<T>(label: string, fn: () => T): T {
-  if (!process.versions?.electron) {
-    lastLabel = label;
-    return fn();
-  }
+/**
+ * 归档操作窗口：窗口内 asar 解释关闭，退出时恢复原值。
+ *
+ * 事故报告点名的独立缺陷（第四节）：旧实现用 `try { return fn() } finally { 恢复 }`，
+ * 当 `fn` 返回的是 **Promise** 时，`finally` 在拿到 Promise 的同一刻就执行了，
+ * 于是异步期间的 I/O 根本不在保护窗口里 —— 开关形同虚设。
+ * 这里改成 `await fn()`，窗口覆盖整个异步过程；配合下面的串行队列，
+ * 不会有并发的归档操作在开关关闭时交叉执行。
+ *
+ * `toggleNoAsar` 显式传入，是为了让测试能在普通 Node 下驱动这套状态机
+ * （Node 下 `process.versions.electron` 为空，本来不会切换开关）。
+ */
+async function insideWindow<T>(
+  label: string,
+  fn: () => T | Promise<T>,
+  toggleNoAsar: boolean,
+): Promise<T> {
+  lastLabel = label;
+  if (!toggleNoAsar) return await fn();
   const prev = getNoAsar();
   depth += 1;
-  lastLabel = label;
   setNoAsar(true);
   try {
-    return fn();
+    return await fn();
   } finally {
     depth -= 1;
     setNoAsar(prev);
@@ -87,11 +100,19 @@ function insideWindow<T>(label: string, fn: () => T): T {
  * 并发的调用会排队，避免进程级开关被交叉改写。
  */
 export function withArchiveIo<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
-  // 已在窗口内（同步嵌套调用）就直接执行，避免等自己被自己阻塞
-  if (depth > 0) return Promise.resolve().then(() => insideWindow(label, fn));
+  return withArchiveIoIn(label, fn, { toggleNoAsar: Boolean(process.versions?.electron) });
+}
 
-  const run = async (): Promise<T> => insideWindow(label, fn);
-  const next = queue.then(run, run);
+/** 显式指定是否切换 noAsar 的版本（供测试驱动状态机） */
+export function withArchiveIoIn<T>(
+  label: string,
+  fn: () => T | Promise<T>,
+  opts: { toggleNoAsar: boolean },
+): Promise<T> {
+  // 已在窗口内（嵌套调用）就不排队：直接在当前窗口里执行，
+  // 否则内层会等外层释放，外层又在等内层返回 —— 互相等死。
+  if (depth > 0) return insideWindow(label, fn, opts.toggleNoAsar);
+  const next = queue.then(() => insideWindow(label, fn, opts.toggleNoAsar));
   queue = next.then(
     () => undefined,
     () => undefined,

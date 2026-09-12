@@ -6,6 +6,8 @@
  * 于是只剩头部的残图也能拿到一个 OK —— 那是名不副实的检查。
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { isMultiFrame, probeImageBytes } from '../../src/core/theme/image-probe';
 import {
@@ -79,5 +81,27 @@ describe('元数据不等于解码', () => {
     expect(r.success).toBe(false);
     // 若 metadata 也失败，这条断言依然成立（只是更强了）
     expect(meta === null || meta.format === 'jpeg').toBe(true);
+  });
+});
+
+describe('APNG：解码器不报 pages 时的多帧判定（A2 缺口补验）', () => {
+  /**
+   * 本环境实测 libvips 8.18.6 读 APNG 时 pages=undefined，
+   * 只看 pages 会把动画 PNG 当静态图放行。probe 通过字节层
+   * looksLikeApng（acTL 块）补上这一路，isMultiFrame 两者都看。
+   */
+  it('真实 APNG 夹具：animated=true 且 isMultiFrame 判真（尽管 pages=1）', async () => {
+    const apng = readFileSync(
+      fileURLToPath(new URL('../fixtures/animated/sample-apng.png', import.meta.url)),
+    );
+    const meta = await sharp(apng).metadata();
+    // 先固化前提：解码器确实不报帧数，这正是本用例存在的理由
+    expect(meta.pages ?? 1).toBe(1);
+
+    const r = await probeImageBytes(apng);
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.animated).toBe(true);
+    expect(isMultiFrame(r.data)).toBe(true);
   });
 });

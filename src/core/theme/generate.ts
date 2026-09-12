@@ -24,6 +24,7 @@ import { buildContrastReport, bodyEntry } from './report';
 import {
   DEFAULT_LIMITS,
   isAnimatedFrameCount,
+  looksLikeApng,
   sniffFormat,
   looksLikeSvg,
   validateImage,
@@ -73,13 +74,17 @@ export async function analyzeImage(
    * 动图明确拒绝（Alpha 策略）：本轮不做首帧静态化。
    * 若放行，预览只会显示第一帧，而写入归档的是整份动图字节 ——
    * 用户确认的图与实际生效的图就不是同一份了。
+   *
+   * 两道判定缺一不可：pages 只能抓「解码器愿意报帧数」的容器（GIF/WebP）；
+   * APNG 在本环境（libvips 8.18.6）不报 pages，必须按 acTL 块在字节层识别。
    */
-  if (isAnimatedFrameCount(meta.pages)) {
+  const animatedByPages = isAnimatedFrameCount(meta.pages);
+  if (animatedByPages || looksLikeApng(buffer)) {
     return fail(
       'IMAGE_ANIMATED',
       '暂不支持动图（动画 WebP / APNG 等多帧图片）',
       '请改用静态图片：PNG、JPEG（含 .jfif/.jpe）或静态 WebP。',
-      `pages=${String(meta.pages)}`,
+      animatedByPages ? `pages=${String(meta.pages)}` : 'APNG acTL 块（解码器未报告帧数）',
     );
   }
 

@@ -47,6 +47,40 @@ export function isAnimatedFrameCount(pages: number | undefined): boolean {
   return typeof pages === 'number' && pages > 1;
 }
 
+/**
+ * APNG 检测（字节层）。
+ *
+ * 为什么不能只信解码器的 pages：本环境实测（libvips 8.18.6）读 APNG 时
+ * `meta.pages` 是 undefined —— 动图会伪装成普通 PNG 通过「按帧数拒绝」的检查，
+ * 被「按第一帧预览 + 原字节写入」，正是 Alpha 要杜绝的不一致。
+ *
+ * APNG 的动画信息在 acTL 块（num_frames + num_plays），规范要求它出现在
+ * 第一个 IDAT 之前。这里按 PNG 块流精确走一遍，只检查 IDAT 之前的块：
+ * IDAT 之后的压缩数据里即使出现 "acTL" 字样也不会误判；到 IDAT 还没见到
+ * acTL 就认定是静态图。块结构损坏时按「不是 APNG」返回 false，交给后续
+ * 解码校验去拒绝。
+ *
+ * num_frames !== 1 一律按动图拒绝：>1 是真动图；0 是无效 APNG，宁可错杀。
+ */
+export function looksLikeApng(buf: Buffer | Uint8Array): boolean {
+  if (buf.length < 8) return false;
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  if (!PNG.every((byte, i) => b[i] === byte)) return false;
+
+  let off = 8;
+  while (off + 12 <= b.length) {
+    const len = b.readUInt32BE(off);
+    const type = b.toString('latin1', off + 4, off + 8);
+    if (type === 'acTL') {
+      if (off + 12 > b.length) return true; // 数据区被截断：按动图处理
+      return b.readUInt32BE(off + 8) !== 1;
+    }
+    if (type === 'IDAT') return false;
+    off += 12 + len; // len 损坏时 off 会越过文件尾，循环条件自然终止
+  }
+  return false;
+}
+
 /** SVG 是文本，可能被当作图片上传后引发解析差异，首版明确拒绝。 */
 export function looksLikeSvg(buf: Buffer | Uint8Array): boolean {
   const head = Buffer.from(buf.subarray(0, 512)).toString('utf8').toLowerCase();

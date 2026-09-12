@@ -13,7 +13,7 @@
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { fail, ok, type Result } from '../../shared/errors';
-import { looksLikeSvg, sniffFormat } from './validate';
+import { looksLikeApng, looksLikeSvg, sniffFormat } from './validate';
 
 export interface ImageProbe {
   /** 仅凭文件头识别出的格式；无法识别为 null */
@@ -26,6 +26,11 @@ export interface ImageProbe {
   height?: number;
   /** 帧数：> 1 表示动图 */
   pages?: number;
+  /**
+   * 字节层检出 APNG 标记（acTL 块）。本环境 libvips 读 APNG 不报 pages，
+   * 只看 pages 会漏放动画 PNG —— 该字段与 pages 一起构成多帧判定。
+   */
+  animated?: boolean;
   bytes: number;
   sha256: string;
 }
@@ -69,6 +74,7 @@ export async function probeImageBytes(buf: Buffer): Promise<Result<ImageProbe>> 
       width: info.width,
       height: info.height,
       pages: meta.pages ?? 1,
+      animated: looksLikeApng(buf),
       bytes: buf.byteLength,
       sha256,
     });
@@ -82,7 +88,10 @@ export async function probeImageBytes(buf: Buffer): Promise<Result<ImageProbe>> 
   }
 }
 
-/** 帧数 > 1 视为动图（Alpha 不支持） */
+/**
+ * 帧数 > 1 或字节层检出 APNG 标记都视为动图（Alpha 不支持）。
+ * 只看 pages 会漏放 APNG（本环境 libvips 不报其帧数）。
+ */
 export function isMultiFrame(probe: ImageProbe): boolean {
-  return (probe.pages ?? 1) > 1;
+  return (probe.pages ?? 1) > 1 || probe.animated === true;
 }

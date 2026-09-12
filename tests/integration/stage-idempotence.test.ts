@@ -24,7 +24,7 @@ import { readAsar, readAsarText, sha256File } from '../../src/core/patch/asar';
 import { listTx } from '../../src/core/patch/txlog';
 import { runtimeDirs } from '../../src/core/patch/layout';
 import { instanceIdFromPath } from '../../src/core/patch/paths';
-import { verifyStagedHtml } from '../../src/core/patch/stage';
+import { injectLink, verifyStagedHtml } from '../../src/core/patch/stage';
 import { ADAPTER } from './helpers/adapter';
 import type { TargetInfo } from '../../src/shared/schema';
 
@@ -190,6 +190,115 @@ describe('HTML 结构性门禁（替换「HTML 必须变化」）', () => {
     const r = verifyStagedHtml(html, ADAPTER);
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.message).toContain('锚点');
+  });
+
+  // ---- A3：真实 head 区间 + 属性容错 + 注释不参与 ----
+
+  it('注释里的伪 link 不算数：只有注释版时必须拒绝', () => {
+    const html = `<!doctype html><html><head><title>t</title>
+<!-- <link rel="stylesheet" href="${href}"> ${marker} -->
+</head><body></body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toContain('缺少');
+  });
+
+  it('注释里的伪 link 不影响真实注入的判定', () => {
+    const html = `<!doctype html><html><head><title>t</title>
+<link rel="stylesheet" href="${href}"> ${marker}
+<!-- 说明：这里以前有过 <link rel="stylesheet" href="${href}"> -->
+</head><body></body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success, r.success ? '' : r.error.message).toBe(true);
+  });
+
+  it('属性写法容错：单引号、大小写、无引号、多余空白、去 ./ 都认', () => {
+    const bare = href.replace('./', '');
+    for (const tag of [
+      `<link rel='stylesheet' href='${href}'>`,
+      `<link REL="StyleSheet" HREF="${href}">`,
+      `<link rel=stylesheet href=${href}>`,
+      `<link   rel = "stylesheet"   href = "${href}"  >`,
+      `<link rel="stylesheet" href="${bare}">`,
+    ]) {
+      const html = `<!doctype html><html><head>\n${tag} ${marker}\n</head><body></body></html>`;
+      const r = verifyStagedHtml(html, ADAPTER);
+      expect(r.success, `${tag} 应被接受：${r.success ? '' : r.error.message}`).toBe(true);
+    }
+  });
+
+  it('链接在 head 之前 → 拒绝', () => {
+    const html = `<!doctype html><link rel="stylesheet" href="${href}">${marker}<html><head></head><body></body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toContain('不在 head 区间内');
+  });
+
+  it('链接在 body 里 → 拒绝', () => {
+    const html = `<!doctype html><html><head></head><body><link rel="stylesheet" href="${href}">${marker}</body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toContain('不在 head 区间内');
+  });
+
+  it('缺少闭合 head（连锚点都没有）→ 拒绝', () => {
+    const html = `<!doctype html><html><head><link rel="stylesheet" href="${href}"> ${marker}`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    // 锚点就是 </head>，因此先被锚点检查拦下；同样是拒绝
+    if (!r.success) expect(r.error.message).toMatch(/锚点|head 区间/);
+  });
+
+  it('有 </head> 但缺开头 <head> → 拒绝（head 区间分支）', () => {
+    const html = `<!doctype html><html><body><link rel="stylesheet" href="${href}"> ${marker}</head></body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toContain('head 区间');
+  });
+
+  it('单引号写法的重复链接 → 拒绝', () => {
+    const html = `<!doctype html><html><head>
+<link rel='stylesheet' href='${href}'> ${marker}
+<link rel="stylesheet" href="${href}"> ${marker}
+</head><body></body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toContain('2 个');
+  });
+
+  it('标记冲突（出现两次）→ 拒绝', () => {
+    const html = `<!doctype html><html><head>
+<link rel="stylesheet" href="${href}"> ${marker}
+<!-- 历史标记残留 ${marker} -->
+</head><body></body></html>`;
+    const r = verifyStagedHtml(html, ADAPTER);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.message).toContain('工具标记出现 2 次');
+  });
+
+  // ---- A3：注入本身不能损坏文档（旧实现会删掉前缀） ----
+
+  it.each([
+    ['单行 HTML（注入行与前面内容同一行）', '<!doctype html><html><head><title>t</title></head><body>x</body></html>'],
+    [
+      '多行 HTML（</head> 自成一行，真实安装的形态）',
+      '<!doctype html>\n<html>\n<head>\n  <title>t</title>\n</head>\n<body>x</body>\n</html>\n',
+    ],
+  ])('重复注入三次不丢内容：%s', (_name, source) => {
+    let html = source;
+    for (let i = 0; i < 3; i += 1) {
+      const r = injectLink(html, href, ADAPTER.injection.anchor);
+      expect(r.success).toBe(true);
+      if (!r.success) return;
+      html = r.data;
+    }
+    // 文档原有的开头与结尾必须还在（旧实现会把前缀整段删掉）
+    expect(html).toContain('<head>');
+    expect(html).toContain('</body>');
+    expect(html).toContain('<title>t</title>');
+    // 链接仍然只有一条，且结构门禁通过
+    expect(html.match(/oc-theme-custom\.css/g) ?? []).toHaveLength(1);
+    expect(verifyStagedHtml(html, ADAPTER).success, html).toBe(true);
   });
 
   it('官方自己的样式链接并存时不受影响（只数本工具那一条）', () => {

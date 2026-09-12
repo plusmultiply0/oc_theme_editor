@@ -85,29 +85,97 @@ interface FileEntry {
 const INJECT_COMMENT = '<!-- opencode-theme-switcher -->';
 
 /**
- * 结构性校验 HTML 注入结果（事故 F3）。
+ * 结构性校验 HTML 注入结果（事故 F3；Alpha A3 加强）。
  *
  * 旧门禁要求「HTML 必须出现在 touched 列表里」，但 injectLink 是幂等的：
  * 换图时只有 CSS/图片变化，HTML 本来就应该保持不变，于是第二次换图被误判为
- * 注入失败（STAGE_FAILED）。这里改成验证**结构**而不是「有没有变」：
- *   - 本工具链接恰好一个（多了说明叠加，少了说明没注入）
- *   - href 指向本工具的 CSS
- *   - 链接位于 head 内（在锚点之前），不能掉到 body 里
- *   - 工具标记唯一
+ * 注入失败（STAGE_FAILED）。这里验证的是**结构**而不是「有没有变」。
+ *
+ * A3 把「看着像 link 的字符串」换成真实的 head 区间与属性解析：
+ *   - 注释里的伪标签不参与匹配（先按长度抹掉注释内容，保留偏移）
+ *   - `<link>` 属性容错：单双引号、无引号、大小写、多余空白
+ *   - 本工具链接必须**恰好一个**，且完整落在 `<head>`…`</head>` 区间内
+ *   - 缺闭合 head、链接跑到 head 外、标记重复都拒绝
+ *
  * 归档完整性、白名单与字节一致性由 verifyPackedResult 负责，这里不重复也不放宽。
  */
+interface HtmlGateLink {
+  tag: string;
+  attrs: Map<string, string>;
+  start: number;
+  end: number;
+}
+
+interface HtmlGateFacts {
+  /** 注释已被等长空白替换的 HTML：偏移量与原文一致，伪标签不再被匹配 */
+  stripped: string;
+  headStart: number;
+  headEnd: number;
+  markerCount: number;
+}
+
+const HEAD_OPEN = /<head\b[^>]*>/i;
+const HEAD_CLOSE = /<\/head\s*>/i;
+
+function parseGateFacts(html: string, marker: string): HtmlGateFacts {
+  // 等长替换：注释内容变空格（换行保留），保证后续所有 indexOf 仍然对得上原文
+  const stripped = html.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '));
+  const open = HEAD_OPEN.exec(stripped);
+  const headStart = open ? open.index : -1;
+  let headEnd = -1;
+  if (headStart >= 0) {
+    HEAD_CLOSE.lastIndex = headStart;
+    const close = HEAD_CLOSE.exec(stripped);
+    if (close) headEnd = close.index + close[0].length;
+  }
+  const markerCount = html.split(marker).length - 1;
+  return { stripped, headStart, headEnd, markerCount };
+}
+
+/** 容错解析 `<link>` 标签：单双引号、无引号值、属性名大小写、多余空白 */
+function parseLinks(html: string): HtmlGateLink[] {
+  const out: HtmlGateLink[] = [];
+  const tagRe = /<link\b[^>]*>/gi;
+  for (const m of html.matchAll(tagRe)) {
+    const tag = m[0];
+    const attrs = new Map<string, string>();
+    const attrRe = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>`]+))/g;
+    for (const a of tag.matchAll(attrRe)) {
+      attrs.set(a[1].toLowerCase(), (a[2] ?? a[3] ?? a[4] ?? '').trim());
+    }
+    const start = m.index ?? 0;
+    out.push({ tag, attrs, start, end: start + tag.length });
+  }
+  return out;
+}
+
+function isOurStylesheet(link: HtmlGateLink, href: string): boolean {
+  const rel = (link.attrs.get('rel') ?? '').toLowerCase().split(/\s+/);
+  if (!rel.includes('stylesheet')) return false;
+  const got = link.attrs.get('href') ?? '';
+  // 归档内引用写法可能带 ./ 或不带，两种都认
+  return got === href || got === href.replace(/^\.\//, '');
+}
+
 export function verifyStagedHtml(html: string, adapter: TargetAdapter): Result<{ linkCount: number }> {
   const anchor = adapter.injection.anchor;
-  const anchorAt = html.indexOf(anchor);
-  if (anchorAt < 0) {
+  if (!html.includes(anchor)) {
     return fail('STAGE_FAILED', `HTML 入口中找不到注入锚点 ${anchor}`, '该版本可能不兼容；安装未被修改。');
   }
 
+  const facts = parseGateFacts(html, INJECT_COMMENT);
+  if (facts.headStart < 0 || facts.headEnd < 0) {
+    return fail(
+      'STAGE_FAILED',
+      'HTML 入口缺少完整的 head 区间',
+      '无法确认样式链接落在 head 内；已中止，安装未被修改。',
+    );
+  }
+
   const href = `./${path.basename(adapter.injection.cssFile)}`;
-  const links = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
-  const mine = links.filter(
-    (tag) => tag.includes(`href="${href}"`) && /rel\s*=\s*"stylesheet"/i.test(tag),
-  );
+  const links = parseLinks(facts.stripped);
+  const mine = links.filter((l) => isOurStylesheet(l, href));
+
   if (mine.length === 0) {
     return fail(
       'STAGE_FAILED',
@@ -122,16 +190,21 @@ export function verifyStagedHtml(html: string, adapter: TargetAdapter): Result<{
       '重复注入会让样式互相覆盖；已中止，安装未被修改。',
     );
   }
-  const linkAt = html.indexOf(mine[0]);
-  if (linkAt < 0 || linkAt > anchorAt) {
-    return fail('STAGE_FAILED', '本工具样式链接不在 head 内', '注入位置异常；已中止，安装未被修改。');
-  }
 
-  const markers = html.split(INJECT_COMMENT).length - 1;
-  if (markers !== 1) {
+  const link = mine[0];
+  const insideHead = link.start >= facts.headStart && link.end <= facts.headEnd;
+  if (!insideHead) {
     return fail(
       'STAGE_FAILED',
-      `HTML 入口中的工具标记出现 ${markers} 次`,
+      '本工具样式链接不在 head 区间内',
+      '注入位置异常（可能落在 head 之前或 body 里）；已中止，安装未被修改。',
+    );
+  }
+
+  if (facts.markerCount !== 1) {
+    return fail(
+      'STAGE_FAILED',
+      `HTML 入口中的工具标记出现 ${facts.markerCount} 次`,
       '标记必须唯一；已中止，安装未被修改。',
     );
   }
@@ -198,18 +271,45 @@ export function collectUnpacked(header: Record<string, unknown>): Set<string> {
 }
 
 /** 幂等注入：先移除本工具此前插入的 link，再插入新的 */
+/**
+ * 摘掉上一次注入的那一段（link + 标记），其余内容原样保留。
+ *
+ * A3 修的是这里：旧实现按「整行」删除 —— `lastIndexOf('\n', marker)` 找不到
+ * 前导换行时 `lineStart` 会退化成 0，于是**把文档开头到标记之间的内容全部删掉**。
+ * 真实安装的 `</head>` 自成一行的确没事，但只要注入行与前面的内容同处一行
+ * （压缩过的 HTML、单行夹具），第二次注入就会静默损坏文档开头。
+ * 现在只精确定位「紧随标记之前的那个 `<link>`」，其余一个字符都不动。
+ */
+function stripPreviousInjection(html: string, marker: string): string {
+  const markerAt = html.indexOf(marker);
+  if (markerAt < 0) return html;
+
+  const before = html.slice(0, markerAt);
+  const linkStart = before.lastIndexOf('<link');
+  let start = markerAt;
+  if (linkStart >= 0 && /^<link\b[^>]*>\s*$/i.test(before.slice(linkStart))) {
+    start = linkStart;
+  }
+
+  let end = markerAt + marker.length;
+  const after = html.slice(end);
+  // 连同紧邻的空白一起吃掉：有换行就吃到换行，没有就吃到行尾空白
+  const withNewline = /^[ \t]*\r?\n/.exec(after);
+  if (withNewline) {
+    end += withNewline[0].length;
+  } else {
+    const spaces = /^[ \t]+/.exec(after);
+    if (spaces) end += spaces[0].length;
+  }
+
+  return html.slice(0, start) + html.slice(end);
+}
+
 export function injectLink(html: string, cssHref: string, anchor: string): Result<string> {
   if (!html.includes(anchor)) {
     return fail('STAGE_FAILED', 'HTML 入口中找不到注入锚点', '该版本可能不兼容；安装未被修改。');
   }
-  const markerStart = html.indexOf(INJECT_COMMENT);
-  let cleaned = html;
-  if (markerStart >= 0) {
-    const lineStart = html.lastIndexOf('\n', markerStart) + 1;
-    const lineEnd = html.indexOf('\n', markerStart);
-    const end = lineEnd === -1 ? html.length : lineEnd + 1;
-    cleaned = `${html.slice(0, lineStart)}${html.slice(end)}`;
-  }
+  const cleaned = stripPreviousInjection(html, INJECT_COMMENT);
   const link = `<link rel="stylesheet" href="${cssHref}"> ${INJECT_COMMENT}\n`;
   return ok(cleaned.replace(anchor, `${link}${anchor}`));
 }

@@ -23,6 +23,12 @@ if (!fs.existsSync(OUT)) {
   process.exit(1);
 }
 const { scanArchive, verifyIntegrity, findSharedOffsetConflicts, checkScripts } = require(OUT);
+const PROBE = path.join(__dirname, '..', 'out', 'core', 'theme', 'image-probe.js');
+if (!fs.existsSync(PROBE)) {
+  console.error('未找到 out/core/theme/image-probe.js，请先 npm run build');
+  process.exit(1);
+}
+const { probeImageBytes, isMultiFrame } = require(PROBE);
 const { OPENCODE_DESKTOP_ADAPTER } = require(path.join(__dirname, '..', 'out', 'adapters', 'opencode-desktop.js'));
 
 const argv = process.argv.slice(2);
@@ -38,6 +44,8 @@ if (!archive) {
   process.exit(1);
 }
 const expectImage = flag('expect-image-sha256');
+const expectFormat = flag('expect-image-format');
+const expectSize = flag('expect-image-size');
 const deep = has('deep');
 
 const checks = [];
@@ -95,18 +103,52 @@ add('不再使用普通 :root 声明 token（F1）', !/(^|\n)\s*:root\s*\{/.test
 add('--background-stronger 随面板透明度（F2）', /--background-stronger:\s*rgba\(/.test(css));
 add('外壳限定规则存在（F2）', css.includes('.bg-v2-background-bg-deep.flex-1'));
 
-// ---------- 背景图片 ----------
-const imgBuf = readEntry(OPENCODE_DESKTOP_ADAPTER.injection.imageFile);
-add('背景图片条目存在', Boolean(imgBuf), imgBuf ? `${imgBuf.length} 字节` : '');
-if (imgBuf) {
-  const got = sha256(imgBuf);
-  add('图片可解码（JPEG/PNG 魔数）', imgBuf[0] === 0xff || imgBuf.slice(1, 4).toString() === 'PNG');
-  if (expectImage) add('图片哈希等于期望值', got === expectImage, `实际 ${got.slice(0, 16)}…`);
-  console.log(`  图片 SHA256 ${got}`);
-}
-
 // ---------- 可选：逐条完整性 ----------
 (async () => {
+  // ---------- 背景图片（需要真实解码，因此放在 async 块内） ----------
+  // ---------- 背景图片 ----------
+  /*
+   * A3：把「文件头识别」与「完整解码」分成两个独立检查项。
+   * 旧实现只有一条「图片可解码（JPEG/PNG 魔数）」，实际只看了首字节 ——
+   * 只剩头部的残图也能拿到 OK，名不副实。
+   * 资源条目的扩展名不能用来推断格式：适配器固定写 .jpg，内容可能是 PNG/WebP。
+   */
+  const imageEntry = OPENCODE_DESKTOP_ADAPTER.injection.imageFile;
+  const imgBuf = readEntry(imageEntry);
+  add('背景图片条目存在', Boolean(imgBuf), imgBuf ? `${imgBuf.length} 字节（条目 ${imageEntry}）` : '');
+  if (imgBuf) {
+    const got = sha256(imgBuf);
+    console.log(`  图片 SHA256 ${got}`);
+    if (expectImage) add('图片哈希等于期望值', got === expectImage, `实际 ${got.slice(0, 16)}…`);
+
+    const probed = await probeImageBytes(imgBuf);
+    add(
+      '文件头可识别',
+      Boolean(probed.success && probed.data.headerFormat) ||
+        Boolean(!probed.success && /SVG/.test(probed.error.message)),
+      probed.success ? `headerFormat=${probed.data.headerFormat ?? 'null'}` : probed.error.message,
+    );
+    add(
+      '完整解码成功',
+      probed.success && probed.data.decoded === true,
+      probed.success
+        ? `${probed.data.format} ${probed.data.width}×${probed.data.height}`
+        : `${probed.error.code}：${probed.error.message}`,
+    );
+    if (probed.success) {
+      console.log(`  实际格式 ${probed.data.format}（条目名后缀不代表内容）`);
+      add('不是多帧动图', !isMultiFrame(probed.data), `pages=${probed.data.pages ?? 1}`);
+      if (expectFormat) {
+        add('实际格式等于期望值', probed.data.format === expectFormat, `实际 ${probed.data.format}`);
+      }
+      if (expectSize) {
+        const actual = `${probed.data.width}x${probed.data.height}`;
+        add('尺寸等于期望值', actual === expectSize, `实际 ${actual}`);
+      }
+    }
+  }
+
+
   if (deep) {
     const integrity = await verifyIntegrity(scan.data);
     add('逐条完整性', integrity.success, integrity.success ? `检查 ${integrity.data.checked} 条` : `${integrity.error.message} | ${integrity.error.detail ?? ''}`);
@@ -117,7 +159,9 @@ if (imgBuf) {
     add(
       '非白名单脚本解析',
       scripts.success,
-      scripts.success ? `解析 ${scripts.data.checked}，跳过 ${scripts.data.skipped}，不支持 ${scripts.data.unsupported}` : `${scripts.error.message} | ${scripts.error.detail ?? ''}`,
+      scripts.success
+        ? `解析成功 ${scripts.data.checked}；跳过 ${scripts.data.skipped}、不支持 ${scripts.data.unsupported}（这两类**未验证**，不计入成功）`
+        : `${scripts.error.message} | ${scripts.error.detail ?? ''}`,
     );
   }
 

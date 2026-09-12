@@ -26,3 +26,8 @@ tools/post-restore-health.json
 tools/*.png
 # 本地界面截图：可用 node tools/capture-ui.cjs 重新生成，不入库
 handoff/images/
+
+# Alpha 候选构建目录（含版本号，便于分发时直接识别）
+candidate-*/
+candidate-*.zip
+candidate-*.txt

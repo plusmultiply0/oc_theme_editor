@@ -71,3 +71,54 @@ body 里、缺开头 head、标记冲突等。
 
 真机只读核验（当前安装）：背景 jpeg 1000×714、pages=1，HTML 链接唯一，
 CSS 为 html:root + stronger rgba + 外壳规则。**未写入真实安装**。
+
+## A4 全量回归与候选包冻结（2026-09-12，wb 执行）
+
+版本确认为 **`0.1.0-alpha.1`**（`v0.1.0-alpha.1` 未被占用；package.json 与
+package-lock.json 同步，`private: true` 保留 —— 发布桌面程序无需解除 npm 私有标记）。
+输出目录改用**产品名 + 版本**：`candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked`，
+不再让用户理解 release7/release8；未覆盖任何被占用的旧目录。
+
+门禁链（`bash tools/release-gate.sh`，任一步非 0 即停）：
+
+| 步骤 | 退出码 | 结果 | 耗时 |
+|---|---|---|---|
+| typecheck | 0 | 通过 | 12s |
+| lint | 0 | 通过 | 11s |
+| test:unit | 0 | **135 项（9 文件）** | 12s |
+| test:integration | 0 | **138 项（12 文件）** | 27s |
+| build | 0 | 通过 | 25s |
+| test:e2e | 0 | 16 项 | 42s |
+| test:e2e:electron | 0 | 35 项 | 12s |
+| audit | 0 | FAIL 0 / WARN 0 | 8s |
+| dist | 0 | 候选包产出 | — |
+| verify:package | 0 | 28 项 0 失败（965 条目） | 8s |
+
+新增 `tools/release-gate.sh`：把整条链固化下来。原因写进脚本头 —— 
+`npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:package`，
+发布验收不能只跑 verify 就宣称全绿。
+
+包内抽查（在 asar 内逐项读取确认，不是看目录名）：
+- `out/main/services/image-store.js` 含 `readCapped` / `contentHash` / `IMAGE_CONTENT_MISMATCH`；
+- `out/main/services/operation-service.js` **不含** `record.imagePath`、含 `contentHash`；
+- `out/shared/image-formats.js` 含 `jfif` 与 `'jpe'`；
+- `out/core/theme/image-probe.js` 含 `headerFormat` / `decoded`。
+
+候选指纹（A5/A6 必须测同一份）：
+
+| 文件 | 大小 | SHA256 |
+|---|---|---|
+| zip（整 win-unpacked，82 条目，完整性校验通过） | 131 MB | `f41354a398c732a0e58cf84231cd77e4b14aafcd4d32f578c59b4959e1d9b08a` |
+| OpenCodeThemeSwitcher.exe | 193.3 MB | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
+| resources/app.asar | 17.7 MB | `3381173d21ac8f45039a42ade17a76611dde3a949d040a5524b713e9f5f4ac6f` |
+
+校验和清单：`candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.sha256.txt`（本地，随包分发）。
+包与哈希已冻结；源码或包有任何改动，本表作废并需重跑门禁。
+
+### 仍未执行（需授权 / 需外部环境）
+
+- **A5 真实安装闭环**：需 jc 授权后才能动真实 OpenCode。当前只做只读核验
+  （背景 jpeg 1000×714、HTML 链接唯一、CSS 标记齐备）。注意：真机归档已不是
+  今天上午接触过的那个（背景 4.9MB 壁纸 → 现在 84KB 的 jpeg），执行 A5 前要重新记录现场。
+- **A6 干净环境**：需要一台非开发环境机器或全新 VM。
+- **A7/A8**：公开发布与 GO/NO-GO 由 jc 决定；当前按计划口径为 **NO-GO**（缺 A5/A6 证据）。

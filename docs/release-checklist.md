@@ -3,26 +3,21 @@
 Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件只回答两件事：
 **当前该用哪个包**、**发布前必须核对什么**。
 
-## 1. 当前候选
+## 1. 当前候选（Alpha）
 
-> **状态：A4 尚未冻结 Alpha 候选。** 下表是上一次构建（release7，2026-09-12 第七次构建），
-> 它含第一批 JPEG 别名支持，但**不含** A1–A3 的改动。A4 会用新目录生成唯一候选并把这里替换掉。
-> 在替换之前，任何验证/分发都应以 release7 为基准，且不得声称它是最终 Alpha 包。
+版本 **`0.1.0-alpha.1`**（Windows x64）。分发前请核对 zip 的 SHA256：
 
 | 文件 | 大小 | SHA256 |
 |---|---|---|
-| `release7/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `3e69d4ff9d0daa46fbb9d8de46078bb28ac3e93d771f312b1197a0d7781861dc` |
-| `release7/win-unpacked/resources/app.asar` | 17.7 MB | `811e59df75b120c201e0e8bd3ad19444d42a92d55ea3cc549559ac74638b763e` |
+| `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip` | 131 MB | `f41354a398c732a0e58cf84231cd77e4b14aafcd4d32f578c59b4959e1d9b08a` |
+| ├ `win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
+| └ `win-unpacked/resources/app.asar` | 17.7 MB | `3381173d21ac8f45039a42ade17a76611dde3a949d040a5524b713e9f5f4ac6f` |
 
-归档 964 条目 / unpacked 7。**未签名。**
+归档 965 条目 / unpacked 7。**未签名**。
+逐项验收与包内抽查见 `docs/alpha-acceptance.md`；校验和清单随包分发。
 
-包内核对（`npm run verify:package`，28 项 0 失败）：归档顶层只有
-`node_modules` / `out` / `package.json`；不含 `src`、`tests`、`handoff`、`docs`；
-包内私有路径与凭证 0 命中；第一批格式声明（`out/shared/image-formats.js` 含 jfif/jpe）
-与主进程 `DIALOG_EXTENSIONS` 使用点在包内。
-
-**分发时必须整目录打包**（`win-unpacked` 全部文件），不能只发 exe；
-zip 的 SHA256 在 A4 生成后一并记录到 `docs/alpha-acceptance.md`。
+**分发要求**：整个 `win-unpacked` 一起发（zip），不能只发 exe；
+zip 的 SHA256 必须与上表一致。
 
 ## 2. 历史构建（全部过期，不要用于验证或分发）
 
@@ -39,22 +34,24 @@ zip 的 SHA256 在 A4 生成后一并记录到 `docs/alpha-acceptance.md`。
 旧的 `app.asar` 曾被安全软件占用（环境的安全删除包装器对 `.asar` 回收失败），
 因此每轮只能递进一个新目录，旧的删不掉。锁释放后在资源管理器手动删除即可。
 
-## 3. 当前门禁结果（2026-09-12 第七次构建时的实测）
+## 3. 当前门禁结果（Alpha 候选 0.1.0-alpha.1）
 
 | 命令 | 退出码 | 结果 |
 |---|---|---|
 | `npm run typecheck` | 0 | 通过 |
 | `npm run lint` | 0 | 通过 |
-| `npm run test:unit` | 0 | 122 项 |
-| `npm run test:integration` | 0 | 114 项（10 文件） |
+| `npm run test:unit` | 0 | 135 项（9 文件） |
+| `npm run test:integration` | 0 | 138 项（12 文件） |
 | `npm run test:e2e` | 0 | 16 项真实窗口闭环 |
 | `npm run test:e2e:electron` | 0 | 35 项真实 Electron 主进程闭环 |
 | `npm run audit` | 0 | 通过 |
-| `npm run dist` | 0 | 产出 `release7/win-unpacked` |
-| `npm run verify:package` | 0 | 28 项 |
+| `npm run dist` | 0 | 产出 `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked` |
+| `npm run verify:package` | 0 | 28 项（965 条目） |
 
-这些数字属于**那一次构建**。A4 会重跑全部门禁并替换本表；
-`npm run verify` 只覆盖其中一部分，不能只跑它就宣称全部门禁通过。
+一条命令跑全链：`bash tools/release-gate.sh`（任一步非 0 即停，逐条打印退出码与耗时）。
+`npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:package` ——
+**不能只跑 verify** 就宣称全部门禁通过。这些数字属于本候选包那一次构建；
+包有改动必须重跑并更新第 1 节哈希。
 
 ## 4. 文档索引
 

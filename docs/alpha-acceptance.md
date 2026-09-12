@@ -15,15 +15,16 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 
 | 项 | 值 |
 |---|---|
-| 候选版本 | 待定（建议 `0.1.0-alpha.1`，A4 确定后回填） |
-| 提交 | 待定（A4 冻结后回填） |
-| 包目录 | 待定（A4 生成，不使用 release/release2/... 旧目录） |
-| exe SHA256 | 待定 |
-| app.asar SHA256 | 待定 |
-| 分发 zip SHA256 | 待定 |
-| 平台 | Windows x64（本次仅此一项） |
-| 目标 | OpenCode Desktop 1.18.29，用户级安装 |
+| 候选版本 | **`0.1.0-alpha.1`**（package.json / package-lock.json 已同步；`private: true` 保留） |
+| 提交 | 见本条目所在提交（A4 冻结） |
+| 包目录 | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked`（不使用 release/release2/... 旧目录） |
+| exe SHA256 | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f`（193.3 MB） |
+| app.asar SHA256 | `3381173d21ac8f45039a42ade17a76611dde3a949d040a5524b713e9f5f4ac6f`（17.7 MB，965 条目） |
+| 分发 zip SHA256 | `f41354a398c732a0e58cf84231cd77e4b14aafcd4d32f578c59b4959e1d9b08a`（131 MB，82 条目，整 `win-unpacked`） |
+| 平台 | Windows x64（本次仅此一项；未在 Windows 11 上实测） |
+| 目标 | OpenCode Desktop 1.18.29，用户级安装（未为了匹配白名单降级 OpenCode） |
 | 签名 | 未签名（如实声明） |
+| 校验和清单 | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.sha256.txt`（本地，随包分发） |
 
 ## 1. 基线（A0）
 
@@ -94,18 +95,32 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 
 | 命令 | 退出码 | 测试数 | 结论 | 证据 |
 |---|---|---|---|---|
-| `npm run typecheck` | 待执行 | — | 待执行 | — |
-| `npm run lint` | 待执行 | — | 待执行 | — |
-| `npm run test:unit` | 待执行 | — | 待执行 | — |
-| `npm run test:integration` | 待执行 | — | 待执行 | — |
-| `npm run build` | 待执行 | — | 待执行 | — |
-| `npm run test:e2e` | 待执行 | — | 待执行 | — |
-| `npm run test:e2e:electron` | 待执行 | — | 待执行 | — |
-| `npm run audit` | 待执行 | — | 待执行 | — |
-| `npm run dist` | 待执行 | — | 待执行 | — |
-| `npm run verify:package` | 待执行 | — | 待执行 | — |
+| `npm run typecheck` | 0 | — | **通过** | 12s |
+| `npm run lint` | 0 | — | **通过** | 11s |
+| `npm run test:unit` | 0 | 135 项（9 文件） | **通过** | 12s |
+| `npm run test:integration` | 0 | 138 项（12 文件） | **通过** | 27s |
+| `npm run build` | 0 | — | **通过** | 25s |
+| `npm run test:e2e` | 0 | 16 项 | **通过** | 42s |
+| `npm run test:e2e:electron` | 0 | 35 项 | **通过** | 12s |
+| `npm run audit` | 0 | FAIL 0 / WARN 0 | **通过** | 8s |
+| `npm run dist` | 0 | 产出 `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked` | **通过** | — |
+| `npm run verify:package` | 0 | 28 项 0 失败（965 条目） | **通过** | 8s |
 
-包内抽查（A4）：ImageStore 副本流程、格式声明（jfif/jpe）、图片解码核验模块 —— 待执行。
+一条命令跑全链：`bash tools/release-gate.sh`（日志同时落 `/tmp/a4-gate.txt`）。
+`npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:package`，
+**不能只跑它**就宣称全部门禁通过。
+
+包内抽查（A4，已在 asar 内逐项确认）：
+
+| 项 | 结果 |
+|---|---|
+| ImageStore 副本流程 | `out/main/services/image-store.js` 含 `readCapped` / `contentHash` / `IMAGE_CONTENT_MISMATCH` |
+| 应用阶段不再重读源路径 | `out/main/services/operation-service.js` 不含 `record.imagePath`，含 `contentHash` |
+| 格式声明（jfif/jpe） | `out/shared/image-formats.js` 含 `jfif` 与 `'jpe'` |
+| 图片解码核验模块 | `out/core/theme/image-probe.js` 含 `headerFormat` / `decoded` |
+
+**风险与限制（如实记录）**：exe 与 app.asar 的哈希绑定本机这次构建；
+A5/A6 必须测同一份 zip（`f41354a3…`）。源码或包若有任何改动，本节哈希作废、需重跑门禁。
 
 ## 6. A5 真实 OpenCode 闭环（需用户授权）
 

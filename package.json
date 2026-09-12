@@ -1,6 +1,6 @@
 {
   "name": "opencode-theme-switcher",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "本地运行的 Windows OpenCode 桌面换肤助手：选图、取色、调节、预览、应用与恢复。",
   "license": "MIT",
@@ -12,7 +12,7 @@
     "appId": "com.local.opencode-theme-switcher",
     "productName": "OpenCodeThemeSwitcher",
     "directories": {
-      "output": "release7"
+      "output": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1"
     },
     "files": [
       "out/**",

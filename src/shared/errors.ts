@@ -12,6 +12,10 @@ export const ERROR_CODES = [
   'IMAGE_INVALID_FORMAT',
   'IMAGE_DECODE_FAILED',
   'IMAGE_TOO_LARGE',
+  /** 已确认的图片副本丢失或内容变化 —— 必须重新导入，不能拿旧参数配新图片 */
+  'IMAGE_CONTENT_MISMATCH',
+  /** 多帧动图（动画 WebP / APNG 等）：Alpha 明确拒绝，不做首帧静态化 */
+  'IMAGE_ANIMATED',
   'IMAGE_UNCHANGED',
 
   // 目标识别

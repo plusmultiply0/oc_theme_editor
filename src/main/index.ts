@@ -125,9 +125,20 @@ function bootstrap(): void {
     }
   });
 
-  // R7：启动即扫描本工具登记过的未完成事务，并清理残留准备区。
-  // 界面在挂载时通过 getRecoveryStatus 读取，不依赖这条广播。
-  void recovery.bootstrap().catch(() => undefined);
+  /*
+   * R7：启动即扫描本工具登记过的未完成事务，并清理残留准备区。
+   * 界面在挂载时通过 getRecoveryStatus 读取，不依赖这条广播。
+   *
+   * A2：清理孤儿图片副本要在 bootstrap **之前**先取引用集合
+   * （bootstrap 会清掉准备区目录，之后就读不到了）。
+   * 顺序：读引用 → bootstrap（清准备区）→ 清没人引用的副本与缩略图。
+   * 清理只动本工具自己的 content/ 与 thumbnails/，不递归、不碰用户目录。
+   */
+  void (async () => {
+    const referenced = await operations.stagedImageIds().catch(() => new Set<string>());
+    await recovery.bootstrap().catch(() => undefined);
+    await images.cleanOrphanCaches(referenced).catch(() => undefined);
+  })();
 
   createWindow();
 }

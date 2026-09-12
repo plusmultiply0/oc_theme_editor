@@ -1,12 +1,19 @@
 /**
- * 图片登记与导入（T20、T21、T52）。
+ * 图片登记、导入与**内容固定**（T20、T21、T52；Alpha A2）。
  *
  * 安全约束：
  * - renderer 只拿到 imageId，永远拿不到真实路径；路径只存在于主进程。
- * - 原图只读：只读取内容，不写回、不移动、不删除。
- * - 分析用缩小副本写到用户数据目录，不污染原图所在目录。
- * - 导入新图会作废上一次的分析结果，避免旧结果覆盖新图（T52）。
+ * - 用户原图**只读**：不写回、不移动、不删除、不改名。
+ * - 导入时把「这一次确认过的字节」写进应用私有副本，此后一切（取色、预览、
+ *   准备、应用）都只认这份副本 —— 源图在导入后被替换或删除都不影响结果。
+ *
+ * 为什么必须固定内容（Alpha 修的就是这个）：
+ * 旧实现只在准备时记下用户源文件路径，应用时**重新读那个路径**。
+ * 用户在中途换掉/删掉源图，就会出现「预览用的是旧图配色，写进安装的是新图」——
+ * 预览与生效内容不一致，而且没有任何提示。现在改成：
+ *   读入受限字节 → 验证 → 落私有副本 + 记内容 hash → 应用前按同一份字节核对。
  */
+
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
@@ -20,8 +27,10 @@ import {
   describeExtensionMismatch,
   extensionOf,
   formatIdForExtension,
+  IMAGE_FORMATS,
   labelForFormatId,
   SUPPORTED_FORMATS_HINT,
+  type ImageFormatId,
 } from '../../shared/image-formats';
 
 export { ALLOWED_EXTENSIONS };
@@ -31,14 +40,22 @@ export type FilePicker = () => Promise<string[] | null>;
 
 export interface ImageRecord {
   imageId: string;
-  /** 原图真实路径，仅主进程持有，绝不通过 IPC 外传 */
-  path: string;
+  /** 用户选择时的文件名，仅用于界面回显 */
   fileName: string;
+  /**
+   * 用户源文件的路径。**只作为诊断信息保存，绝不再用它读取内容**
+   * （A2：读一次、定内容，之后一律走私有副本）。
+   */
+  sourcePath?: string;
+  /** 应用私有副本：本次确认过的字节，后续读取的唯一来源 */
+  copyPath?: string;
+  /** 本次确认内容的 SHA256（源文件哈希语义与它区分开） */
+  contentHash?: string;
   byteSize: number;
-  hash?: string;
+  /** 实际内容格式（由内容识别，不看后缀） */
+  format?: ImageFormatId;
   width?: number;
   height?: number;
-  format?: string;
   brightness?: number;
   palette?: string[];
   thumbnailId: string;
@@ -46,7 +63,7 @@ export interface ImageRecord {
 }
 
 export interface ImageStoreOptions {
-  /** 运行数据根目录，缩略图写在这里 */
+  /** 运行数据根目录，私有副本与缩略图写在这里 */
   runtimeRoot: string;
   picker: FilePicker;
   limits?: ImageLimits;
@@ -58,17 +75,32 @@ function newId(prefix: string, now?: () => string): string {
   return `${prefix}-${stamp}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
+function sha256(buf: Buffer): string {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+/** 归档用的扩展名：取该格式的第一个别名（jpeg → jpg） */
+function extForFormat(format: ImageFormatId): string {
+  const spec = IMAGE_FORMATS.find((f) => f.id === format);
+  return `.${spec?.extensions[0] ?? 'png'}`;
+}
+
 export class ImageStore {
   private readonly records = new Map<string, ImageRecord>();
   private readonly thumbsDir: string;
+  private readonly contentDir: string;
   private readonly limits: ImageLimits;
 
   constructor(private readonly opts: ImageStoreOptions) {
     this.thumbsDir = path.join(opts.runtimeRoot, 'thumbnails');
+    this.contentDir = path.join(opts.runtimeRoot, 'content');
     this.limits = opts.limits ?? DEFAULT_LIMITS;
   }
 
-  /** 弹出系统选择框并登记图片；此处只做登记，解码在 import 阶段 */
+  /**
+   * 弹出系统选择框并登记图片；此阶段只做「后缀 + 体积」的快速筛除，
+   * 真正的内容验证与私有副本在 import 阶段完成。
+   */
   async pick(): Promise<Result<PickedImage>> {
     let picked: string[] | null;
     try {
@@ -107,8 +139,8 @@ export class ImageStore {
 
     const record: ImageRecord = {
       imageId: newId('img', this.opts.now),
-      path: file,
       fileName: path.basename(file),
+      sourcePath: file,
       byteSize: size,
       thumbnailId: newId('thumb', this.opts.now),
     };
@@ -118,7 +150,7 @@ export class ImageStore {
 
   /**
    * 拖拽导入：renderer 只交出文件内容和文件名，不交出路径（T52）。
-   * 内容落在运行数据目录，后续读取与预览都走这条副本，原文件不再被引用。
+   * 内容同样落私有副本，之后与选图路径完全一致。
    */
   async importData(fileName: string, data: Uint8Array): Promise<Result<ImportedImage>> {
     const ext = extensionOf(fileName);
@@ -139,92 +171,84 @@ export class ImageStore {
     }
 
     const imageId = newId('img', this.opts.now);
-    const dir = path.join(this.opts.runtimeRoot, 'imports');
-    await fs.mkdir(dir, { recursive: true });
-    const file = path.join(dir, `${imageId}${ext}`);
-    await fs.writeFile(file, Buffer.from(data));
-
     this.records.set(imageId, {
       imageId,
-      path: file,
       fileName: path.basename(fileName),
       byteSize: data.byteLength,
       thumbnailId: newId('thumb', this.opts.now),
     });
-    return this.import(imageId);
+    return this.materialize(imageId, Buffer.from(data));
   }
 
-  /** 解码、取色、写缩略图；返回可安全回显给界面的元信息 */
+  /** 解码、取色、落私有副本；返回可安全回显给界面的元信息 */
   async import(imageId: string): Promise<Result<ImportedImage>> {
     const record = this.records.get(imageId);
     if (!record) {
       return fail('IMAGE_NOT_FOUND', '图片记录已失效', '请重新选择图片。');
     }
 
-    let buffer: Buffer;
-    try {
-      buffer = await fs.readFile(record.path);
-    } catch (e) {
-      return fail('IMAGE_NOT_FOUND', '无法读取该图片', '文件可能已被移动或删除，请重新选择。', String(e));
+    // 已经固定过内容：直接回显缓存结果，不再读任何文件
+    if (record.copyPath && record.contentHash) {
+      return this.describe(record);
     }
 
-    const analyzed = await analyzeImage(buffer, this.limits);
-    if (!analyzed.success) {
-      return analyzed;
-    }
-
-    record.hash = crypto.createHash('sha256').update(buffer).digest('hex');
-    record.width = analyzed.data.width;
-    record.height = analyzed.data.height;
-    record.format = analyzed.data.format;
-    record.brightness = analyzed.data.brightness;
-    record.palette = analyzed.data.palette;
-
-    // 缩略图只用于界面回显，失败不阻断主流程
-    try {
-      await fs.mkdir(this.thumbsDir, { recursive: true });
-      const file = path.join(this.thumbsDir, `${record.thumbnailId}.png`);
-      await sharp(buffer).rotate().resize(320, 320, { fit: 'inside' }).png().toFile(file);
-      record.thumbnailPath = file;
-    } catch {
-      record.thumbnailPath = undefined;
+    if (!record.sourcePath) {
+      return fail('IMAGE_NOT_FOUND', '图片内容不存在', '请重新导入这张图片。');
     }
 
     /*
-     * 实际格式以内容识别为准（扩展名只做筛选）。
-     * 后缀与实际内容都是受支持格式但不一致时，如实告知，不静默按后缀解释。
+     * 按上限读取，而不是先 stat 再整读：从 stat 到读取之间文件可能变大，
+     * 只信 stat 会让超大文件被完整读进内存。
      */
-    const actual = formatIdForExtension(analyzed.data.format);
-    const mismatch = describeExtensionMismatch(record.fileName, actual);
-    return ok({
-      imageId,
-      hash: record.hash,
-      width: record.width,
-      height: record.height,
-      thumbnailId: record.thumbnailId,
-      palette: analyzed.data.palette,
-      ...(actual ? { format: actual, formatLabel: labelForFormatId(actual) } : {}),
-      ...(mismatch ? { note: mismatch } : {}),
-    });
+    const read = await this.readCapped(record.sourcePath, this.limits.maxBytes);
+    if (!read.success) return read;
+
+    return this.materialize(imageId, read.data);
   }
 
-  /** 读取原图内容；应用阶段需要它写入归档 */
+  /**
+   * 读取归档/生成要用的字节：一律来自私有副本，并核对其内容指纹。
+   * 副本丢失或被改动 → 拒绝使用（调用方据此要求重新导入），绝不用旧参数配新内容。
+   */
   async readBytes(imageId: string): Promise<Result<Buffer>> {
     const record = this.records.get(imageId);
     if (!record) {
       return fail('IMAGE_NOT_FOUND', '图片记录已失效', '请重新选择图片。');
     }
-    try {
-      return ok(await fs.readFile(record.path));
-    } catch (e) {
-      return fail('IMAGE_NOT_FOUND', '无法读取该图片', '文件可能已被移动或删除，请重新选择。', String(e));
+    if (!record.copyPath || !record.contentHash) {
+      return fail(
+        'IMAGE_CONTENT_MISMATCH',
+        '这张图片还没有完成内容固定',
+        '请重新导入并等待配色生成完成后再应用。',
+      );
     }
+
+    let bytes: Buffer;
+    try {
+      bytes = await fs.readFile(record.copyPath);
+    } catch (e) {
+      return fail(
+        'IMAGE_CONTENT_MISMATCH',
+        '已确认的图片副本不存在',
+        '它可能被清理工具删除了；请重新导入该图片。',
+        String(e),
+      );
+    }
+
+    if (bytes.byteLength !== record.byteSize || sha256(bytes) !== record.contentHash) {
+      return fail(
+        'IMAGE_CONTENT_MISMATCH',
+        '已确认的图片副本内容发生了变化',
+        '为避免把没预览过的图片写进安装，已拒绝本次操作；请重新导入。',
+        `副本 ${record.copyPath}`,
+      );
+    }
+    return ok(bytes);
   }
 
   /**
    * 界面回显用的缩小副本（data URL）。
-   * 只用工具自己生成的缩略图；即便缩略图没写成功，也在内存里临时缩一张，
-   * 总之不会把原图路径交给 renderer。
+   * 只用工具自己生成的缩略图；即便缩略图没写成功，也从**私有副本**临时缩一张。
    */
   async previewDataUrl(imageId: string): Promise<Result<string>> {
     const record = this.records.get(imageId);
@@ -236,16 +260,168 @@ export class ImageStore {
         const buf = await fs.readFile(record.thumbnailPath);
         return ok(`data:image/png;base64,${buf.toString('base64')}`);
       }
-      const original = await fs.readFile(record.path);
-      const buf = await sharp(original).rotate().resize(512, 512, { fit: 'inside' }).png().toBuffer();
+      const source = record.copyPath
+        ? await fs.readFile(record.copyPath)
+        : await this.readCapped(record.sourcePath ?? '', this.limits.maxBytes).then((r) => {
+            if (!r.success) throw new Error(r.error.message);
+            return r.data;
+          });
+      const buf = await sharp(source).rotate().resize(512, 512, { fit: 'inside' }).png().toBuffer();
       return ok(`data:image/png;base64,${buf.toString('base64')}`);
     } catch (e) {
       return fail('IMAGE_DECODE_FAILED', '无法生成预览图', '图片可能已损坏，请换一张。', String(e));
     }
   }
 
-  /** 只给主进程内部用的元信息，不含路径之外的 IPC 数据 */
+  /**
+   * 清理没人引用的私有副本与缩略图（启动时调用）。
+   *
+   * 只动本工具自己的两个目录，**不递归、不触碰用户目录**；
+   * `keep` 由调用方给出（当前进程内已登记 + 仍有准备记录引用的 imageId），
+   * 保证「待恢复/待应用」引用的文件不会被清掉。
+   */
+  async cleanOrphanCaches(keep: Iterable<string>): Promise<number> {
+    const keepSet = new Set<string>([...keep, ...this.records.keys()]);
+    let removed = 0;
+    for (const dir of [this.contentDir, this.thumbsDir]) {
+      let names: string[];
+      try {
+        names = await fs.readdir(dir);
+      } catch {
+        continue;
+      }
+      for (const name of names) {
+        const id = name.replace(/\.[^.]+$/, '');
+        const referenced = keepSet.has(id) || [...keepSet].some((k) => name.startsWith(k));
+        if (referenced) continue;
+        try {
+          await fs.rm(path.join(dir, name), { force: true });
+          removed += 1;
+        } catch {
+          // 删不掉就留着，下次再清
+        }
+      }
+    }
+    return removed;
+  }
+
+  /** 只给主进程内部用的元信息，不含对外 IPC 数据 */
   peek(imageId: string): ImageRecord | undefined {
     return this.records.get(imageId);
+  }
+
+  // ---------------------------------------------------------------- 内部实现
+
+  /**
+   * 验证 + 固定内容：分析、写私有副本、算内容指纹、生成缩略图。
+   * 任何一步失败都会清掉本次产生的文件，不留下半个副本。
+   */
+  private async materialize(imageId: string, bytes: Buffer): Promise<Result<ImportedImage>> {
+    const record = this.records.get(imageId);
+    if (!record) {
+      return fail('IMAGE_NOT_FOUND', '图片记录已失效', '请重新选择图片。');
+    }
+
+    const analyzed = await analyzeImage(bytes, this.limits);
+    if (!analyzed.success) {
+      await this.discard(imageId);
+      return analyzed;
+    }
+
+    const format = formatIdForExtension(analyzed.data.format);
+    if (!format) {
+      await this.discard(imageId);
+      return fail('IMAGE_INVALID_FORMAT', '无法识别图片格式', `请使用 ${SUPPORTED_FORMATS_HINT}。`);
+    }
+
+    const copyPath = path.join(this.contentDir, `${imageId}${extForFormat(format)}`);
+    const thumbnailPath = path.join(this.thumbsDir, `${record.thumbnailId}.png`);
+    try {
+      await fs.mkdir(this.contentDir, { recursive: true });
+      await fs.writeFile(copyPath, bytes);
+
+      // 缩略图失败不阻断主流程，但也不写回原图路径
+      try {
+        await fs.mkdir(this.thumbsDir, { recursive: true });
+        await sharp(bytes).rotate().resize(320, 320, { fit: 'inside' }).png().toFile(thumbnailPath);
+        record.thumbnailPath = thumbnailPath;
+      } catch {
+        record.thumbnailPath = undefined;
+      }
+    } catch (e) {
+      await this.discard(imageId);
+      return fail('IMAGE_DECODE_FAILED', '无法保存图片副本', '请重试或换一张图片。', String(e));
+    }
+
+    record.copyPath = copyPath;
+    record.contentHash = sha256(bytes);
+    record.byteSize = bytes.byteLength;
+    record.format = format;
+    record.width = analyzed.data.width;
+    record.height = analyzed.data.height;
+    record.brightness = analyzed.data.brightness;
+    record.palette = analyzed.data.palette;
+
+    return this.describe(record);
+  }
+
+  /** 汇总回显信息（同时给出后缀与实际内容不一致时的说明） */
+  private describe(record: ImageRecord): Result<ImportedImage> {
+    if (!record.copyPath || !record.contentHash || !record.format) {
+      return fail('IMAGE_CONTENT_MISMATCH', '这张图片还没有完成内容固定', '请重新导入该图片。');
+    }
+    const mismatch = describeExtensionMismatch(record.fileName, record.format);
+    return ok({
+      imageId: record.imageId,
+      hash: record.contentHash,
+      width: record.width ?? 0,
+      height: record.height ?? 0,
+      thumbnailId: record.thumbnailId,
+      palette: record.palette ?? [],
+      format: record.format,
+      formatLabel: labelForFormatId(record.format),
+      ...(mismatch ? { note: mismatch } : {}),
+    });
+  }
+
+  /** 清掉本次导入自己产生的文件（副本 + 缩略图），不碰用户目录 */
+  private async discard(imageId: string): Promise<void> {
+    const record = this.records.get(imageId);
+    if (!record) return;
+    if (record.copyPath) {
+      await fs.rm(record.copyPath, { force: true }).catch(() => undefined);
+      record.copyPath = undefined;
+    }
+    await fs.rm(path.join(this.thumbsDir, `${record.thumbnailId}.png`), { force: true }).catch(
+      () => undefined,
+    );
+    record.thumbnailPath = undefined;
+  }
+
+  /**
+   * 按上限读取文件：最多读 maxBytes + 1 字节。
+   * 多出来的那 1 字节用来判断「读到这里还没完」——说明文件超限，直接拒绝，
+   * 不会把整个超大文件读进内存。
+   */
+  private async readCapped(file: string, maxBytes: number): Promise<Result<Buffer>> {
+    let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+    try {
+      handle = await fs.open(file, 'r');
+      const buf = Buffer.alloc(maxBytes + 1);
+      const { bytesRead } = await handle.read(buf, 0, maxBytes + 1, 0);
+      if (bytesRead > maxBytes) {
+        const mb = (maxBytes / 1024 / 1024).toFixed(0);
+        return fail(
+          'IMAGE_TOO_LARGE',
+          `图片体积超过限制（上限 ${mb} MiB）`,
+          '请压缩图片或选择更小的文件。',
+        );
+      }
+      return ok(buf.subarray(0, bytesRead));
+    } catch (e) {
+      return fail('IMAGE_NOT_FOUND', '无法读取该图片', '文件可能已被移动或删除，请重新选择。', String(e));
+    } finally {
+      await handle?.close().catch(() => undefined);
+    }
   }
 }

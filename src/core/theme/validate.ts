@@ -34,6 +34,19 @@ export function sniffFormat(buf: Buffer | Uint8Array): ImageFormat | null {
   return null;
 }
 
+/**
+ * 多帧判定（Alpha 的动图策略）。
+ *
+ * 本轮**明确拒绝**动图：一边按第一帧预览、一边把动图原字节写进安装，
+ * 会让「你确认的图」和「实际生效的图」不一致。
+ * 首帧静态化属于后续版本，不在 Alpha 范围内。
+ *
+ * 拿不到帧数（undefined）按单帧处理：静态 PNG/JPEG/WebP 不会带 pages。
+ */
+export function isAnimatedFrameCount(pages: number | undefined): boolean {
+  return typeof pages === 'number' && pages > 1;
+}
+
 /** SVG 是文本，可能被当作图片上传后引发解析差异，首版明确拒绝。 */
 export function looksLikeSvg(buf: Buffer | Uint8Array): boolean {
   const head = Buffer.from(buf.subarray(0, 512)).toString('utf8').toLowerCase();

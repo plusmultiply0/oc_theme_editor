@@ -14,6 +14,7 @@
  */
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import { errorResult, fail, ok, type Result } from '../../shared/errors';
 import type {
   ApplyThemeInput,
@@ -47,8 +48,11 @@ interface StagedRecord {
   imageId: string;
   spec: ThemeSpec;
   css: string;
-  /** 原图路径，仅本机记录，不外传 */
-  imagePath: string;
+  /**
+   * 准备时那次确认内容的 SHA256（A2：内容固定）。
+   * 应用前按它核对私有副本，不一致就拒绝 —— 不拿没预览过的图片写入安装。
+   */
+  contentHash?: string;
   themeSummary: string;
   createdAt: string;
   /** 准备时刻的归档指纹，提交前复核 */
@@ -199,7 +203,8 @@ export class OperationService {
       imageId: input.imageId,
       spec,
       css: generated.data.css,
-      imagePath: record0.path,
+      // 与 generateTheme 用的是同一份 bytes，因此这里记的就是「用户确认过的那份内容」
+      contentHash: crypto.createHash('sha256').update(bytes.data).digest('hex'),
       themeSummary,
       createdAt: new Date().toISOString(),
       beforeHash: snapshot.data.sha256,
@@ -306,12 +311,31 @@ export class OperationService {
       );
     }
 
-    let imageBytes: Buffer;
-    try {
-      imageBytes = await fs.readFile(record.imagePath);
-    } catch (e) {
-      return fail('IMAGE_NOT_FOUND', '原图已无法读取', '请重新选择图片并再次准备。', String(e));
+    /*
+     * A2：不再从用户源路径重读文件。
+     * 私有副本 + 内容指纹才是「用户确认过的那份内容」；副本丢失或变化一律拒绝，
+     * 绝不把新读到的图默默套上旧配色参数。
+     */
+    if (!record.contentHash) {
+      return fail(
+        'IMAGE_CONTENT_MISMATCH',
+        '这份准备记录来自旧版本，缺少图片内容指纹',
+        '为避免写出没预览过的图片，已拒绝本次应用；请重新准备一次。',
+        `operationId=${record.operationId}`,
+      );
     }
+    const pinned = await this.opts.images.readBytes(record.imageId);
+    if (!pinned.success) return pinned;
+    const imageHash = crypto.createHash('sha256').update(pinned.data).digest('hex');
+    if (imageHash !== record.contentHash) {
+      return fail(
+        'IMAGE_CONTENT_MISMATCH',
+        '图片内容与准备时不一致',
+        '请重新准备并确认预览后再应用；安装未被修改。',
+        `staged=${record.contentHash} current=${imageHash}`,
+      );
+    }
+    const imageBytes = pinned.data;
 
     {
       const r = await coreApply({
@@ -403,6 +427,40 @@ export class OperationService {
     if (!rec.success) return rec;
     const { phases: _phases, targetPath: _targetPath, ...manifest } = rec.data;
     return ok(manifest);
+  }
+
+  /**
+   * 仍存在准备记录的 imageId 集合（供启动时清理孤儿副本时保留引用）。
+   * 只读 staged 目录，不触碰事务与备份。
+   */
+  async stagedImageIds(): Promise<Set<string>> {
+    const out = new Set<string>();
+    const instancesDir = path.join(this.opts.runtimeRoot, 'instances');
+    let names: string[];
+    try {
+      names = await fs.readdir(instancesDir);
+    } catch {
+      return out;
+    }
+    for (const name of names) {
+      const dir = path.join(instancesDir, name, 'staged');
+      let files: string[];
+      try {
+        files = await fs.readdir(dir);
+      } catch {
+        continue;
+      }
+      for (const f of files) {
+        if (!f.endsWith('.json')) continue;
+        try {
+          const raw = JSON.parse(await fs.readFile(path.join(dir, f), 'utf8')) as StagedRecord;
+          if (raw?.imageId) out.add(raw.imageId);
+        } catch {
+          // 损坏的记录跳过
+        }
+      }
+    }
+    return out;
   }
 
   private async findStaged(operationId: string): Promise<{ record: StagedRecord; file: string } | null> {

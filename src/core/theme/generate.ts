@@ -21,7 +21,14 @@ import { deriveStates, ensureContrast, lighten, darken, mix } from './color';
 import { renderThemeCss } from './css';
 import { REGION_ALPHAS } from './surfaces';
 import { buildContrastReport, bodyEntry } from './report';
-import { DEFAULT_LIMITS, sniffFormat, looksLikeSvg, validateImage, type ImageLimits } from './validate';
+import {
+  DEFAULT_LIMITS,
+  isAnimatedFrameCount,
+  sniffFormat,
+  looksLikeSvg,
+  validateImage,
+  type ImageLimits,
+} from './validate';
 
 /** 分析用的最大边长，控制解码成本 */
 const ANALYZE_EDGE = 256;
@@ -62,6 +69,20 @@ export async function analyzeImage(
   } catch (e) {
     return fail('IMAGE_DECODE_FAILED', '图片无法解码', '文件可能已损坏，请换一张图片。', String(e));
   }
+  /*
+   * 动图明确拒绝（Alpha 策略）：本轮不做首帧静态化。
+   * 若放行，预览只会显示第一帧，而写入归档的是整份动图字节 ——
+   * 用户确认的图与实际生效的图就不是同一份了。
+   */
+  if (isAnimatedFrameCount(meta.pages)) {
+    return fail(
+      'IMAGE_ANIMATED',
+      '暂不支持动图（动画 WebP / APNG 等多帧图片）',
+      '请改用静态图片：PNG、JPEG（含 .jfif/.jpe）或静态 WebP。',
+      `pages=${String(meta.pages)}`,
+    );
+  }
+
   const width = meta.width ?? 0;
   const height = meta.height ?? 0;
 

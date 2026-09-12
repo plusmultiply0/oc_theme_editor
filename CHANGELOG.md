@@ -1,6 +1,11 @@
 # 变更记录
 
-版本号尚未对外发布，按阶段记录。所有条目均可在 `git log` 与 `handoff/progress.md` 中对照。
+按阶段记录。所有条目均可在 `git log` 与 `handoff/progress.md` 中对照。
+
+- `v0.1.0`（tag，提交 `8e6bd04`）是项目首个标记版本，对应第七次构建 `release7`。
+- 下面的历史条目记录的是**当时**的事实（含当时的构建目录名与测试数量），
+  不代表当前状态；当前候选包与门禁结果见 `docs/release-checklist.md`，
+  当前 Alpha 验收见 `docs/alpha-acceptance.md`。
 
 ## 未发布（当前）
 

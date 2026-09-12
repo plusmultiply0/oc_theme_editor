@@ -1,112 +1,82 @@
-# 交付清单（T74）
+# 交付清单
 
-生成时间：2026-09-11（**第三次构建**，含 P0 审查 R1–R8 修复，见 CHANGELOG 对应小节）。
-构建环境 Windows 10.0.26200 / Node v22.22.2 / Electron 36.9.5 / electron-builder 26.15.3。
+Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件只回答两件事：
+**当前该用哪个包**、**发布前必须核对什么**。
 
-> 哈希与大小由构建完成后回填；构建命令见第 5 节。
+## 1. 当前候选
 
-## 1. 产物
-
-生成时间：2026-09-12（**第七次构建**，含第一批 JPEG 别名支持）。
+> **状态：A4 尚未冻结 Alpha 候选。** 下表是上一次构建（release7，2026-09-12 第七次构建），
+> 它含第一批 JPEG 别名支持，但**不含** A1–A3 的改动。A4 会用新目录生成唯一候选并把这里替换掉。
+> 在替换之前，任何验证/分发都应以 release7 为基准，且不得声称它是最终 Alpha 包。
 
 | 文件 | 大小 | SHA256 |
 |---|---|---|
 | `release7/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `3e69d4ff9d0daa46fbb9d8de46078bb28ac3e93d771f312b1197a0d7781861dc` |
 | `release7/win-unpacked/resources/app.asar` | 17.7 MB | `811e59df75b120c201e0e8bd3ad19444d42a92d55ea3cc549559ac74638b763e` |
 
-归档 964 条目 / unpacked 7。**仍未签名**。这是当前唯一与源码一致的构建。
+归档 964 条目 / unpacked 7。**未签名。**
 
-**输出目录历史**：`release/` ~ `release6/` 的旧产物被占用（安全软件扫描 +
-环境安全删除包装器对 `.asar` 回收失败），无法原地覆盖，只能递进新目录。
-**`release/` ~ `release6/` 全部过期，不要用于验证或分发**；锁释放后手动删除即可。
+包内核对（`npm run verify:package`，28 项 0 失败）：归档顶层只有
+`node_modules` / `out` / `package.json`；不含 `src`、`tests`、`handoff`、`docs`；
+包内私有路径与凭证 0 命中；第一批格式声明（`out/shared/image-formats.js` 含 jfif/jpe）
+与主进程 `DIALOG_EXTENSIONS` 使用点在包内。
 
-本轮核对（`npm run verify:package`，28 项，0 失败）：
+**分发时必须整目录打包**（`win-unpacked` 全部文件），不能只发 exe；
+zip 的 SHA256 在 A4 生成后一并记录到 `docs/alpha-acceptance.md`。
 
-| 项 | 结果 |
-|---|---|
-| 归档条目数 | 964，unpacked 7 |
-| 归档顶层 | 仅 `node_modules` / `out` / `package.json` |
-| 源码/测试/交接/文档条目 | 0 |
-| 包内私有路径与凭证 | 扫描全部文本条目，0 命中 |
-| 第一批在包内 | `out/shared/image-formats.js` 含 jfif/jpe；主进程用 `DIALOG_EXTENSIONS`；image-store 与 renderer 产物均引用共享声明 |
+## 2. 历史构建（全部过期，不要用于验证或分发）
 
-重新构建后哈希会变化，发布前请用 `npm run verify:package` 重新核对并替换本表。
+| 目录 | 构建时间 | 内容 | 状态 |
+|---|---|---|---|
+| `release/` | 2026-09-11 | 最早的可执行目录目标 | 过期 |
+| `release2/` | 2026-09-11 | 目标发现过滤修复 | 过期 |
+| `release3/` | 2026-09-11 | P0 审查 R1–R8 修复 | 过期 |
+| `release4/` | 2026-09-12 | 事故 F1–F4 修复前 | 过期 |
+| `release5/` | 2026-09-12 | 背景事故 F1–F4 | 过期 |
+| `release6/` | 2026-09-12 | 真机验收发现的三处修复 | 过期 |
+| `release7/` | 2026-09-12 | 第一批 JPEG 别名支持 | 当前基准（见第 1 节） |
 
-## 2. 文档
+旧的 `app.asar` 曾被安全软件占用（环境的安全删除包装器对 `.asar` 回收失败），
+因此每轮只能递进一个新目录，旧的删不掉。锁释放后在资源管理器手动删除即可。
 
-| 文件 | 内容 |
-|---|---|
-| `README.md` | 定位、支持范围、五步使用、恢复语义、风险、常见报错、已知限制、开发命令 |
-| `docs/acceptance.md` | 命令与退出码、合规自检、便携包核对、未执行项 |
-| `docs/security.md` | 信任边界、写入范围、事务安全、备份语义、输入安全、隐私、不保证什么 |
-| `docs/compatibility.md` | 官方主题机制取证与路线选择 |
-| `docs/architecture.md` | 分层、契约、事务与恢复模型 |
-| `docs/discovery.md` | 目标归档只读取证 |
-| `docs/demo-script.md` | 演示分镜（**未拍摄**） |
-| `docs/article-outline.md` | 掘金文章提纲（**发布前需核实活动规则**） |
-| `CHANGELOG.md` | 分阶段变更记录 |
-| `handoff/progress.md` | 每项功能一次提交的交接记录 |
-
-## 3. 测试结果
+## 3. 当前门禁结果（2026-09-12 第七次构建时的实测）
 
 | 命令 | 退出码 | 结果 |
 |---|---|---|
 | `npm run typecheck` | 0 | 通过 |
 | `npm run lint` | 0 | 通过 |
-| `npm run test:unit` | 0 | 4 文件 / 82 项 |
-| `npm run test:integration` | 0 | 3 文件 / 48 项 |
-| `npm run test:e2e` | 0 | **8 项真实窗口闭环**（Playwright + Electron） |
-| `npm run test:e2e:electron` | 0 | **35 项真实 Electron 主进程闭环** |
-| `npm run verify:package` | 0 | 便携包内容核对 28 项 |
-| `npm run build` | 0 | 通过 |
-| `npm run audit` | 0 | 5 项自检全通过 |
-| 便携包构建 | 0 | 产出 `release2/win-unpacked`（见第 1 节） |
+| `npm run test:unit` | 0 | 122 项 |
+| `npm run test:integration` | 0 | 114 项（10 文件） |
+| `npm run test:e2e` | 0 | 16 项真实窗口闭环 |
+| `npm run test:e2e:electron` | 0 | 35 项真实 Electron 主进程闭环 |
+| `npm run audit` | 0 | 通过 |
+| `npm run dist` | 0 | 产出 `release7/win-unpacked` |
+| `npm run verify:package` | 0 | 28 项 |
 
-## 4. 未完成 / 待办（按优先级）
+这些数字属于**那一次构建**。A4 会重跑全部门禁并替换本表；
+`npm run verify` 只覆盖其中一部分，不能只跑它就宣称全部门禁通过。
 
-1. **T63 真实应用与观察（进行中）**：第 1 次应用已成功（指纹 `1c53ca…` → `aeab66…`），
-   **等 jc 观察当前效果**；之后还有：换浅色主题 → 再观察 → 恢复上一主题 → 恢复原版。
-2. **T64 真实界面走查**：侧栏、正文、代码、输入、菜单、按钮四态、终端、错误/diff；背景缩放与窗口变化。
-3. **T65 干净环境验证**：在无作者开发目录、无全局 Node/Python 的机器上启动便携包；当前**未验证**。
-   清单见 `docs/portable-verify.md`。
-4. **E2E**：`tests/e2e` 补 F1–F5 用例（当前 0 用例）。
-5. **便携包签名**：当前未签名，不得声称已签名。
-6. **演示视频**：依赖 1、2 完成，当前只有脚本。
-7. **公开仓库 / 发文 / 上传安装包**：均需 jc 单独授权。
-8. **清理旧 `release/` 目录**：文件被占用未能删除，锁释放后手动删。
+## 4. 文档索引
+
+| 文件 | 内容 |
+|---|---|
+| `docs/alpha-acceptance.md` | **Alpha 验收记录**（候选标识、A1–A8 逐项，未执行一律「待执行」） |
+| `README.md` | 定位、支持范围、使用步骤、恢复语义、风险、常见报错、已知限制 |
+| `docs/security.md` | 信任边界、写入范围、事务安全、备份语义、输入安全、隐私 |
+| `docs/compatibility.md` | 官方主题机制取证与路线选择 |
+| `docs/architecture.md` | 分层、契约、事务与恢复模型 |
+| `docs/discovery.md` | 目标归档只读取证 |
+| `docs/original-evidence.md` | 出厂指纹登记方式（当前指纹表为空） |
+| `docs/portable-verify.md` | 干净环境验证清单 |
+| `docs/acceptance.md` | 历史轮次的命令与证据记录 |
+| `CHANGELOG.md` | 分阶段变更记录 |
 
 ## 5. 发布前的硬性提醒
 
-- 不要把它说成「官方功能」或「已签名」。
-- 不要教用户关闭安全软件。
-- 「已验证版本 1.18.29」「需要重新应用」「卸载前先恢复原版」三句话必须出现在对外说明里。
-
----
-
-## 更新（2026-09-11）：第三次构建（P0 审查 R1–R8 修复）
-
-| 项 | 结果 |
-|---|---|
-| 输出目录 | `release/win-unpacked`（`package.json` 的 `directories.output` 未改） |
-| 旧 `release2/` | **仍是上一次构建的产物，已过期，不要用它验证或分发**。本次尝试删除与改名均被占用拒绝 |
-| 测试门禁 | `npm run verify`（类型 + lint + 单测 96 + 集成 62 含真实 Electron 主进程 35 项 + 构建 + 真实窗口 E2E 8 项）全过 |
-| 合规自检 | `npm run audit` FAIL 0 / WARN 0 |
-| 签名 | 仍未签名，不要对外声称已签名 |
-
-### 核对项（构建后必须重做）
-
-1. 归档条目数与顶层结构：顶层只允许 `node_modules` / `out` / `package.json`。
-2. `src/`、`tests/`、`handoff/` 零命中；工作区绝对路径与作者用户名零命中（`npm run audit` 已覆盖源码与文档）。
-3. **本轮修复必须在包内**：抽查 `out/core/patch/physical-fs.js`、`archive-io.js`、`legacy-theme.js`、
-   `original-evidence.js`、`theme/surfaces.js`、`theme/tokens.js` 存在；
-   `out/shared/ipc.js` 含 `chooseTargetDirectory` / `getRecoveryStatus` / `resolveRecovery`；
-   `out/main/index.js` 含 `RecoveryService` 启动调用。
-4. 重新计算 exe 与 app.asar 的 SHA256 并替换第 1 节的表。
-
-### 构建命令（直连 GitHub 会 ETIMEDOUT，走镜像）
-
-```bash
-ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
-ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
-npm run dist
-```
+- 不要把它说成「官方功能」，也不要声称「已签名」——当前没有代码签名证书。
+- 不要教用户关闭安全软件，也不要把所有拦截都称为误报。
+- 必须对外说明的三件事：**只验证过 OpenCode Desktop 1.18.29**、
+  **应用与恢复后都需要完全重启才看得到效果**、**没有出厂指纹证据时不承诺回到出厂状态**
+  （可用的诚实入口是「恢复上一主题」与「恢复到首次接管时」）。
+- 分发内容：整目录 zip + SHA256 + 已知限制 + 兼容范围 + 使用与恢复说明 + 反馈模板。
+- 公开仓库、上传安装包、发文都需要单独授权；本清单不代表已获授权。

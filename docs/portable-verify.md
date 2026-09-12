@@ -5,8 +5,10 @@
 
 ## 准备
 
-1. 把 `release2/win-unpacked` 整个目录复制到目标机器（U 盘、另一台电脑、或本机另一个盘符根目录下的临时文件夹）。
-   本轮产物在 `release2/`——上一轮的 `release/` 因 `app.asar` 被占用没能删掉，是旧代码，**别拿去测**。
+1. 把**当前候选目录**的 `win-unpacked` 整个复制到目标机器
+   （U 盘、另一台电脑，或本机另一个盘符根目录下的临时文件夹）。
+   当前基准是 `release7/win-unpacked`；A4 冻结 Alpha 候选后以 `docs/alpha-acceptance.md`
+   里记录的候选目录为准。`release/` ~ `release6/` 都是**过期构建，别拿去测**。
 2. 确认目标机器**没有** Node、Python 的全局安装参与：即不要在项目目录里用 `npm start` 启动，直接双击目录里的
    `OpenCodeThemeSwitcher.exe`。
 3. 目标机器上应已安装 OpenCode 1.18.29（否则预期结果就是「未发现目标」，这本身也是一条有效验证）。

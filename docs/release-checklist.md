@@ -7,21 +7,20 @@
 
 ## 1. 产物
 
-生成时间：2026-09-12（**第五次构建**，含背景事故 F1–F4 修复）。
+生成时间：2026-09-12（**第六次构建**，含背景事故 F1–F4 修复与真机验收发现的三处增量修复）。
 
 | 文件 | 大小 | SHA256 |
 |---|---|---|
-| `release5/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `33ce654a9099574da093cdf27a704b9ad04b4e44528a90b5d38699fec979388a` |
-| `release5/win-unpacked/resources/app.asar` | 17.7 MB | `cdfce84dce8681830c32b13328607517e9058393d0c55cad84962ac60f19a0c6` |
+| `release6/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `7613c014c1331cd2367c8d58597de0685662348f1fa72ae4bbb5b1096cce7c1d` |
+| `release6/win-unpacked/resources/app.asar` | 17.7 MB | `7e619b3f905b9f0ed0ac18d0bb3180a480fedc863787ce625d7a67ff218827f1` |
 
-归档 963 条目 / unpacked 7。**仍未签名**。
+归档 963 条目 / unpacked 7。**仍未签名**。这是当前唯一与源码一致的构建
+（含准备区清理改为后台、预检空间估算 4 份、live-cli 清理上界与注册表开关）。
 
-**输出目录历史**：`release/` ~ `release4/` 里的旧 `app.asar` 被占用
+**输出目录历史**：`release/` ~ `release5/` 里的旧 `app.asar` 被占用
 （安全软件扫描 + 环境安全删除包装器对 `.asar` 回收失败），覆盖与删除都被拒，
-所以每次只能递进一个新目录。当前输出为 `release5`
-（`package.json` 的 `build.directories.output`）。
-**`release/` ~ `release4/` 全是过期产物，不要用它们验证或分发**；
-锁释放后在资源管理器手动删除即可。
+所以每次只能递进一个新目录。**`release/` ~ `release5/` 全是过期产物，
+不要用它们验证或分发**；锁释放后在资源管理器手动删除即可。
 
 本轮核对（`npm run verify:package`，28 项，0 失败）：
 
@@ -31,7 +30,8 @@
 | 归档顶层 | 仅 `node_modules` / `out` / `package.json` |
 | 源码/测试/交接/文档条目 | 0 |
 | 包内私有路径与凭证 | 扫描全部文本条目，0 命中 |
-| 背景修复在包内 | `html:root`（F1）、stronger 随面板透明度 + 外壳限定规则（F2）、`verifyStagedHtml` 且旧门禁已移除（F3）、`bubbleLayerAlpha` / `stackedAlpha`（F4）—— 逐项核对通过 |
+| 背景修复在包内 | `html:root`（F1）、stronger 随面板透明度 + 外壳限定规则（F2）、`verifyStagedHtml` 且旧门禁已移除（F3）、`bubbleLayerAlpha` / `stackedAlpha`（F4） |
+| 真机增量修复在包内 | 准备区清理不阻塞结果、预检空间按 4 份估算 |
 
 重新构建后哈希会变化，发布前请用 `npm run verify:package` 重新核对并替换本表。
 

@@ -7,30 +7,31 @@
 
 ## 1. 产物
 
-生成时间：2026-09-11（**第四次构建**，含事故修复 F1–F4 与恢复后校验器修正）。
+生成时间：2026-09-12（**第五次构建**，含背景事故 F1–F4 修复）。
 
 | 文件 | 大小 | SHA256 |
 |---|---|---|
-| `release4/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `cc01fc93222104b19c56e475b67d39fdbdc20ee8e78e0d04217c9aa5ebc6e069` |
-| `release4/win-unpacked/resources/app.asar` | 17.7 MB | `a3a9fa5128428a992b7c54aad7d00ac65354185c66374a8e85e97416a2cb3910` |
+| `release5/win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `33ce654a9099574da093cdf27a704b9ad04b4e44528a90b5d38699fec979388a` |
+| `release5/win-unpacked/resources/app.asar` | 17.7 MB | `cdfce84dce8681830c32b13328607517e9058393d0c55cad84962ac60f19a0c6` |
 
 归档 963 条目 / unpacked 7。**仍未签名**。
 
-**输出目录历史**：`release/`、`release2/`、`release3/` 里的旧 `app.asar` 被占用
-（安全软件扫描 + 环境安全删除包装器对 `.asar` 回收失败），删除与覆盖都被拒绝。
-当前输出固定为 `release4`（`package.json` 的 `build.directories.output`）。
-**`release/` ~ `release3/` 全部是过期产物，不要用它们验证或分发**；
+**输出目录历史**：`release/` ~ `release4/` 里的旧 `app.asar` 被占用
+（安全软件扫描 + 环境安全删除包装器对 `.asar` 回收失败），覆盖与删除都被拒，
+所以每次只能递进一个新目录。当前输出为 `release5`
+（`package.json` 的 `build.directories.output`）。
+**`release/` ~ `release4/` 全是过期产物，不要用它们验证或分发**；
 锁释放后在资源管理器手动删除即可。
 
 本轮核对（`npm run verify:package`，28 项，0 失败）：
 
 | 项 | 结果 |
 |---|---|
-| 归档条目数 | 963（上一轮 960；新增事故修复模块），unpacked 7 |
+| 归档条目数 | 963，unpacked 7 |
 | 归档顶层 | 仅 `node_modules` / `out` / `package.json` |
 | 源码/测试/交接/文档条目 | 0 |
-| 事故修复模块在包内 | `pack-worker.js`、`pack.js`、`archive-verify.js`、`physical-fs.js`、`archive-io.js` 等 |
 | 包内私有路径与凭证 | 扫描全部文本条目，0 命中 |
+| 背景修复在包内 | `html:root`（F1）、stronger 随面板透明度 + 外壳限定规则（F2）、`verifyStagedHtml` 且旧门禁已移除（F3）、`bubbleLayerAlpha` / `stackedAlpha`（F4）—— 逐项核对通过 |
 
 重新构建后哈希会变化，发布前请用 `npm run verify:package` 重新核对并替换本表。
 

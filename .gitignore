@@ -6,6 +6,7 @@ release/
 release2/
 release3/
 release4/
+release5/
 
 # 换肤脚本运行时产物：含本机路径与体积较大的备份，不入库
 backups/

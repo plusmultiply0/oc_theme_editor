@@ -96,6 +96,16 @@ async function main() {
 
   console.log(`运行数据目录：${root}`);
 
+  // 与桌面应用启动流程一致：先清掉上次残留的准备区。
+  // 它们每个都是上百 MB，不清会在磁盘紧张时把下一次应用挤到失败。
+  const { cleanAllStages } = require(path.join(OUT, '..', 'core', 'patch', 'recovery'));
+  try {
+    const cleaned = await cleanAllStages(root);
+    if (cleaned > 0) console.log(`  已清理残留准备区：${cleaned} 个`);
+  } catch {
+    // 清理失败不阻断后续
+  }
+
   const discovered = await targets.discover();
   if (!printResult('识别安装目标', discovered)) process.exit(1);
   const supported = discovered.data.targets.filter((t) => t.support === 'supported');

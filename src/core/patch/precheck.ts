@@ -60,10 +60,18 @@ export interface PrecheckReport {
   requiredBytes: number;
 }
 
-/** 三份开销：备份 + staged 归档 + 同卷临时替换，再加固定余量 */
+/**
+ * 峰值占用（真机取证 2026-09-12 修正为四份）：
+ *  1. 备份副本（写进运行数据目录，通常与安装同卷）
+ *  2. 准备区：解包出来的整个应用目录
+ *  3. 准备区：重打包出来的 staged 归档（与上一条并存）
+ *  4. 提交时同卷的临时副本（目标归档旁）
+ * 旧估算只算三份，真机上按 495 MB 放行却在提交阶段耗尽空间（ENOSPC），
+ * 因此这里按四份算，再加固定余量。
+ */
 export function requiredBytes(archiveSize: number): number {
   const SLACK = 64 * 1024 * 1024;
-  return archiveSize * 3 + SLACK;
+  return archiveSize * 4 + SLACK;
 }
 
 export async function freeBytesOf(dir: string): Promise<number> {

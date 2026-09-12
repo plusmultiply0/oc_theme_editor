@@ -278,13 +278,14 @@ describe('应用前预检（T32、T33）', () => {
       expect(r.data.processState).toBe('idle');
       expect(r.data.writable).toBe(true);
       expect(r.data.requiredBytes).toBe(requiredBytes(size));
-      expect(r.data.requiredBytes).toBeGreaterThan(size * 2);
+      // 四份：备份 + 解包准备区 + staged 归档 + 同卷临时副本
+      expect(r.data.requiredBytes).toBeGreaterThan(size * 3);
       expect(r.data.archivePath).toBe(inst.archivePath);
     }
   });
 
   it('所需空间覆盖备份、staged 与临时文件三份开销', () => {
     const size = 100 * 1024 * 1024;
-    expect(requiredBytes(size)).toBeGreaterThanOrEqual(size * 3);
+    expect(requiredBytes(size)).toBeGreaterThanOrEqual(size * 4);
   });
 });

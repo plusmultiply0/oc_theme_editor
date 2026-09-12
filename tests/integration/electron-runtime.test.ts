@@ -45,7 +45,16 @@ function electronBinary(): string {
  */
 function runHarness(timeoutMs = 150_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    fs.rmSync(RESULT, { force: true });
+    /*
+     * 清掉上一次的结果文件只是为了让下面的「文件出现」判定干净；
+     * harness 本身会覆盖它。删不掉（例如执行环境的删除守卫把本轮删除
+     * 次数封顶）不该让用例变红 —— 否则环境策略会被误读成产品回归。
+     */
+    try {
+      fs.rmSync(RESULT, { force: true });
+    } catch {
+      // 忽略：旧结果会在 harness 写出时被覆盖
+    }
 
     const env = { ...process.env } as NodeJS.ProcessEnv;
     // 该变量会让 electron 以纯 Node 身份运行，主进程根本不启动，等于什么都没验
@@ -67,8 +76,24 @@ function runHarness(timeoutMs = 150_000): Promise<void> {
     child.on('error', reject);
 
     const started = Date.now();
+    /**
+     * 结果是否「新鲜」：文件存在还不够 —— 万一旧结果删不掉，
+     * 只看存在会立刻读到上一次的报告，把陈旧成功当成这次通过。
+     * harness 会写 ranAt，因此按时间戳判定。
+     */
+    const freshResult = (): boolean => {
+      if (!fs.existsSync(RESULT)) return false;
+      try {
+        const parsed = JSON.parse(fs.readFileSync(RESULT, 'utf8')) as { ranAt?: string };
+        if (!parsed.ranAt) return false;
+        return Date.parse(parsed.ranAt) >= started;
+      } catch {
+        return false; // 正在写入的半截文件，继续等
+      }
+    };
+
     const tick = () => {
-      if (fs.existsSync(RESULT)) {
+      if (freshResult()) {
         // 结果已落盘；子进程收尾不可靠，直接结束它
         child.kill();
         resolve();

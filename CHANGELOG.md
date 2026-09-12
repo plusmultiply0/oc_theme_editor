@@ -4,6 +4,29 @@
 
 ## 未发布（当前）
 
+### 第一批：JPEG 别名（.jfif/.jpe）入口支持（2026-09-12 第六轮）
+
+依据 `handoff/format-review-2026-09-12/NEXT_EXECUTION_PLAN.md`：
+
+- **T1**（`46af497`）：新增 `src/shared/image-formats.ts` 作为格式与扩展名别名的唯一声明
+  （纯数据，不 import sharp/fs/electron）。系统对话框、主进程校验、界面文案全部由它派生 ——
+  此前三处各写一份，导致标准 JPEG 别名 `.jfif/.jpe` 在选择框里看不见、选到了也被拒。
+  只登记内容格式（jpeg/png/webp），别名挂在 jpeg 下，不新增伪枚举，旧数据无需迁移。
+  后缀与实际内容不一致但都受支持时按实际内容处理并提示。
+- **T2**（`f9a61f0`）：新增程序生成的图片样本与 15 项入口回归
+  （选图/拖拽两个入口、全部别名、中文名、大小写、异常与超限、取消选择、PNG/WebP 不回归），
+  拖拽路径一路跑到真实 `generateTheme`。JFIF 样本按规范构造，并记录
+  「sharp 自身不输出 JFIF 标记」这一事实。
+- **T3**（本提交）：合成安装闭环 `.jfif → .png → .webp → 同图 no-op → 恢复上一主题 →
+  恢复到首次接管`，按字节与指纹核对；README/CHANGELOG 更新；构建 release7。
+
+门禁：typecheck 0 / lint 0 / 单元 122 / 集成 114 / 真实窗口 e2e 16 / 真实 Electron 主进程 35 /
+`npm run dist` 成功 / `verify:package` 28 项 0 失败（964 条目，包内含 jfif 与 jpe）。
+
+**真机应用与视觉走查未执行**（需授权）。第二批（规范化静态背景 + GIF/AVIF/TIFF）与
+第三批（核验脚本改为真实完整解码、HTML 结构边界）未开始。
+
+
 ### 真机应用与验收（2026-09-12，jc 授权）
 
 在真实安装上完成 A→B→A 三次应用（用户壁纸 / 纯色图 / 回到壁纸），

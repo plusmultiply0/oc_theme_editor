@@ -96,12 +96,22 @@ async function main() {
 
   console.log(`运行数据目录：${root}`);
 
-  // 与桌面应用启动流程一致：先清掉上次残留的准备区。
-  // 它们每个都是上百 MB，不清会在磁盘紧张时把下一次应用挤到失败。
+  /*
+   * 与桌面应用启动流程一致：先清掉上次残留的准备区（每个上百 MB，
+   * 不清会在磁盘紧张时把下一次应用挤到失败）。
+   *
+   * 但清理必须**有上界**：递归删除上千个文件在部分 Windows 环境
+   * （安全软件逐文件扫描）会被拖住几十分钟，await 它会让命令永远不开工
+   * （真机实测卡住约 30 分钟）。超时就跳过，交给下次清理或应用内的后台清理。
+   */
   const { cleanAllStages } = require(path.join(OUT, '..', 'core', 'patch', 'recovery'));
   try {
-    const cleaned = await cleanAllStages(root);
-    if (cleaned > 0) console.log(`  已清理残留准备区：${cleaned} 个`);
+    const cleaned = await Promise.race([
+      cleanAllStages(root),
+      new Promise((r) => setTimeout(() => r('timeout'), 30_000)),
+    ]);
+    if (cleaned === 'timeout') console.log('  跳过残留准备区清理（超时 30s，稍后自行清理）');
+    else if (cleaned > 0) console.log(`  已清理残留准备区：${cleaned} 个`);
   } catch {
     // 清理失败不阻断后续
   }

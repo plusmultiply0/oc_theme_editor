@@ -653,6 +653,29 @@ describe('故障注入（7.3）', () => {
   });
 });
 
+describe('准备区清理不参与结果（真机取证 2026-09-12）', () => {
+  it('清理挂起时应用仍然正常返回（不会被拖在 100%）', async () => {
+    const { inst, target } = await makeTarget();
+    const before = await sha256File(inst.archivePath);
+
+    const r = await doApply({
+      target,
+      runtimeRoot: newRuntime(),
+      css: css('#2b2b2b'),
+      imageBytes: Buffer.from('cleanup-hang'),
+      themeSummary: '清理挂起',
+      // 永不 resolve，模拟 Windows 上被安全软件阻塞的递归删除
+      hooks: { cleanup: () => new Promise<void>(() => undefined) },
+    });
+
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.noop).toBe(false);
+    // 安装确实换了（结果不受清理影响）
+    expect(await sha256File(inst.archivePath)).not.toBe(before);
+  });
+});
+
 describe('原版证据的登记与迁移（R2）', () => {
   it('登记出厂指纹后，命中指纹的旧记录会被升级为有证据的原版', async () => {
     const { inst, target } = await makeTarget();

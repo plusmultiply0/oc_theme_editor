@@ -80,7 +80,11 @@ async function main() {
   }
 
   const root = runtimeRoot();
-  const targets = new TargetService({ useRegistry: true });
+  // 与桌面应用一致：THEME_SWITCHER_NO_REGISTRY=1 时跳过 Windows 卸载登记表
+  // （受限环境下查询登记表会被安全策略拦截）
+  const targets = new TargetService({
+    useRegistry: process.env.THEME_SWITCHER_NO_REGISTRY !== '1',
+  });
   const images = new ImageStore({
     runtimeRoot: root,
     picker: async () => (args.flags.image ? [args.flags.image] : null),

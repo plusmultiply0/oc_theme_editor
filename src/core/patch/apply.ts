@@ -54,6 +54,11 @@ export interface ApplyHooks {
   commit?: CommitHooks;
   /** 写入事务日志失败 */
   failLogWrite?: boolean;
+  /**
+   * 覆盖准备区清理动作（默认递归删除 workDir）。
+   * 注入挂起的实现即可验证「清理卡住也不会拖住应用结果」。
+   */
+  cleanup?(workDir: string): Promise<void>;
 }
 
 export interface ApplyInput {
@@ -337,7 +342,21 @@ async function runApply(
   record = done.data;
   emit('applied', '应用完成，已通过 hash 复核', 100);
 
-  await physicalFsp.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+  /*
+   * 准备区清理**不参与结果**（真机取证 2026-09-12）：
+   * 递归删除上百 MB、上千个文件的准备区在部分 Windows 环境（安全软件逐文件扫描）
+   * 会被阻塞几十分钟；await 它会让界面一直停在 100%，而安装其实早已换好。
+   * 这里改为后台执行并吞掉错误 —— 残留的准备区由启动时 RecoveryService.cleanAllStages
+   * 清理，不影响本次结果，也不影响下一次操作（每次操作的准备区目录互不相同）。
+   */
+  void (async () => {
+    try {
+      if (input.hooks?.cleanup) await input.hooks.cleanup(workDir);
+      else await physicalFsp.rm(workDir, { recursive: true, force: true });
+    } catch {
+      // 清理失败不影响本次结果
+    }
+  })();
 
   const { phases: _p, targetPath: _t, ...manifest } = record;
   return ok({ manifest, staged: staged.data, noop: false });

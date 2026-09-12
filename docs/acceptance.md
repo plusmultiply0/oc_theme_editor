@@ -186,3 +186,27 @@ npx electron-builder --win --dir
 - 出厂指纹登记（可选）：按 `docs/original-evidence.md` 补录后「恢复原版」入口才会出现。
 - `npm run dist` 的便携包**未重新构建**：本轮改了大量源码，`release2/win-unpacked` 是旧产物，
   重新发布前必须按第 4 节流程重打包并重新核对归档内容。
+
+---
+
+## 7. 真机应用与验收（2026-09-12，背景事故 F1–F4 之后，jc 授权）
+
+前置：OpenCode 完全退出（相关进程 0）；`live-cli precheck` 通过（1.18.29 supported、
+进程 idle、目录可写）。执行走 `tools/live-cli.cjs`，与 GUI 同一服务层与事务逻辑。
+
+| 步骤 | 结果 |
+|---|---|
+| 应用 A（用户壁纸 `80fbd6a9…`） | applied，归档 `2b75faf7…` |
+| 应用 B（纯色图 `ae03d212…`） | applied，归档 `89748b46…`（连续换图成功，F3 在真机成立） |
+| 再应用 A | applied，回到 `2b75faf7…` |
+
+最终核验（`npm run` 级别工具 `tools/verify-real-install.cjs --deep`）：**16 项 0 失败**——
+图片字节与哈希等于用户壁纸、HTML 链接唯一且在 head 内、CSS 含 `html:root` 与外壳限定规则、
+逐条完整性 6949 条、无 offset 冲突、1293 脚本解析通过（2776 个 ESM/TS 声明如实跳过）。
+
+真机同时暴露并修复三个额外缺陷：准备区清理阻塞结果（改为后台）、
+预检空间估算少算一份（3→4 份）、live-cli 启动清理无上界（加 30s）与注册表开关。
+
+**未完成**：OpenCode 启动后的肉眼验收（首页/会话/侧栏/输入/菜单/旧新布局、
+主题与明暗切换、重启后是否保留、Portal 与终端）——必须由 jc 亲自看。
+未做真机 DOM 探针，未截真实窗口图。

@@ -9,6 +9,7 @@ import type {
   TargetInfo,
 } from '../shared/types';
 import type { ThemeSpec } from '../shared/schema';
+import { SUPPORTED_FORMATS_HINT } from '../shared/image-formats';
 import Preview from './components/Preview';
 import ContrastPanel from './components/ContrastPanel';
 import ApplyDialog from './components/ApplyDialog';
@@ -92,6 +93,8 @@ export default function App() {
   const [summary, setSummary] = useState<StageSummary | null>(null);
   const [scale, setScale] = useState<number>(loadScale);
   const [notice, setNotice] = useState<string | null>(null);
+  /** 实际内容格式的显示名（由主进程按 magic bytes 识别，不是后缀） */
+  const [imageFormat, setImageFormat] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
   const genRef = useRef(0);
@@ -244,10 +247,12 @@ export default function App() {
   }, [spec, generate]);
 
   const adoptImage = useCallback(
-    async (imported: { imageId: string; fileName?: string }) => {
+    async (imported: { imageId: string; fileName?: string; formatLabel?: string; note?: string }) => {
       const next = { ...spec, imageId: imported.imageId };
       setSpec(next);
       if (imported.fileName) setImageName(imported.fileName);
+      setImageFormat(imported.formatLabel ?? null);
+      if (imported.note) setNotice(imported.note);
       if (!saveSpec(next)) setNotice('参数未能保存到本机，下次启动会回到默认值。');
       const url = await window.themeSwitcher.getImagePreview(imported.imageId);
       if (url.success) setPreviewUrl(url.data);
@@ -272,7 +277,12 @@ export default function App() {
       fail(imported.error);
       return;
     }
-    await adoptImage({ imageId: imported.data.imageId, fileName: picked.data.fileName });
+    await adoptImage({
+      imageId: imported.data.imageId,
+      fileName: picked.data.fileName,
+      ...(imported.data.formatLabel ? { formatLabel: imported.data.formatLabel } : {}),
+      ...(imported.data.note ? { note: imported.data.note } : {}),
+    });
   }, [adoptImage, fail, result]);
 
   const onDrop = useCallback(
@@ -292,6 +302,8 @@ export default function App() {
       const next: ThemeSpec = { ...spec, imageId: imported.data.imageId, palette: imported.data.palette };
       setSpec(next);
       setImageName(file.name);
+      setImageFormat(imported.data.formatLabel ?? null);
+      if (imported.data.note) setNotice(imported.data.note);
       if (!saveSpec(next)) setNotice('参数未能保存到本机，下次启动会回到默认值。');
       const url = await window.themeSwitcher.getImagePreview(imported.data.imageId);
       setPreviewUrl(url.success ? url.data : null);
@@ -432,7 +444,11 @@ export default function App() {
           <button className="btn primary" type="button" onClick={() => void pickImage()} disabled={isBusy(ui)}>
             选择图片
           </button>
-          <p className="scope">{imageName || '尚未选择图片'}</p>
+          <p className="scope">
+            {imageName || '尚未选择图片'}
+            {imageFormat ? ` · 实际格式 ${imageFormat}` : ''}
+          </p>
+          <p className="scope">支持 {SUPPORTED_FORMATS_HINT}；扩展名仅用于筛选，格式按实际内容识别。</p>
 
           <label className="field">
             <span>背景遮罩 {spec.overlayOpacity.toFixed(2)}</span>

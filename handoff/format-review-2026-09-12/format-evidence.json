@@ -1,0 +1,219 @@
+{
+  "versions": {
+    "aom": "3.14.1",
+    "archive": "3.8.9",
+    "cairo": "1.18.4",
+    "cgif": "0.5.3",
+    "exif": "0.6.26",
+    "expat": "2.8.3",
+    "ffi": "3.8.0",
+    "fontconfig": "2.18.3",
+    "freetype": "2.14.3",
+    "fribidi": "1.0.16",
+    "glib": "2.89.4",
+    "harfbuzz": "14.3.1",
+    "heif": "1.23.2",
+    "highway": "1.4.0",
+    "imagequant": "2.4.1",
+    "lcms": "2.19.1",
+    "mozjpeg": "0826579",
+    "pango": "1.58.2",
+    "pixman": "0.46.4",
+    "png": "1.6.58",
+    "proxy-libintl": "0.5",
+    "rsvg": "2.62.91",
+    "tiff": "4.7.2",
+    "uhdr": "2.0.2",
+    "vips": "8.18.6",
+    "webp": "1.6.0",
+    "xml2": "2.15.3",
+    "zlib-ng": "2.3.3",
+    "sharp": "0.35.4"
+  },
+  "decoders": {
+    "jpeg": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".jpg",
+        ".jpeg",
+        ".jpe",
+        ".jfif"
+      ]
+    },
+    "png": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".png"
+      ]
+    },
+    "webp": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".webp"
+      ]
+    },
+    "gif": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".gif"
+      ]
+    },
+    "tiff": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".tif",
+        ".tiff"
+      ]
+    },
+    "heif": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".avif"
+      ]
+    },
+    "svg": {
+      "file": true,
+      "buffer": true,
+      "stream": true,
+      "fileSuffix": [
+        ".svg",
+        ".svgz",
+        ".svg.gz"
+      ]
+    },
+    "magick": {
+      "file": false,
+      "buffer": false,
+      "stream": false
+    }
+  },
+  "formats": [
+    {
+      "format": "jpeg",
+      "byteLength": 274,
+      "decodedAs": "jpeg",
+      "analysis": {
+        "success": true,
+        "data": {
+          "width": 24,
+          "height": 18,
+          "format": "jpeg",
+          "brightness": 0.4773372549022794,
+          "palette": [
+            "#4484bc"
+          ]
+        }
+      }
+    },
+    {
+      "format": "png",
+      "byteLength": 110,
+      "decodedAs": "png",
+      "analysis": {
+        "success": true,
+        "data": {
+          "width": 24,
+          "height": 18,
+          "format": "png",
+          "brightness": 0.47963921568596796,
+          "palette": [
+            "#448cbc"
+          ]
+        }
+      }
+    },
+    {
+      "format": "webp",
+      "byteLength": 78,
+      "decodedAs": "webp",
+      "analysis": {
+        "success": true,
+        "data": {
+          "width": 24,
+          "height": 18,
+          "format": "webp",
+          "brightness": 0.47963921568596796,
+          "palette": [
+            "#448cbc"
+          ]
+        }
+      }
+    },
+    {
+      "format": "gif",
+      "byteLength": 59,
+      "decodedAs": "gif",
+      "analysis": {
+        "success": false,
+        "error": {
+          "code": "IMAGE_INVALID_FORMAT",
+          "message": "无法识别图片格式",
+          "recoveryHint": "请选择 PNG、JPEG 或 WebP 图片。"
+        }
+      }
+    },
+    {
+      "format": "tiff",
+      "byteLength": 926,
+      "decodedAs": "tiff",
+      "analysis": {
+        "success": false,
+        "error": {
+          "code": "IMAGE_INVALID_FORMAT",
+          "message": "无法识别图片格式",
+          "recoveryHint": "请选择 PNG、JPEG 或 WebP 图片。"
+        }
+      }
+    },
+    {
+      "format": "avif",
+      "byteLength": 285,
+      "decodedAs": "heif",
+      "analysis": {
+        "success": false,
+        "error": {
+          "code": "IMAGE_INVALID_FORMAT",
+          "message": "无法识别图片格式",
+          "recoveryHint": "请选择 PNG、JPEG 或 WebP 图片。"
+        }
+      }
+    }
+  ],
+  "jfif": {
+    "pick": {
+      "success": false,
+      "error": {
+        "code": "IMAGE_INVALID_FORMAT",
+        "message": "不支持的文件类型 .jfif",
+        "recoveryHint": "请选择 .png、.jpg、.jpeg、.webp 格式的图片。"
+      }
+    },
+    "drag": {
+      "success": false,
+      "error": {
+        "code": "IMAGE_INVALID_FORMAT",
+        "message": "不支持的文件类型 .jfif",
+        "recoveryHint": "请拖入 .png、.jpg、.jpeg、.webp 格式的图片。"
+      }
+    }
+  },
+  "installedImage": {
+    "format": "png",
+    "width": 691,
+    "height": 591,
+    "fullDecode": true,
+    "sha256": "b89f8f8d83b98a1a078169745d61908a93590d1cfbbed515b2a6fd232d36afb5"
+  }
+}

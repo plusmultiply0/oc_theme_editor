@@ -8,6 +8,7 @@ import { OperationService } from './services/operation-service';
 import { RecoveryService } from './services/recovery-service';
 import { OperationEventBus } from './services/events';
 import { runtimeRoot as resolveRuntimeRoot } from '../core/patch/precheck';
+import { DIALOG_EXTENSIONS } from '../shared/image-formats';
 
 /**
  * 窗口安全基线（T11）：
@@ -70,7 +71,8 @@ function bootstrap(): void {
       const options: Electron.OpenDialogOptions = {
         title: '选择背景图片',
         properties: ['openFile'],
-        filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+        // 扩展名列表来自共享声明，别名（jfif/jpe）与主进程校验保持同步
+        filters: [{ name: '图片', extensions: [...DIALOG_EXTENSIONS] }],
       };
       const res = win
         ? await dialog.showOpenDialog(win, options)

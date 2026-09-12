@@ -15,9 +15,16 @@ import { errorResult, fail, ok, type Result } from '../../shared/errors';
 import type { ImportedImage, PickedImage } from '../../shared/ipc';
 import { DEFAULT_LIMITS, type ImageLimits } from '../../core/theme/validate';
 import { analyzeImage } from '../../core/theme/generate';
+import {
+  ALLOWED_EXTENSIONS,
+  describeExtensionMismatch,
+  extensionOf,
+  formatIdForExtension,
+  labelForFormatId,
+  SUPPORTED_FORMATS_HINT,
+} from '../../shared/image-formats';
 
-/** 允许的图片扩展名；真实格式仍以 magic bytes 为准 */
-export const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'] as const;
+export { ALLOWED_EXTENSIONS };
 
 /** 文件选择器可注入，测试不需要真的弹对话框 */
 export type FilePicker = () => Promise<string[] | null>;
@@ -74,12 +81,12 @@ export class ImageStore {
     }
 
     const file = picked[0];
-    const ext = path.extname(file).toLowerCase();
-    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+    const ext = extensionOf(file);
+    if (formatIdForExtension(ext) === null) {
       return fail(
         'IMAGE_INVALID_FORMAT',
         `不支持的文件类型 ${ext || '（无扩展名）'}`,
-        `请选择 ${ALLOWED_EXTENSIONS.join('、')} 格式的图片。`,
+        `请选择 ${SUPPORTED_FORMATS_HINT} 格式的图片。`,
       );
     }
 
@@ -114,12 +121,12 @@ export class ImageStore {
    * 内容落在运行数据目录，后续读取与预览都走这条副本，原文件不再被引用。
    */
   async importData(fileName: string, data: Uint8Array): Promise<Result<ImportedImage>> {
-    const ext = path.extname(fileName).toLowerCase();
-    if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+    const ext = extensionOf(fileName);
+    if (formatIdForExtension(ext) === null) {
       return fail(
         'IMAGE_INVALID_FORMAT',
         `不支持的文件类型 ${ext || '（无扩展名）'}`,
-        `请拖入 ${ALLOWED_EXTENSIONS.join('、')} 格式的图片。`,
+        `请拖入 ${SUPPORTED_FORMATS_HINT} 格式的图片。`,
       );
     }
     if (data.byteLength > this.limits.maxBytes) {
@@ -183,6 +190,12 @@ export class ImageStore {
       record.thumbnailPath = undefined;
     }
 
+    /*
+     * 实际格式以内容识别为准（扩展名只做筛选）。
+     * 后缀与实际内容都是受支持格式但不一致时，如实告知，不静默按后缀解释。
+     */
+    const actual = formatIdForExtension(analyzed.data.format);
+    const mismatch = describeExtensionMismatch(record.fileName, actual);
     return ok({
       imageId,
       hash: record.hash,
@@ -190,6 +203,8 @@ export class ImageStore {
       height: record.height,
       thumbnailId: record.thumbnailId,
       palette: analyzed.data.palette,
+      ...(actual ? { format: actual, formatLabel: labelForFormatId(actual) } : {}),
+      ...(mismatch ? { note: mismatch } : {}),
     });
   }
 

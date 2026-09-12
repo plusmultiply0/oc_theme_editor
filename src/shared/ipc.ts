@@ -46,6 +46,12 @@ export interface PickedImage {
 
 export interface ImportedImage {
   imageId: string;
+  /** 实际内容格式（由 magic bytes 识别，与文件后缀无关） */
+  format?: 'png' | 'jpeg' | 'webp';
+  /** 实际格式的显示名，界面直接回显 */
+  formatLabel?: string;
+  /** 需要提醒用户的一句话（例如后缀与实际内容不一致） */
+  note?: string;
   /** 原图内容 SHA256，原图只读、不被修改（T21） */
   hash: string;
   width: number;

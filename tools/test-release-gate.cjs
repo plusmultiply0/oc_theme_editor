@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /**
- * tools/release-gate.sh 脚本层故障传播测试（R1 验收 + S6 日志隔离验收）。
+ * tools/release-gate.sh 脚本层故障传播测试（R1 验收 + S6 日志隔离 + S3 绑定验收）。
  *
  * 把真实 npm/node 替换为函数桩，不执行任何真实构建/测试/打包命令：
  *   - 依次令每一步失败，断言后续步骤未执行、退出码保留、不打印 ALL_GREEN；
- *   - 重点覆盖 dist=17（历史缺陷：dist 失败仍全绿）且 verify:package 桩本可
+ *   - 重点覆盖 dist=17（历史缺陷：dist 失败仍全绿）且 verify 桩本可
  *     返回 0 的情形——dist 失败时 verify 步骤根本不应被执行；
  *   - S6：日志目录隔离——每个场景用独立临时目录（GATE_LOG_DIR 注入），
  *     预先存在的旧证据文件必须原样保留；运行前后比较目录文件集合，
- *     断言**恰好新增一个**本次 runId 日志且内容含本次步骤与退出码，
- *     不再用全局通配符命中历史文件充数；
- *   - S6：verify:package 的显式候选目录分支（GATE_CANDIDATE_DIR）也走 stub；
- *   - S6：同一日志目录连续两次运行（模拟并发），证据互不覆盖。
+ *     断言**恰好新增一个**本次 runId 日志且内容含本次步骤与退出码；
+ *   - S6：同一日志目录连续两次运行（模拟并发），证据互不覆盖；
+ *   - S3：verify:package 改走 node tools/verify-release.cjs，必须显式绑定
+ *     GATE_CANDIDATE_DIR + GATE_BUILD_ID：缺任一在构建前 exit 2、一步不跑、
+ *     不打印 ALL_GREEN；全绿场景断言 node 调用带完整绑定参数。
  *
  * 用法：node tools/test-release-gate.cjs
  * 退出码：0 全部通过；1 有失败。
@@ -28,6 +29,7 @@ const ALL_STEPS = [
   'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
   'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'verify:package',
 ];
+const VERIFY_RELEASE = 'tools/verify-release.cjs';
 
 function findBash() {
   const candidates = ['D:/SOFTWARE/Git/bin/bash.exe', 'C:/Program Files/Git/bin/bash.exe'];
@@ -35,14 +37,20 @@ function findBash() {
   return 'bash';
 }
 
+// Windows 下本机安全进程可能短暂握住 bash 刚写过的文件（R5 教训），
+// recursive 删除带重试参数：EBUSY/EPERM 自动重试，不留残留目录
+const rmDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+
 /**
  * 在隔离环境中以函数桩执行门禁脚本。
- * - failStep 指定哪一步返回 failCode；
+ * - failStep 指定哪一步返回 failCode（verify:package 的失败注入到 node 桩，
+ *   其余步骤注入到 npm 桩）；
  * - logDir 省略时在 runDir 下新建独立日志目录（场景隔离）；
  *   显式传入可模拟「共享目录多次运行」；
- * - candidateDir 设置后走 GATE_CANDIDATE_DIR 显式分支（node 桩执行）。
+ * - candidate / buildId 默认注入测试绑定值；传空字符串表示不设置该环境变量
+ *   （S3：模拟缺失绑定的失败关闭场景）。
  */
-function runGate({ failStep = '', failCode = 0, logDir, candidateDir = '' } = {}) {
+function runGate({ failStep = '', failCode = 0, logDir, candidate = 'candidate-X/win-unpacked.new', buildId = 'b-test-1' } = {}) {
   const runDir = fs.mkdtempSync(path.join(__dirname, 'gate-test-'));
   const callsFile = path.join(runDir, 'calls.txt').replace(/\\/g, '/');
   const gateLogDir = (logDir || path.join(runDir, 'gate-logs')).replace(/\\/g, '/');
@@ -58,22 +66,27 @@ function runGate({ failStep = '', failCode = 0, logDir, candidateDir = '' } = {}
   const patched = original.replace(/^cd ".*" ?\|\| exit 1$/m, ': # stay in isolated cwd');
   if (patched === original) throw new Error('gate patch failed: cd line not found');
 
-  // failGuard 为空时用占位命令 `:`，避免展开成 bash 语法错误的 `;;`
-  const failGuard = failStep
+  // npm 桩：记录调用并按需失败（除 verify:package 外的 9 步）。
+  // node 桩：记录调用；verify:package 现在是 node tools/verify-release.cjs（S3），
+  // 失败注入按 $1 = tools/verify-release.cjs 判断。
+  // trap EXIT 保住退出码。
+  const npmGuard = failStep && failStep !== 'verify:package'
     ? `if [ "$1" = "run" ] && [ "$2" = "${failStep}" ]; then return ${failCode}; fi`
     : ':';
-  // npm 桩记录调用并按需失败；node 桩记录调用（verify:package 显式分支）。
-  // trap EXIT 保住退出码。
+  const nodeGuard = failStep === 'verify:package'
+    ? `if [ "$1" = "${VERIFY_RELEASE}" ]; then return ${failCode}; fi`
+    : ':';
   const prelude = [
-    `npm() { echo "npm $*" >> '${callsFile}'; ${failGuard}; return 0; }`,
-    `node() { echo "node $*" >> '${callsFile}'; return 0; }`,
+    `npm() { echo "npm $*" >> '${callsFile}'; ${npmGuard}; return 0; }`,
+    `node() { echo "node $*" >> '${callsFile}'; ${nodeGuard}; return 0; }`,
     "trap 'rc=$?",
     'exit $rc\' EXIT',
     '',
   ].join('\n');
 
   const env = { ...process.env, GATE_LOG_DIR: gateLogDir };
-  if (candidateDir) env.GATE_CANDIDATE_DIR = candidateDir;
+  if (candidate) env.GATE_CANDIDATE_DIR = candidate;
+  if (buildId) env.GATE_BUILD_ID = buildId;
 
   const out = spawnSync(findBash(), ['--noprofile', '--norc', '-s'], {
     input: prelude + patched, encoding: 'utf8', timeout: 60000, windowsHide: true, env,
@@ -91,12 +104,12 @@ function runGate({ failStep = '', failCode = 0, logDir, candidateDir = '' } = {}
     ? fs.readFileSync(path.join(gateLogDir, gateLogAdded[0]), 'utf8')
     : '';
 
-  fs.rmSync(runDir, { recursive: true, force: true });
-  // 归一化为步骤名：npm 桩去掉 "npm run " 前缀；显式候选目录分支的 verify
-  // 走 node 桩（node tools/verify-package.cjs <dir>），它是门禁中唯一的
-  // node 调用，语义上就是 verify:package 这一步。原始调用保留在 nodeCalls。
+  rmDir(runDir);
+  // 归一化为步骤名：npm 桩去掉 "npm run " 前缀；发布核验步骤走 node 桩
+  // （node tools/verify-release.cjs --candidate-dir <dir> --build-id <id>），
+  // 它是门禁中唯一的 node 调用，语义上就是 verify:package 这一步。原始调用保留在 nodeCalls。
   const executedSteps = calls.map((c) =>
-    c.startsWith('node tools/verify-package.cjs') ? 'verify:package' : c.replace(/^npm run /, ''),
+    c.startsWith(`node ${VERIFY_RELEASE}`) ? 'verify:package' : c.replace(/^npm run /, ''),
   );
   return {
     status: out.status,
@@ -141,29 +154,38 @@ for (let i = 0; i < ALL_STEPS.length; i++) {
   });
 }
 
-// 2) 全绿路径：10 步全部执行，ALL_GREEN，退出 0
-scenario('全绿路径', {}, (r) => {
+// 2) 全绿路径：显式绑定注入，10 步全部执行，verify-release 调用带完整绑定参数
+scenario('全绿路径（显式绑定）', {}, (r) => {
   expect(r.status === 0, '全绿时退出 0', `实际 ${r.status}`);
   expect(r.executedSteps.join(',') === ALL_STEPS.join(','),
     '全绿时 10 步全部执行', `实际 ${r.executedSteps.join(',')}`);
   expect(r.stdout.includes('ALL_GREEN'), '全绿时打印 ALL_GREEN');
+  expect(r.nodeCalls.some((c) => c.includes(VERIFY_RELEASE)
+      && c.includes('--candidate-dir candidate-X/win-unpacked.new')
+      && c.includes('--build-id b-test-1')),
+    'verify-release 调用显式绑定候选目录与 buildId', `实际 node 调用：${r.nodeCalls.join(' | ')}`);
   expect(r.sentinelIntact, '旧证据未被访问/修改');
   expect(r.gateLogAdded === 1 && r.gateLogContent.includes('ALL_GREEN'),
     '恰好新增一个本次日志且含 ALL_GREEN');
 });
 
-// 3) GATE_CANDIDATE_DIR 显式分支：verify:package 走 node 桩并绑定指定目录
-scenario('显式候选目录分支', { candidateDir: 'candidate-X/win-unpacked.new' }, (r) => {
-  expect(r.status === 0, '显式候选目录时全链退出 0', `实际 ${r.status}`);
-  expect(r.executedSteps.join(',') === ALL_STEPS.join(','),
-    '显式候选目录时 10 步全部执行', `实际 ${r.executedSteps.join(',')}`);
-  expect(r.nodeCalls.some((c) => c.includes('tools/verify-package.cjs') && c.includes('candidate-X/win-unpacked.new')),
-    'verify:package 显式绑定指定候选目录', `实际 node 调用：${r.nodeCalls.join(' | ')}`);
-  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('ALL_GREEN'),
-    '显式分支同样恰好新增一个含 ALL_GREEN 的日志');
+// 3) S3：缺 GATE_BUILD_ID —— 构建前失败关闭（exit 2），一步不跑
+scenario('缺失 GATE_BUILD_ID（S3 失败关闭）', { buildId: '' }, (r) => {
+  expect(r.status === 2, '缺绑定时退出 2', `实际 ${r.status}`);
+  expect(r.executedSteps.length === 0, '缺绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
+  expect(!r.stdout.includes('ALL_GREEN'), '缺绑定时不会打印 ALL_GREEN');  expect(r.stdout.includes('缺少 GATE_CANDIDATE_DIR/GATE_BUILD_ID'), '缺绑定时给出明确停止原因');  expect(r.sentinelIntact, '旧证据未被访问/修改');
+  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('STOPPED at verify:package'),
+    '缺绑定同样落一份含 STOPPED 的独立日志');
 });
 
-// 4) 同一日志目录连续两次运行：证据互不覆盖（并发安全的最小确定性模拟）
+// 4) S3：缺 GATE_CANDIDATE_DIR —— 同样失败关闭
+scenario('缺失 GATE_CANDIDATE_DIR（S3 失败关闭）', { candidate: '' }, (r) => {
+  expect(r.status === 2, '缺候选目录绑定时退出 2', `实际 ${r.status}`);
+  expect(r.executedSteps.length === 0, '缺候选目录绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
+  expect(!r.stdout.includes('ALL_GREEN'), '缺候选目录绑定时不会打印 ALL_GREEN');
+});
+
+// 5) 同一日志目录连续两次运行：证据互不覆盖（并发安全的最小确定性模拟）
 {
   console.log('\n== 共享日志目录两次运行互不覆盖 ==');
   const shared = fs.mkdtempSync(path.join(__dirname, 'gate-shared-'));
@@ -172,7 +194,7 @@ scenario('显式候选目录分支', { candidateDir: 'candidate-X/win-unpacked.n
   const b = runGate({ logDir });
   const files = fs.readdirSync(logDir).filter((f) => /^a4-gate-/.test(f));
   const contents = files.map((f) => fs.readFileSync(path.join(logDir, f), 'utf8'));
-  fs.rmSync(shared, { recursive: true, force: true });
+  rmDir(shared);
   expect(a.status === 17 && b.status === 0, '两次运行退出码各自正确（17 与 0）');
   expect(files.length === 2, '共享目录恰好留下两个独立日志', `实际 ${files.length} 个`);
   expect(contents.some((c) => c.includes('STOPPED at dist')) && contents.some((c) => c.includes('ALL_GREEN')),
@@ -183,4 +205,4 @@ if (failures.length) {
   console.error(`\n${failures.length} 项断言失败`);
   process.exit(1);
 }
-console.log('\nR1/S6 门禁故障传播与日志隔离测试：全部通过');
+console.log('\nR1/S6/S3 门禁故障传播、日志隔离与绑定测试：全部通过');

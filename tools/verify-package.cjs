@@ -312,7 +312,12 @@ if (!noIdentity) {
         check(false, '分发 zip 存在', manifest.zip);
       }
     }
-    for (const rel of ['out/main/index.js', 'out/preload/index.js', 'out/core/patch/stage.js']) {
+    // S3：本地 out 比对至少覆盖图片修复三模块（ImageStore / generate / image-probe）——
+    // 旧候选缺这些修复时，身份核对必须拦住，而不是放行为「与登记一致」
+    for (const rel of [
+      'out/main/index.js', 'out/preload/index.js', 'out/core/patch/stage.js',
+      'out/main/services/image-store.js', 'out/core/theme/generate.js', 'out/core/theme/image-probe.js',
+    ]) {
       const local = path.join(ROOT, rel);
       if (!fs.existsSync(local)) {
         check(false, `本地构建输出存在 ${rel}`, '缺失：请先 npm run build，否则无法证明候选与当前源码一致');
@@ -335,4 +340,7 @@ if (!noIdentity) {
 const failed = results.filter((r) => !r.ok);
 for (const r of failed) console.log(`[FAIL] ${r.label} | ${r.detail}`);
 console.log(`\n核对 ${results.length} 项，失败 ${failed.length} 项`);
+if (failed.length === 0 && !noIdentity) {
+  console.log('候选身份核验通过——这只是「登记候选磁盘身份与登记一致」，不构成当前源码的发布验收结论；发布门禁用 node tools/verify-release.cjs。');
+}
 process.exit(failed.length === 0 ? 0 : 1);

@@ -13,9 +13,12 @@
 #   - dist 会自动带 electron 镜像（直连 GitHub 常 ETIMEDOUT）
 #   - dist 与其他步骤走同一条 run 路径：非 0 立即停止，保留该退出码，
 #     不执行 verify:package，不打印 ALL_GREEN
-#   - 设置 GATE_CANDIDATE_DIR 可让 verify:package 核对指定候选目录；
-#     未设置时沿用 npm run verify:package 的默认目标（由候选配置决定）
-#   - 退出码：0 全绿；否则等于第一个失败步骤的退出码
+#   - S3：发布门禁最后一步改为 tools/verify-release.cjs，必须显式绑定本次构建
+#     登记——GATE_CANDIDATE_DIR（候选目录）与 GATE_BUILD_ID（唯一构建 ID）两者
+#     缺一即在构建前失败关闭（exit 2），不再回落 candidate-manifest.json 默认候选；
+#     显式目标与登记不一致时 verify-release 失败关闭，不允许自动重登记掩盖。
+#     旧候选身份核验（不构成发布验收）用 npm run verify:package。
+#   - 退出码：0 全绿；否则等于第一个失败步骤的退出码（绑定缺失为 2）
 set -u
 export PATH="/usr/bin:/bin:$PATH"
 cd "$(dirname "$0")/.." || exit 1
@@ -25,6 +28,13 @@ GATE_LOG_DIR="${GATE_LOG_DIR:-/tmp}"
 LOG="${GATE_LOG_DIR}/a4-gate-${GATE_ID}.txt"
 mkdir -p "$GATE_LOG_DIR" || exit 1
 : > "$LOG"
+
+# S3：绑定预检放在构建前——缺绑定的门禁连 dist 都不许跑，避免40分钟构建后才发现无效
+if [ -z "${GATE_CANDIDATE_DIR:-}" ] || [ -z "${GATE_BUILD_ID:-}" ]; then
+  echo "STOPPED at verify:package：缺少 GATE_CANDIDATE_DIR/GATE_BUILD_ID 显式绑定（发布门禁不回落默认候选）" | tee -a "$LOG"
+  exit 2
+fi
+echo "BINDING candidate=$GATE_CANDIDATE_DIR buildId=$GATE_BUILD_ID" | tee -a "$LOG"
 
 run() {
   local name="$1"; shift
@@ -58,12 +68,9 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 run dist npm run dist
 unset ELECTRON_MIRROR ELECTRON_BUILDER_BINARIES_MIRROR
 
-# 核对必须绑定本次候选：发布链上应通过 GATE_CANDIDATE_DIR 显式指定候选目录，
-# 防止核对到「某个仍然存在的旧目录」。
-if [ -n "${GATE_CANDIDATE_DIR:-}" ]; then
-  run verify:package node tools/verify-package.cjs "$GATE_CANDIDATE_DIR"
-else
-  run verify:package npm run verify:package
-fi
+# 核对必须绑定本次构建登记（S3）：verify-release 校验 buildId/候选目录/来源提交
+# 与 candidate-manifest.json（schema/2）一致、out/** 逐文件一致、zip 与候选同源，
+# 任何不一致都失败关闭。旧候选身份核验（verify-package.cjs）不在这里使用。
+run verify:package node tools/verify-release.cjs --candidate-dir "$GATE_CANDIDATE_DIR" --build-id "$GATE_BUILD_ID"
 
 echo "ALL_GREEN" | tee -a "$LOG"

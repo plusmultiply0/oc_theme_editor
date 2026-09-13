@@ -51,7 +51,11 @@ zip 的 SHA256 必须与上表一致。
 | `npm run verify:package` | 0 | 30 项（967 条目） |
 
 一条命令跑全链：`bash tools/release-gate.sh`（任一步非 0 即停，逐条打印退出码与耗时）。
-`npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:package` ——
+S3 起发布门禁最后一步为 `tools/verify-release.cjs`（`npm run verify:release`），必须显式绑定
+**本次构建**登记：`GATE_CANDIDATE_DIR=<候选目录> GATE_BUILD_ID=<唯一构建ID> bash tools/release-gate.sh`；
+缺绑定在构建前即失败关闭（exit 2），不回落 candidate-manifest.json 默认候选。
+`npm run verify:package` 只是**旧候选身份核验**（磁盘与登记一致），通过它不代表当前源码已通过发布验收。
+`npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:release` ——
 **不能只跑 verify** 就宣称全部门禁通过。这些数字属于本候选包那一次构建；
 包有改动必须重跑并更新第 1 节哈希。
 

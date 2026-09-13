@@ -145,3 +145,58 @@ package-lock.json 同步，`private: true` 保留 —— 发布桌面程序无�
 公开仓库、上传 zip、对外发文、购买签名。
 
 A8 当前结论仍为 **NO-GO**（A5/A6 无证据；演示素材未拍摄；LICENSE 缺口待定）。
+
+## 候选包重封：A4 之后发现并修复三个打包缺陷（2026-09-13，wb 执行）
+
+起因：APNG 修复提交后按计划重跑门禁重封候选包，`npm run dist` **三次都在同一位置挂死**
+（Electron 运行时解包完成、复制完 shell 后无限等待，CPU 0、无网络、DEBUG 日志无新行）。
+顺着查下去，发现挂死只是表象，真正的坏消息是 **A4 冻结那个包本身跑不起来**。
+
+### 根因链
+
+1. 某个外部进程长期占用 `win-unpacked/resources/app.asar`（改名/删除均被拒）。
+2. electron-builder 收尾要「清旧输出目录 → 把 .tmp 改名顶上」，
+   删掉了未加锁的 `app.asar.unpacked` 与大量 `locales/*.pak`，
+   随后卡在加锁的 `app.asar` 上 → 静默等待 → 三次挂死 → 被杀后留下删一半的产物。
+
+### 三个缺陷（都是「只查结构与清单」查不出来的）
+
+| # | 缺陷 | 发现方式 | 修复 |
+|---|---|---|---|
+| 1 | `app.asar.unpacked` 目录整体缺失：`@img/sharp-win32-x64` 的 9 个文件在归档头标为 unpacked，磁盘上没有 → 运行时 `require('sharp')` 失败 | `ELECTRON_RUN_AS_NODE=1` 在包内 require sharp（报 "Could not load the sharp module"）；`@electron/asar` 提取时精确报出缺哪 9 个文件 | 从本机 `node_modules` 补回原生模块，重封时带 `unpack` 规则 |
+| 2 | 运行期依赖 `@img/colour` 根本没进包 | 补完 #1 后复测报 `Cannot find module '@img/colour'` | 补入并重封 |
+| 3 | 39 个 `locales/*.pak` 被删（16/55） | 与 `node_modules/electron/dist` 逐文件比对 | 补齐缺失的 40 个文件（含 zh-CN） |
+
+重封方式：从 A4 归档提取 → 换入本次构建的 `out/`（含 APNG 修复）→ 补齐依赖 →
+用 `@electron/asar` 带 unpack 规则重新封包 → 覆盖进候选目录。exe 未动（哈希不变）。
+
+### 一个差点导致误判的环境陷阱
+
+本机 shell **全局带 `ELECTRON_RUN_AS_NODE=1`**：从这里启动任何 Electron 应用都会退化成
+Node 模式 —— 不建窗口、无脚本时静默退出 0、未知参数报 "bad option"。
+我一度据此判定「打包 exe 坏了」，还用最小 hello 应用复现过（同样被污染）。
+清掉该变量后打包应用正常启动。已写进 `tools/smoke-packaged.ts` 的注释与实现。
+
+### 新增/加固的工具
+
+- `tools/smoke-packaged.ts`：用 Playwright 启动打包 exe 冒烟（显式剥离 ELECTRON_RUN_AS_NODE）。
+  本机沙箱下 Playwright 附着报 "Target crashed"（渲染进程），视觉验收仍留 A5。
+- `tools/verify-package.cjs` 补两项：**unpacked 标记的文件必须真的存在于磁盘**、
+  **包内 sharp 必须能加载并产出 PNG**。校验项 28 → **30**。
+
+### 重新冻结的指纹（A5/A6 必须用这一份）
+
+| 文件 | 大小 | SHA256 |
+|---|---|---|
+| zip（131 MB，84 条目，完整性 OK，含 zh-CN.pak 与 11 个 unpacked 条目） | 131 MB | `9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c` |
+| OpenCodeThemeSwitcher.exe（未变） | 193.3 MB | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
+| resources/app.asar | 17.0 MB | `7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8` |
+
+本地目录名为 `win-unpacked.new`（旧 `win-unpacked` 里被占用的 app.asar 无法删除），**分发以 zip 为准**。
+
+### 仍未执行（需授权 / 需外部环境）
+
+- **A5**：真实 OpenCode 上的应用 / 换图 / 恢复闭环 + 视觉走查（真机验收，需 jc 授权）。
+- **A6**：干净非开发环境验证（需另一台机器或新 VM）。
+- **A7 剩余**：演示素材未拍摄；`LICENSE` 文件缺失（声明 MIT 却无文件）待 jc 定。
+- **A8**：当前结论仍为 **NO-GO**（缺 A5/A6 证据）。

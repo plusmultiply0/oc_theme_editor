@@ -85,6 +85,25 @@ if (fs.existsSync(asar)) {
   })(header, []);
   console.log(`\n  归档条目 ${files.length}，unpacked ${unpacked}`);
 
+  /*
+   * unpacked 标记必须落到磁盘：归档头说「这些文件在外面」，
+   * 外面却没有 = 运行时 require 原生模块直接失败。
+   * 本仓库真出过这个事故（打包被中断后 app.asar.unpacked 缺失），
+   * 而当时的核对只数了标记数量，因此漏过。
+   */
+  const unpackedDir = path.join(ROOT_DIR, 'resources', 'app.asar.unpacked');
+  const missingUnpacked = [...nodes.entries()]
+    .filter(([, v]) => v.unpacked)
+    .map(([rel]) => rel)
+    .filter((rel) => !fs.existsSync(path.join(unpackedDir, rel)));
+  check(
+    missingUnpacked.length === 0,
+    'unpacked 标记的文件都存在于 app.asar.unpacked',
+    missingUnpacked.length === 0
+      ? `共 ${unpacked} 个，目录 ${path.relative(ROOT_DIR, unpackedDir)}`
+      : `缺失 ${missingUnpacked.length} 个：${missingUnpacked.slice(0, 5).join('、')}`,
+  );
+
   const tops = {};
   for (const f of files) {
     const t = f.split('/')[0];
@@ -192,6 +211,38 @@ if (fs.existsSync(asar)) {
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/*
+ * ---------- 5. 打包产物必须真的能加载原生模块 ----------
+ *
+ * 归档头齐全 ≠ 能跑。本仓库真出过：@img/sharp-win32-x64 被标成 unpacked
+ * 但磁盘上没有，运行时 require('sharp') 直接失败；后来又发现运行期依赖
+ * @img/colour 整个没被打进包。两项都是「只查结构与清单」查不出来的。
+ *
+ * 做法：用 exe 的 Node 模式（ELECTRON_RUN_AS_NODE=1）在包内 require sharp
+ * 并真的产出一张 PNG —— 不需要窗口与 GPU，任何环境都能跑，结论可复核。
+ */
+const { spawnSync } = require('node:child_process');
+if (fs.existsSync(exe) && fs.existsSync(asar)) {
+  const script =
+    `const sharp = require(${JSON.stringify(path.join(asar, 'node_modules', 'sharp'))});` +
+    `sharp({create:{width:8,height:8,channels:3,background:{r:1,g:2,b:3}}})` +
+    `.png().toBuffer().then((b) => console.log('OK ' + b.length))` +
+    `.catch((e) => { console.log('ERR ' + e.message); process.exitCode = 3; });`;
+  const r = spawnSync(exe, ['-e', script], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    encoding: 'utf8',
+    timeout: 120000,
+    windowsHide: true,
+  });
+  const out = `${r.stdout || ''}${r.stderr || ''}`;
+  const ok = r.status === 0 && /OK \d+/.test(out);
+  check(
+    ok,
+    '打包应用内可加载 sharp 并产出图片（原生模块可用）',
+    ok ? out.trim().split('\n').slice(-1)[0] : out.trim().split('\n').slice(-1)[0] || `exit=${r.status}`,
+  );
 }
 
 // ---------- 汇总 ----------

@@ -9,11 +9,13 @@ Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件�
 
 | 文件 | 大小 | SHA256 |
 |---|---|---|
-| `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip` | 131 MB | `f41354a398c732a0e58cf84231cd77e4b14aafcd4d32f578c59b4959e1d9b08a` |
-| ├ `win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
-| └ `win-unpacked/resources/app.asar` | 17.7 MB | `3381173d21ac8f45039a42ade17a76611dde3a949d040a5524b713e9f5f4ac6f` |
+| `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip` | 131 MB | `9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c` |
+| ├ `OpenCodeThemeSwitcher.exe` | 193.3 MB | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
+| └ `resources/app.asar` | 17.0 MB | `7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8` |
 
-归档 965 条目 / unpacked 7。**未签名**。
+归档 967 条目 / unpacked 7。**未签名**；RunAsNode 等加固 fuse 均为 Electron 默认值（未加固）。
+本轮为修复打包缺陷重封过，重封记录见 `docs/alpha-acceptance.md`「A4 之后发现并修复的三个打包缺陷」；
+分发以 zip 为准（旧 `win-unpacked` 目录已废弃，其中文件被外部进程占用，无法删除）。
 逐项验收与包内抽查见 `docs/alpha-acceptance.md`；校验和清单随包分发。
 
 **分发要求**：整个 `win-unpacked` 一起发（zip），不能只发 exe；
@@ -45,8 +47,8 @@ zip 的 SHA256 必须与上表一致。
 | `npm run test:e2e` | 0 | 16 项真实窗口闭环 |
 | `npm run test:e2e:electron` | 0 | 35 项真实 Electron 主进程闭环 |
 | `npm run audit` | 0 | 通过 |
-| `npm run dist` | 0 | 产出 `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked` |
-| `npm run verify:package` | 0 | 28 项（965 条目） |
+| `npm run dist` | 0 | 产出候选包（其后因打包缺陷重封） |
+| `npm run verify:package` | 0 | 30 项（967 条目） |
 
 一条命令跑全链：`bash tools/release-gate.sh`（任一步非 0 即停，逐条打印退出码与耗时）。
 `npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:package` ——

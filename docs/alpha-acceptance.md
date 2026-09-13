@@ -17,10 +17,10 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 |---|---|
 | 候选版本 | **`0.1.0-alpha.1`**（package.json / package-lock.json 已同步；`private: true` 保留） |
 | 提交 | 见本条目所在提交（A4 冻结） |
-| 包目录 | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked`（不使用 release/release2/... 旧目录） |
+| 包目录 | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked.new`（不使用 release/release2/... 旧目录）。<br>注：同级的 `win-unpacked` 是上一轮产物，其中 `app.asar` 被外部进程长期占用、无法改名或删除，故本轮重封落在新目录；**分发以 zip 为准** |
 | exe SHA256 | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f`（193.3 MB） |
-| app.asar SHA256 | `3381173d21ac8f45039a42ade17a76611dde3a949d040a5524b713e9f5f4ac6f`（17.7 MB，965 条目） |
-| 分发 zip SHA256 | `f41354a398c732a0e58cf84231cd77e4b14aafcd4d32f578c59b4959e1d9b08a`（131 MB，82 条目，整 `win-unpacked`） |
+| app.asar SHA256 | `7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8`（17.0 MB，967 条目，unpacked 7） |
+| 分发 zip SHA256 | `9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c`（131 MB，84 条目，整目录压缩；含 `locales/zh-CN.pak` 与 11 个 unpacked 条目） |
 | 平台 | Windows x64（本次仅此一项；未在 Windows 11 上实测） |
 | 目标 | OpenCode Desktop 1.18.29，用户级安装（未为了匹配白名单降级 OpenCode） |
 | 签名 | 未签名（如实声明） |
@@ -103,8 +103,8 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 | `npm run test:e2e` | 0 | 16 项 | **通过** | 42s |
 | `npm run test:e2e:electron` | 0 | 35 项 | **通过** | 12s |
 | `npm run audit` | 0 | FAIL 0 / WARN 0 | **通过** | 8s |
-| `npm run dist` | 0 | 产出 `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked` | **通过** | — |
-| `npm run verify:package` | 0 | 28 项 0 失败（965 条目） | **通过** | 8s |
+| `npm run dist` | 0 | 产出 `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked`（**其后因打包缺陷重封，见下节**） | **通过** | — |
+| `npm run verify:package` | 0 | **30 项 0 失败**（967 条目；新增「unpacked 文件必须在盘上」「包内 sharp 可加载并出图」两项） | **通过** | — |
 
 一条命令跑全链：`bash tools/release-gate.sh`（日志同时落 `/tmp/a4-gate.txt`）。
 `npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:package`，
@@ -120,7 +120,26 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 | 图片解码核验模块 | `out/core/theme/image-probe.js` 含 `headerFormat` / `decoded` |
 
 **风险与限制（如实记录）**：exe 与 app.asar 的哈希绑定本机这次构建；
-A5/A6 必须测同一份 zip（`f41354a3…`）。源码或包若有任何改动，本节哈希作废、需重跑门禁。
+A5/A6 必须测同一份 zip（`92126171…`）。源码或包若有任何改动，本节哈希作废、需重跑门禁。
+
+### A4 之后发现并修复的三个打包缺陷（重封记录）
+
+冻结后又发现 A4 那次打包的产物**本身跑不起来**，逐条定位与修复如下。
+三条都属于「只查结构与清单查不出来」的类型，因此同时补进了 `verify:package`。
+
+| # | 缺陷 | 怎么发现的 | 修复 |
+|---|---|---|---|
+| 1 | `app.asar.unpacked` 整个目录缺失：`@img/sharp-win32-x64` 的 9 个文件在归档头里标为 unpacked，磁盘上却没有，运行时 `require('sharp')` 直接失败 | 用 `ELECTRON_RUN_AS_NODE=1` 在包内 require sharp 复现；`@electron/asar` 提取时精确报「找不到这 9 个文件」 | 从本机 `node_modules` 补回原生模块，重封时带 `unpack` 规则 |
+| 2 | 运行期依赖 `@img/colour` 根本没被打进包 | 补完 #1 后再测，报 `Cannot find module '@img/colour'` | 从本机 `node_modules` 补入并重封 |
+| 3 | 39 个 `locales/*.pak` 被删（16/55，含 zh-CN 之外的多语言资源） | 与原始 Electron 运行时逐文件比对 | 从 `node_modules/electron/dist` 补齐缺失文件（40 个） |
+
+成因：某次打包在「清理旧输出目录」时卡住（旧 `app.asar` 被外部进程占用、改名失败），
+被中断后留下了删掉一半的产物；后续 electron-builder 也在同一位置反复挂死。
+修复后的包：`verify:package` 30 项 0 失败，包内 sharp 能真的产出 PNG。
+
+**环境提醒（避免重复误判）**：本机 shell 全局带 `ELECTRON_RUN_AS_NODE=1`，
+从命令行启动任何 Electron 应用都会退化成 Node 模式——不建窗口、无脚本时静默退出 0，
+看上去像「包坏了」。启动验证必须先清掉这个变量（见 `tools/smoke-packaged.ts`）。
 
 ## 6. A5 真实 OpenCode 闭环（需用户授权）
 

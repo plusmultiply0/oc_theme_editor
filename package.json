@@ -1,9 +1,10 @@
 {
   "name": "opencode-theme-switcher",
   "version": "0.1.0-alpha.1",
+  "author": "jc",
+  "license": "MIT",
   "private": true,
   "description": "本地运行的 Windows OpenCode 桌面换肤助手：选图、取色、调节、预览、应用与恢复。",
-  "license": "MIT",
   "main": "out/main/index.js",
   "engines": {
     "node": ">=22"

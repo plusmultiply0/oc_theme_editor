@@ -3,8 +3,13 @@
  * 便携包内容核对（docs/release-checklist.md 第 1、2 节）。
  *
  * 只读，不写入、不解压、不改动任何文件。用法：
- *   node tools/verify-package.cjs [win-unpacked 目录]
- * 默认核对 package.json `build.directories.output` 指向目录下的 win-unpacked。
+ *   node tools/verify-package.cjs [候选目录] [--no-identity]
+ *
+ * 目标解析（R2）：
+ *   - 默认从项目根 candidate-manifest.json 读取 candidateDir（唯一登记候选）；
+ *     manifest 缺失或目标目录不存在都直接失败，绝不回退旧的 win-unpacked。
+ *   - 显式给出候选目录时也默认做身份核对（exe/asar/zip hash 与登记一致），
+ *     `--no-identity` 仅用于取证核对未登记目录，此时跳过身份与内容比对。
  *
  * 退出码：0 全部通过；1 有失败项（逐条列出）。
  */
@@ -15,8 +20,28 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const outDir = (pkg.build && pkg.build.directories && pkg.build.directories.output) || 'release';
-const ROOT_DIR = path.resolve(ROOT, process.argv[2] || path.join(outDir, 'win-unpacked'));
+
+// ---------- 目标解析：默认绑定 manifest 候选，不自动回退 ----------
+const argv = process.argv.slice(2);
+const noIdentity = argv.includes('--no-identity');
+const dirArgs = argv.filter((a) => !a.startsWith('--'));
+const MANIFEST_PATH = path.join(ROOT, 'candidate-manifest.json');
+let manifest = null;
+if (!dirArgs.length) {
+  if (!fs.existsSync(MANIFEST_PATH)) {
+    console.error('未找到 candidate-manifest.json：请先 node tools/candidate-manifest.cjs register <候选目录> 登记唯一候选（或显式传入候选目录，仅限取证）');
+    process.exit(1);
+  }
+  manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+}
+const ROOT_DIR = path.resolve(ROOT, dirArgs[0] || manifest.candidateDir);
+if (!fs.existsSync(ROOT_DIR)) {
+  console.error(`候选目录不存在：${ROOT_DIR}${manifest ? '（来自 candidate-manifest.json，核对目标以登记为准，不回退旧目录）' : ''}`);
+  process.exit(1);
+}
+if (manifest) console.log(`核对目标：${manifest.candidateDir}（buildId=${manifest.buildId}）`);
+else if (noIdentity) console.log(`核对目标：${ROOT_DIR}（--no-identity 取证模式，跳过身份核对）`);
+else console.log(`核对目标：${ROOT_DIR}（显式目录，将与登记候选做身份核对）`);
 
 const results = [];
 const check = (ok, label, detail) => {
@@ -243,6 +268,67 @@ if (fs.existsSync(exe) && fs.existsSync(asar)) {
     '打包应用内可加载 sharp 并产出图片（原生模块可用）',
     ok ? out.trim().split('\n').slice(-1)[0] : out.trim().split('\n').slice(-1)[0] || `exit=${r.status}`,
   );
+}
+
+/*
+ * ---------- 6. 候选身份核对（R2） ----------
+ * 仅 exe 相同不算候选相同：exe 是 Electron 运行时，新旧候选几乎必然一致。
+ * 必须逐项核对 exe/asar/zip 的 sha256 与 candidate-manifest.json 登记一致，
+ * 并把包内关键构建产物与本地 out/ 字节比对，防止「核对到旧目录」或
+ * 「候选与当前源码构建输出脱节」被误判为通过。--no-identity 跳过本段（仅限取证）。
+ */
+function readEntryBuffer(entry) {
+  const node = nodes.get(entry);
+  if (!node || node.unpacked) return null;
+  const buf = Buffer.alloc(node.size);
+  const fd = fs.openSync(asar, 'r');
+  try {
+    fs.readSync(fd, buf, 0, node.size, dataStart + Number(node.offset));
+  } finally {
+    fs.closeSync(fd);
+  }
+  return buf;
+}
+if (!noIdentity) {
+  if (!manifest && fs.existsSync(MANIFEST_PATH)) {
+    manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  }
+  if (!manifest) {
+    check(false, '候选身份核对', '未提供 candidate-manifest.json；显式目录核对仅限取证，需加 --no-identity');
+  } else {
+    check(manifest.version === pkg.version, 'manifest version 与 package.json 一致',
+      manifest.version === pkg.version ? manifest.version : `${manifest.version} vs ${pkg.version}`);
+    if (fs.existsSync(exe)) {
+      check(sha256(exe) === manifest.hashes.exe, 'exe sha256 与登记一致', manifest.hashes.exe.slice(0, 16) + '…');
+    }
+    if (fs.existsSync(asar)) {
+      check(sha256(asar) === manifest.hashes['app.asar'], 'app.asar sha256 与登记一致', manifest.hashes['app.asar'].slice(0, 16) + '…');
+    }
+    if (manifest.zip) {
+      const zp = path.resolve(ROOT, manifest.zip);
+      if (fs.existsSync(zp)) {
+        check(sha256(zp) === manifest.hashes.zip, '分发 zip sha256 与登记一致（zip 与核对对象为同一候选）', manifest.hashes.zip.slice(0, 16) + '…');
+      } else {
+        check(false, '分发 zip 存在', manifest.zip);
+      }
+    }
+    for (const rel of ['out/main/index.js', 'out/preload/index.js', 'out/core/patch/stage.js']) {
+      const local = path.join(ROOT, rel);
+      if (!fs.existsSync(local)) {
+        check(false, `本地构建输出存在 ${rel}`, '缺失：请先 npm run build，否则无法证明候选与当前源码一致');
+        continue;
+      }
+      const inAsar = readEntryBuffer(rel);
+      if (!inAsar) {
+        check(false, `包内存在 ${rel}`, '缺失或位于 unpacked');
+        continue;
+      }
+      const localSha = crypto.createHash('sha256').update(fs.readFileSync(local)).digest('hex');
+      const asarSha = crypto.createHash('sha256').update(inAsar).digest('hex');
+      check(localSha === asarSha, `包内 ${rel} 与本地构建输出一致`,
+        localSha === asarSha ? '' : `本地 ${localSha.slice(0, 12)} 包内 ${asarSha.slice(0, 12)}（候选落后于源码，需重新构建并重新登记）`);
+    }
+  }
 }
 
 // ---------- 汇总 ----------

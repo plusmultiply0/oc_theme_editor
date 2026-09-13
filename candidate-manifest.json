@@ -1,0 +1,18 @@
+{
+  "schema": "candidate-manifest/1",
+  "version": "0.1.0-alpha.1",
+  "buildId": "manual-repack-20260912",
+  "sourceCommit": "871703da2bd775a2af1a9eb464b813a57e6fb8ae",
+  "sourceCommitSubject": "候选包重封：修复三个让包跑不起来的打包缺陷，并加固包校验",
+  "registeredAt": "2026-09-13T04:46:29.011Z",
+  "packMethod": "manual-repack",
+  "reproducibleBuild": false,
+  "notes": "手工重封候选（内容对应重封提交 871703d；electron-builder 被外部进程占用中断后以 @electron/asar API 带 unpack 规则重封并补齐依赖）。普通 dist 通过不代表此候选/zip 的生成证据；win-unpacked 与 win-unpacked-fresh 为取证留存，禁止分发。",
+  "candidateDir": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked.new",
+  "zip": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip",
+  "hashes": {
+    "exe": "99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f",
+    "app.asar": "7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8",
+    "zip": "9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c"
+  }
+}

@@ -174,7 +174,7 @@ A5/A6 必须测同一份 zip（`92126171…`）。源码或包若有任何改动
 | 声明非官方/Alpha/未签名/需备份重启 | 如实 | 发布说明首屏即声明非官方与未签名；写明备份位置与「删工具目录 ≠ 撤销主题」 | **通过** | 同上 |
 | 演示素材 | 只用已实测候选包与可公开素材 | **未拍摄**（`docs/demo-script.md` 只有分镜） | 待执行 | — |
 | Git 跟踪文件与历史隐私检查 | 输出「建议排除/脱敏」清单，交用户确认 | 已输出：10 个跟踪文件含本机路径（集中在 handoff/ 与 3 个 tools 脚本）、5 张诊断截图、49 个提交为个人邮箱；**无私人壁纸、无凭证** | **通过（清单已出，处置待 jc 确认）** | `handoff/alpha-release-plan-2026-09-12/publish-scope.md` |
-| 许可与依赖说明 | 完整 | **缺口**：`package.json` 声明 MIT 但仓库无 LICENSE 文件；author/repository 均未设置 | 待执行（需 jc 定） | publish-scope.md 第 4 节 |
+| 许可与依赖说明 | 完整 | 已补根目录 `LICENSE`（MIT，`Copyright (c) 2026 jc`）、`package.json` 补 author/license | **通过** | 仓库 `LICENSE`；注意当前候选包构建于此元信息改动之前 |
 
 ## 9. A8 GO/NO-GO
 

@@ -7,14 +7,19 @@
 # 发布验收必须跑全，不能只跑 verify 就宣称全部门禁通过。
 #
 # 用法：bash tools/release-gate.sh
-#   - 日志同时写屏与 /tmp/a4-gate.txt
+#   - 日志写屏并写入本次独立的 /tmp/a4-gate-<构建ID>.txt（不固定覆盖上次证据）
 #   - dist 会自动带 electron 镜像（直连 GitHub 常 ETIMEDOUT）
+#   - dist 与其他步骤走同一条 run 路径：非 0 立即停止，保留该退出码，
+#     不执行 verify:package，不打印 ALL_GREEN
+#   - 设置 GATE_CANDIDATE_DIR 可让 verify:package 核对指定候选目录；
+#     未设置时沿用 npm run verify:package 的默认目标（由候选配置决定）
 #   - 退出码：0 全绿；否则等于第一个失败步骤的退出码
 set -u
 export PATH="/usr/bin:/bin:$PATH"
 cd "$(dirname "$0")/.." || exit 1
 
-LOG=/tmp/a4-gate.txt
+GATE_ID="$(date +%Y%m%d-%H%M%S)-$$"
+LOG="/tmp/a4-gate-${GATE_ID}.txt"
 : > "$LOG"
 
 run() {
@@ -41,11 +46,20 @@ run test:e2e      npm run test:e2e
 run test:e2e:electron npm run test:e2e:electron
 run audit         npm run audit
 
-echo "=== 构建候选包（带镜像）===" | tee -a "$LOG"
-ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
-ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
-  npm run dist >> "$LOG" 2>&1
-echo "EXIT dist = $?" | tee -a "$LOG"
+# dist 与其他步骤同一条 run 路径（修复：此前 dist 直接执行、仅 echo 退出码，
+# 失败后仍会继续 verify 并可能对旧产物打印 ALL_GREEN）。
+# 用 export 而非 env 前缀，保证 dist 步骤仍是可被桩替换的普通命令。
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+run dist npm run dist
+unset ELECTRON_MIRROR ELECTRON_BUILDER_BINARIES_MIRROR
 
-run verify:package npm run verify:package
+# 核对必须绑定本次候选：发布链上应通过 GATE_CANDIDATE_DIR 显式指定候选目录，
+# 防止核对到「某个仍然存在的旧目录」。
+if [ -n "${GATE_CANDIDATE_DIR:-}" ]; then
+  run verify:package node tools/verify-package.cjs "$GATE_CANDIDATE_DIR"
+else
+  run verify:package npm run verify:package
+fi
+
 echo "ALL_GREEN" | tee -a "$LOG"

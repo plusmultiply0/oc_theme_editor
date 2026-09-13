@@ -6,7 +6,7 @@
  * 这样验的是脚本**实际接线**，而不是只验背后的模块。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createPackageWithOptions } from '@electron/asar';
@@ -30,7 +30,7 @@ afterEach(() => {
 
 /** 造一个最小可核验归档：只放核验脚本会看的几个条目 */
 async function makeArchiveWithImage(imageBytes: Buffer): Promise<string> {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-vri-'));
+  const base = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-vri-'));
   cleanups.push(() => fs.rmSync(base, { recursive: true, force: true, maxRetries: 3 }));
   const src = path.join(base, 'src');
   fs.mkdirSync(path.join(src, 'out/renderer'), { recursive: true });

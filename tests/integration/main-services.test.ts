@@ -5,7 +5,7 @@
  * 不弹系统对话框、不接触真实安装、不启动任何外部进程。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -54,7 +54,7 @@ async function setup(version = '1.18.29'): Promise<Ctx> {
   const install = await makeSyntheticInstall({ version });
   cleanups.push(install.cleanup);
 
-  const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-runtime-'));
+  const runtime = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-runtime-'));
   cleanups.push(() => fs.rmSync(runtime, { recursive: true, force: true, maxRetries: 3 }));
 
   const imageFile = path.join(runtime, 'wallpaper.png');

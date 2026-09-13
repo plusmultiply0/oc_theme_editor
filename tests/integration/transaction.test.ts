@@ -8,7 +8,7 @@
  * 全部使用合成安装，不触碰真实安装。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { extractFile, uncache } from '@electron/asar';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -34,7 +34,7 @@ const installs: SyntheticInstall[] = [];
 const runtimeRoots: string[] = [];
 
 function newRuntime(): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-runtime-'));
+  const d = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-runtime-'));
   runtimeRoots.push(d);
   return d;
 }

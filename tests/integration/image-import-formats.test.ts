@@ -10,7 +10,7 @@
  * 全部使用程序生成的样本与临时目录，不碰真实安装、不弹系统对话框。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ImageStore } from '../../src/main/services/image-store';
@@ -43,14 +43,14 @@ afterEach(() => {
 });
 
 function newRuntime(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-fmt-'));
+  const dir = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-fmt-'));
   cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
   return dir;
 }
 
 /** 把样本写到临时文件，模拟用户从系统对话框选中的真实路径 */
 function writeSample(name: string, bytes: Buffer): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-pick-'));
+  const dir = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-pick-'));
   cleanups.push(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 }));
   const file = path.join(dir, name);
   fs.writeFileSync(file, bytes);

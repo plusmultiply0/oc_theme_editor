@@ -5,7 +5,7 @@
  * 归档由 @electron/asar 真实打包，保证识别逻辑面对的是合法 ASAR 结构。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from './test-tmp';
 import path from 'node:path';
 import { createPackageWithOptions } from '@electron/asar';
 
@@ -33,7 +33,7 @@ const DEFAULT_HTML = '<!doctype html><html><head><title>t</title></head><body></
 export async function makeSyntheticInstall(
   opts: SyntheticInstallOptions = {},
 ): Promise<SyntheticInstall> {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-install-'));
+  const base = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-install-'));
   const srcDir = path.join(base, '_src');
   const root = path.join(base, 'install');
 

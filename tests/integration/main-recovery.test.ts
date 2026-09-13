@@ -6,7 +6,7 @@
  * R6 的关键点是「用户有出路」：手动登记目录必须真的能变成可操作目标。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeSyntheticInstall, type SyntheticInstall } from '../fixtures/synthetic-install';
@@ -25,7 +25,7 @@ const installs: SyntheticInstall[] = [];
 const tmpDirs: string[] = [];
 
 function tmp(prefix: string): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const d = fs.mkdtempSync(path.join(testTmpRoot(), prefix));
   tmpDirs.push(d);
   return d;
 }

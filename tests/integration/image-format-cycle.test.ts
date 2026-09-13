@@ -13,7 +13,7 @@
  * 顺带确保「换内容不换名字」不会让校验误判。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { extractFile, uncache } from '@electron/asar';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -60,11 +60,11 @@ describe('格式轮换闭环（合成安装）', () => {
   it('.jfif → .png → .webp → 同图 no-op → 恢复上一主题 → 恢复首次接管', async () => {
     const install: SyntheticInstall = await makeSyntheticInstall();
     cleanups.push(install.cleanup);
-    const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-cycle-'));
+    const runtime = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-cycle-'));
     cleanups.push(() => fs.rmSync(runtime, { recursive: true, force: true, maxRetries: 3 }));
 
     // 三个不同格式的样本，各自写进临时目录模拟用户选中的文件
-    const samplesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-cycle-files-'));
+    const samplesDir = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-cycle-files-'));
     cleanups.push(() => fs.rmSync(samplesDir, { recursive: true, force: true, maxRetries: 3 }));
     const jfif = path.join(samplesDir, 'wallpaper.jfif');
     const png = path.join(samplesDir, 'wallpaper.png');

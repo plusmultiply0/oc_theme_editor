@@ -11,7 +11,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { packArchiveInWorker, resolvePackWorkerPath } from '../../src/core/patch/pack';
@@ -20,7 +20,7 @@ import { listAsarFiles, readAsar, readAsarText } from '../../src/core/patch/asar
 const dirs: string[] = [];
 
 function tmp(prefix: string): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), `ots-pack-${prefix}-`));
+  const d = fs.mkdtempSync(path.join(testTmpRoot(), `ots-pack-${prefix}-`));
   dirs.push(d);
   return d;
 }

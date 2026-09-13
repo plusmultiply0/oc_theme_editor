@@ -8,7 +8,7 @@
  * 全部使用临时目录构造的合成安装，不触碰任何真实安装。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeSyntheticInstall, type SyntheticInstall } from '../fixtures/synthetic-install';
@@ -31,7 +31,7 @@ const installs: SyntheticInstall[] = [];
 const runtimes: string[] = [];
 
 function tmp(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return fs.mkdtempSync(path.join(testTmpRoot(), prefix));
 }
 
 async function fixture(opts: Parameters<typeof makeSyntheticInstall>[0] = {}) {

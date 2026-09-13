@@ -16,7 +16,7 @@
  */
 import fsPromises from 'node:fs/promises';
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { ImageStore } from '../../src/main/services/image-store';
@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 function tmpDir(prefix: string): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const d = fs.mkdtempSync(path.join(testTmpRoot(), prefix));
   cleanups.push(() => fs.rmSync(d, { recursive: true, force: true, maxRetries: 3 }));
   return d;
 }

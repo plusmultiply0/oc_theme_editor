@@ -8,7 +8,7 @@
  * 全部使用临时目录与合成安装，不碰真实安装。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { extractFile, uncache } from '@electron/asar';
@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 function tmpDir(prefix: string): string {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const d = fs.mkdtempSync(path.join(testTmpRoot(), prefix));
   cleanups.push(() => fs.rmSync(d, { recursive: true, force: true, maxRetries: 3 }));
   return d;
 }

@@ -4,7 +4,7 @@
  * 全部使用临时目录内构造的合法 ASAR，不触碰任何真实安装。
  */
 import fs from 'node:fs';
-import os from 'node:os';
+import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -84,7 +84,7 @@ describe('目标识别（T30、T31）', () => {
   });
 
   it('目录里没有归档时判为 unknown，不猜测兼容', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-empty-'));
+    const dir = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-empty-'));
     installs.push({
       root: dir,
       srcDir: dir,
@@ -100,7 +100,7 @@ describe('目标识别（T30、T31）', () => {
   });
 
   it('路径不存在时识别直接失败', async () => {
-    const r = await inspectRoot(path.join(os.tmpdir(), 'ots-no-such-dir-xyz'));
+    const r = await inspectRoot(path.join(testTmpRoot(), 'ots-no-such-dir-xyz'));
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.code).toBe('TARGET_NOT_FOUND');
   });
@@ -113,7 +113,7 @@ describe('目标识别（T30、T31）', () => {
 
   it('按候选位置扫描可发现目标，不存在的目录不出现在结果里', async () => {
     const inst = await fixture();
-    const missing = path.join(os.tmpdir(), 'ots-missing-root-xyz');
+    const missing = path.join(testTmpRoot(), 'ots-missing-root-xyz');
     const { outcomes } = await discoverTargets({
       localAppData: '',
       extraRoots: [missing, inst.root],
@@ -170,7 +170,7 @@ describe('卸载登记表的过滤（回归：真机上扫出满屏无关软件�
 
   it('目录里没有归档的候选不算「未通过」，只计入已检查位置', async () => {
     const inst = await fixture();
-    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-unrelated-'));
+    const empty = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-unrelated-'));
     installs.push({
       root: empty,
       srcDir: empty,
@@ -256,7 +256,7 @@ describe('应用前预检（T32、T33）', () => {
   });
 
   it('目录不可写时拒绝', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ots-nowrite-'));
+    const dir = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-nowrite-'));
     installs.push({
       root: dir,
       srcDir: dir,
@@ -280,7 +280,9 @@ describe('应用前预检（T32、T33）', () => {
       expect(r.data.requiredBytes).toBe(requiredBytes(size));
       // 四份：备份 + 解包准备区 + staged 归档 + 同卷临时副本
       expect(r.data.requiredBytes).toBeGreaterThan(size * 3);
-      expect(r.data.archivePath).toBe(inst.archivePath);
+      // canonicalize 返回真实大小写（realpath），fixture 来自 os.tmpdir()（Windows 盘符被
+      // Node 小写化），二者指向同一路径——用 path.relative 做大小写不敏感的相等断言
+      expect(path.relative(inst.archivePath, r.data.archivePath)).toBe('');
     }
   });
 

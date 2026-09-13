@@ -22,6 +22,7 @@ import { errorResult, fail, ok, type Result } from '../../shared/errors';
 import type { ImportedImage, PickedImage } from '../../shared/ipc';
 import { DEFAULT_LIMITS, sniffFormat, type ImageLimits } from '../../core/theme/validate';
 import { analyzeImage } from '../../core/theme/generate';
+import { isMultiFrame, probeImageBytes } from '../../core/theme/image-probe';
 import {
   ALLOWED_EXTENSIONS,
   describeExtensionMismatch,
@@ -255,6 +256,17 @@ export class ImageStore {
   private static readonly THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 
   /**
+   * 缩略图派生数据限额（S4）：我们只会生成 320×320（fit: inside）单帧 PNG，
+   * 因此像素上限取 1024² 已非常宽裕；超限/多帧/APNG 都是「不该出现在缓存里」
+   * 的派生数据，一律拒绝并回退重建。
+   */
+  private static readonly THUMBNAIL_LIMITS: ImageLimits = {
+    ...DEFAULT_LIMITS,
+    maxBytes: ImageStore.THUMBNAIL_MAX_BYTES,
+    maxPixels: 1024 * 1024,
+  };
+
+  /**
    * 界面回显用的缩小副本（data URL）。
    *
    * 读取顺序（R3）：
@@ -309,11 +321,24 @@ export class ImageStore {
     return fail('IMAGE_NOT_FOUND', '图片内容不存在', '请重新导入这张图片。');
   }
 
-  /** 缩略图受限读取：体积上限 + 必须仍是我们生成的 PNG，否则按缺失处理 */
+  /**
+   * 缩略图受限读取（S4 强化）：体积上限 + PNG 识别 + **受限完整解码**。
+   *
+   * 旧实现只查体积和 PNG magic bytes：文件头保留但像素已损坏的缩略图
+   * （截断/写一半）会通过检查并被当作健康缓存直接回显——返回一张无法
+   * 解码的坏 data URL，永远不走健康副本重建。现在返回前用
+   * `probeImageBytes` 做一次完整解码验证（metadata 不算解码，R4 同款
+   * 语义），并拒绝非预期派生形态：超尺寸（>1024² 像素或超边）、多帧/APNG。
+   * 缓存命中多花一次 320 级小图解码，换取坏缓存必被识别进回退重建。
+   */
   private async readThumbnail(file: string): Promise<Result<Buffer>> {
     const capped = await this.readCapped(file, ImageStore.THUMBNAIL_MAX_BYTES);
     if (!capped.success) return capped;
     if (sniffFormat(capped.data) !== 'png') {
+      return fail('IMAGE_INVALID_FORMAT', '缩略图内容异常', '');
+    }
+    const probe = await probeImageBytes(capped.data, ImageStore.THUMBNAIL_LIMITS);
+    if (!probe.success || isMultiFrame(probe.data)) {
       return fail('IMAGE_INVALID_FORMAT', '缩略图内容异常', '');
     }
     return capped;
@@ -330,11 +355,20 @@ export class ImageStore {
       try {
         await fs.mkdir(this.thumbsDir, { recursive: true });
         const thumbnailPath = path.join(this.thumbsDir, `${record.thumbnailId}.png`);
-        await sharp(source, { limitInputPixels: this.limits.maxPixels })
+        // S4：先写临时文件再替换，崩溃/占用不会留下半张 PNG 冒充健康缓存
+        const png = await sharp(source, { limitInputPixels: this.limits.maxPixels })
           .rotate()
           .resize(320, 320, { fit: 'inside' })
           .png()
-          .toFile(thumbnailPath);
+          .toBuffer();
+        const tmpPath = `${thumbnailPath}.tmp-${process.pid}-${Date.now()}`;
+        try {
+          await fs.writeFile(tmpPath, png);
+          await fs.rename(tmpPath, thumbnailPath);
+        } catch (e) {
+          await fs.rm(tmpPath, { force: true }).catch(() => undefined);
+          throw e;
+        }
         record.thumbnailPath = thumbnailPath;
       } catch {
         // 缩略图文件恢复失败不影响本次预览结果

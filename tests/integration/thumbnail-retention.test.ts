@@ -251,3 +251,89 @@ describe('previewDataUrl：回退与错误语义（R3）', () => {
     }
   });
 });
+
+describe('readThumbnail 完整性校验（S4）', () => {
+  /** 断言 data URL 是真实可解码的 PNG，而不是坏字节的 base64 */
+  async function expectDecodablePng(dataUrl: string): Promise<void> {
+    const sharpMod = (await import('sharp')).default;
+    const b64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+    const meta = await sharpMod(Buffer.from(b64, 'base64')).metadata();
+    expect(meta.format).toBe('png');
+    expect((meta.width ?? 0)).toBeGreaterThan(0);
+    expect((meta.height ?? 0)).toBeGreaterThan(0);
+  }
+
+  it('截断但保留文件头的缩略图：拒绝缓存、回退重建，返回的 data URL 真实可解码', async () => {
+    const { store } = newStore();
+    const imageId = await importPng(store);
+    const record = store.peek(imageId);
+    if (!record?.thumbnailPath || !record.copyPath) throw new Error('缺少副本/缩略图');
+
+    fs.writeFileSync(record.thumbnailPath, fs.readFileSync(record.thumbnailPath).subarray(0, 16));
+    const preview = await store.previewDataUrl(imageId);
+    expect(preview.success).toBe(true);
+    if (!preview.success) return;
+    await expectDecodablePng(preview.data);
+
+    // 缩略图文件被重建回健康状态（临时文件+替换落盘）
+    const rebuilt = fs.readFileSync(record.thumbnailPath);
+    expect(rebuilt.byteLength).toBeGreaterThan(16);
+    const sharpMod = (await import('sharp')).default;
+    expect((await sharpMod(rebuilt).metadata()).format).toBe('png');
+    // 私有副本不变
+    expect(fs.existsSync(record.copyPath)).toBe(true);
+  });
+
+  it('metadata 可读但像素数据被截断的缩略图：同样拒绝并回退', async () => {
+    const { store } = newStore();
+    const imageId = await importPng(store);
+    const record = store.peek(imageId);
+    if (!record?.thumbnailPath) throw new Error('缺少缩略图');
+
+    const healthy = fs.readFileSync(record.thumbnailPath);
+    // 保留头部与部分像素数据：metadata 很可能成功，raw 解码必须失败
+    fs.writeFileSync(record.thumbnailPath, healthy.subarray(0, Math.floor(healthy.byteLength / 2)));
+    const preview = await store.previewDataUrl(imageId);
+    expect(preview.success).toBe(true);
+    if (!preview.success) return;
+    await expectDecodablePng(preview.data);
+  });
+
+  it('超大尺寸 PNG 冒充缩略图：拒绝缓存并回退重建出合规缩略图', async () => {
+    const { store } = newStore();
+    const imageId = await importPng(store);
+    const record = store.peek(imageId);
+    if (!record?.thumbnailPath) throw new Error('缺少缩略图');
+
+    const sharpMod = (await import('sharp')).default;
+    const oversized = await sharpMod({
+      create: { width: 2000, height: 2000, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    })
+      .png()
+      .toBuffer();
+    fs.writeFileSync(record.thumbnailPath, oversized);
+
+    const preview = await store.previewDataUrl(imageId);
+    expect(preview.success).toBe(true);
+    if (!preview.success) return;
+    // 回退重建后：缓存回到 320 级合规缩略图
+    const meta = await sharpMod(fs.readFileSync(record.thumbnailPath)).metadata();
+    expect((meta.width ?? 0)).toBeLessThanOrEqual(320);
+    expect((meta.height ?? 0)).toBeLessThanOrEqual(320);
+  });
+
+  it('缩略图损坏且私有副本也损坏：明确失败，不把坏 data URL 当成功', async () => {
+    const { store } = newStore();
+    const imageId = await importPng(store);
+    const record = store.peek(imageId);
+    if (!record?.thumbnailPath || !record.copyPath) throw new Error('缺少副本/缩略图');
+
+    fs.writeFileSync(record.thumbnailPath, fs.readFileSync(record.thumbnailPath).subarray(0, 16));
+    fs.writeFileSync(record.copyPath, Buffer.alloc(2048, 7));
+    const preview = await store.previewDataUrl(imageId);
+    expect(preview.success).toBe(false);
+    if (!preview.success) {
+      expect(preview.error.code).toBe('IMAGE_CONTENT_MISMATCH');
+    }
+  });
+});

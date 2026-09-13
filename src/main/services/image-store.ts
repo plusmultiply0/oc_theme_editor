@@ -20,7 +20,7 @@ import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { errorResult, fail, ok, type Result } from '../../shared/errors';
 import type { ImportedImage, PickedImage } from '../../shared/ipc';
-import { DEFAULT_LIMITS, type ImageLimits } from '../../core/theme/validate';
+import { DEFAULT_LIMITS, sniffFormat, type ImageLimits } from '../../core/theme/validate';
 import { analyzeImage } from '../../core/theme/generate';
 import {
   ALLOWED_EXTENSIONS,
@@ -209,6 +209,11 @@ export class ImageStore {
   /**
    * 读取归档/生成要用的字节：一律来自私有副本，并核对其内容指纹。
    * 副本丢失或被改动 → 拒绝使用（调用方据此要求重新导入），绝不用旧参数配新内容。
+   *
+   * R4 修复：副本读取同样受限额约束——上限是「导入时确认的字节数 + 1」，
+   * 多出的 1 字节用于识别「副本被换成更大的文件」。旧实现把副本**整读进内存**
+   * 之后才比对体积与 hash：被换大的副本会先完整分配内存再被拒绝，
+   * 资源上限承诺在拒绝发生前就已经被打破（受控复现：4 KiB 限额读入 64 KiB）。
    */
   async readBytes(imageId: string): Promise<Result<Buffer>> {
     const record = this.records.get(imageId);
@@ -223,18 +228,18 @@ export class ImageStore {
       );
     }
 
-    let bytes: Buffer;
-    try {
-      bytes = await fs.readFile(record.copyPath);
-    } catch (e) {
+    const capped = await this.readCapped(record.copyPath, record.byteSize);
+    if (!capped.success) {
+      const missing = capped.error.code === 'IMAGE_NOT_FOUND';
       return fail(
         'IMAGE_CONTENT_MISMATCH',
-        '已确认的图片副本不存在',
-        '它可能被清理工具删除了；请重新导入该图片。',
-        String(e),
+        missing ? '已确认的图片副本不存在' : '已确认的图片副本内容发生了变化',
+        '为避免把没预览过的图片写进安装，已拒绝本次操作；请重新导入。',
+        capped.error.detail,
       );
     }
 
+    const bytes = capped.data;
     if (bytes.byteLength !== record.byteSize || sha256(bytes) !== record.contentHash) {
       return fail(
         'IMAGE_CONTENT_MISMATCH',
@@ -246,6 +251,9 @@ export class ImageStore {
     return ok(bytes);
   }
 
+  /** 缩略图只读上限：工具自己生成的 320px PNG；超过即为异常文件（R4） */
+  private static readonly THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
+
   /**
    * 界面回显用的缩小副本（data URL）。
    *
@@ -256,6 +264,8 @@ export class ImageStore {
    *      「图片已损坏」；
    *   3. 尚未固定内容的记录 → 仍可从用户源文件生成预览（只读、受限）。
    *
+   * R4：所有读取入口都受限额约束——缩略图按自身体积上限读取且必须仍像 PNG；
+   * 源文件回退源与导入共用同一套格式/帧数/像素/体积限制（超限在 raw 分配前拒绝）。
    * 错误语义区分（R3）：副本丢失/被改动 = IMAGE_CONTENT_MISMATCH（缓存与副本
    * 问题，重导入即可）；字节读到了但解码失败 = IMAGE_DECODE_FAILED（图片本身
    * 可能损坏）。
@@ -266,13 +276,12 @@ export class ImageStore {
       return fail('IMAGE_NOT_FOUND', '图片记录已失效', '请重新选择图片。');
     }
     if (record.thumbnailPath) {
-      try {
-        const buf = await fs.readFile(record.thumbnailPath);
-        return ok(`data:image/png;base64,${buf.toString('base64')}`);
-      } catch {
-        // 缩略图失效：清掉标记，走下面的回退重建
-        record.thumbnailPath = undefined;
+      const thumb = await this.readThumbnail(record.thumbnailPath);
+      if (thumb.success) {
+        return ok(`data:image/png;base64,${thumb.data.toString('base64')}`);
       }
+      // 缩略图失效（缺失/超限/内容异常）：清掉标记，走下面的回退重建
+      record.thumbnailPath = undefined;
     }
 
     if (record.copyPath && record.contentHash) {
@@ -291,20 +300,41 @@ export class ImageStore {
           read.error.detail,
         );
       }
+      // R4：回退源与导入共用 analyzeImage 的格式/帧数/像素/体积限制
+      const analyzed = await analyzeImage(read.data, this.limits);
+      if (!analyzed.success) return analyzed;
       return this.renderPreview(record, read.data);
     }
 
     return fail('IMAGE_NOT_FOUND', '图片内容不存在', '请重新导入这张图片。');
   }
 
+  /** 缩略图受限读取：体积上限 + 必须仍是我们生成的 PNG，否则按缺失处理 */
+  private async readThumbnail(file: string): Promise<Result<Buffer>> {
+    const capped = await this.readCapped(file, ImageStore.THUMBNAIL_MAX_BYTES);
+    if (!capped.success) return capped;
+    if (sniffFormat(capped.data) !== 'png') {
+      return fail('IMAGE_INVALID_FORMAT', '缩略图内容异常', '');
+    }
+    return capped;
+  }
+
   /** 用源字节生成 512 预览；同时尽力恢复 320 缩略图文件（恢复失败不阻断预览） */
   private async renderPreview(record: ImageRecord, source: Buffer): Promise<Result<string>> {
     try {
-      const buf = await sharp(source).rotate().resize(512, 512, { fit: 'inside' }).png().toBuffer();
+      const buf = await sharp(source, { limitInputPixels: this.limits.maxPixels })
+        .rotate()
+        .resize(512, 512, { fit: 'inside' })
+        .png()
+        .toBuffer();
       try {
         await fs.mkdir(this.thumbsDir, { recursive: true });
         const thumbnailPath = path.join(this.thumbsDir, `${record.thumbnailId}.png`);
-        await sharp(source).rotate().resize(320, 320, { fit: 'inside' }).png().toFile(thumbnailPath);
+        await sharp(source, { limitInputPixels: this.limits.maxPixels })
+          .rotate()
+          .resize(320, 320, { fit: 'inside' })
+          .png()
+          .toFile(thumbnailPath);
         record.thumbnailPath = thumbnailPath;
       } catch {
         // 缩略图文件恢复失败不影响本次预览结果
@@ -404,7 +434,11 @@ export class ImageStore {
       // 缩略图失败不阻断主流程，但也不写回原图路径
       try {
         await fs.mkdir(this.thumbsDir, { recursive: true });
-        await sharp(bytes).rotate().resize(320, 320, { fit: 'inside' }).png().toFile(thumbnailPath);
+        await sharp(bytes, { limitInputPixels: this.limits.maxPixels })
+          .rotate()
+          .resize(320, 320, { fit: 'inside' })
+          .png()
+          .toFile(thumbnailPath);
         record.thumbnailPath = thumbnailPath;
       } catch {
         record.thumbnailPath = undefined;
@@ -463,14 +497,22 @@ export class ImageStore {
    * 按上限读取文件：最多读 maxBytes + 1 字节。
    * 多出来的那 1 字节用来判断「读到这里还没完」——说明文件超限，直接拒绝，
    * 不会把整个超大文件读进内存。
+   *
+   * R4 修复：循环处理短读直到 EOF。单次 handle.read 不保证读满请求的字节数，
+   * 旧实现把「一次没读满」当成文件结束，可能把大文件静默截断成小图。
    */
   private async readCapped(file: string, maxBytes: number): Promise<Result<Buffer>> {
     let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
     try {
       handle = await fs.open(file, 'r');
       const buf = Buffer.alloc(maxBytes + 1);
-      const { bytesRead } = await handle.read(buf, 0, maxBytes + 1, 0);
-      if (bytesRead > maxBytes) {
+      let total = 0;
+      while (total < maxBytes + 1) {
+        const { bytesRead } = await handle.read(buf, total, maxBytes + 1 - total, null);
+        if (bytesRead <= 0) break; // EOF
+        total += bytesRead;
+      }
+      if (total > maxBytes) {
         const mb = (maxBytes / 1024 / 1024).toFixed(0);
         return fail(
           'IMAGE_TOO_LARGE',
@@ -478,7 +520,7 @@ export class ImageStore {
           '请压缩图片或选择更小的文件。',
         );
       }
-      return ok(buf.subarray(0, bytesRead));
+      return ok(buf.subarray(0, total));
     } catch (e) {
       return fail('IMAGE_NOT_FOUND', '无法读取该图片', '文件可能已被移动或删除，请重新选择。', String(e));
     } finally {

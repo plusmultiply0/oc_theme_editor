@@ -13,7 +13,7 @@
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { fail, ok, type Result } from '../../shared/errors';
-import { looksLikeApng, looksLikeSvg, sniffFormat } from './validate';
+import { DEFAULT_LIMITS, looksLikeApng, looksLikeSvg, sniffFormat, validateImage, type ImageLimits } from './validate';
 
 export interface ImageProbe {
   /** 仅凭文件头识别出的格式；无法识别为 null */
@@ -35,8 +35,18 @@ export interface ImageProbe {
   sha256: string;
 }
 
-/** 完整解码一份图片字节；失败时给出中文原因 */
-export async function probeImageBytes(buf: Buffer): Promise<Result<ImageProbe>> {
+/**
+ * 完整解码一份图片字节；失败时给出中文原因。
+ *
+ * R4：接受产品级资源限额（默认 DEFAULT_LIMITS）——
+ *   - 解码管线显式 limitInputPixels，解码器按限额拒绝超限像素；
+ *   - metadata 读取后、**raw 像素分配前**先按同一限额校验尺寸，
+ *     超限直接拒绝，不再让解码器先分配内存。
+ */
+export async function probeImageBytes(
+  buf: Buffer,
+  limits: ImageLimits = DEFAULT_LIMITS,
+): Promise<Result<ImageProbe>> {
   const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
   const headerFormat = sniffFormat(buf);
 
@@ -51,6 +61,8 @@ export async function probeImageBytes(buf: Buffer): Promise<Result<ImageProbe>> 
 
   let meta;
   try {
+    // metadata 只读头部、不分配像素，不带 limitInputPixels——
+    // 超限要按产品语义报 IMAGE_TOO_LARGE，而不是被解码器提前抛成解码失败。
     meta = await sharp(buf).metadata();
   } catch (e) {
     return fail(
@@ -62,11 +74,23 @@ export async function probeImageBytes(buf: Buffer): Promise<Result<ImageProbe>> 
   }
 
   /*
+   * raw 像素分配前的产品级校验：体积与解码后像素数必须都在限额内。
+   *（R4：此前这里没有任何限制参数，40MP 承诺只覆盖导入入口。）
+   */
+  const sizeCheck = validateImage(
+    { bytes: buf.byteLength, width: meta.width ?? 0, height: meta.height ?? 0 },
+    limits,
+  );
+  if (!sizeCheck.success) return sizeCheck;
+
+  /*
    * 真正解码像素：metadata 只读头部，残图也可能拿到尺寸。
    * 这里要求解码器把全部像素吐出来，失败即判失败。
    */
   try {
-    const { info } = await sharp(buf).raw().toBuffer({ resolveWithObject: true });
+    const { info } = await sharp(buf, { limitInputPixels: limits.maxPixels })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
     return ok({
       headerFormat,
       decoded: true,

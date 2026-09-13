@@ -100,7 +100,7 @@ describe('cleanOrphanCaches：在用文件保留（R3）', () => {
   });
 
   it('清理与导入交错：已登记记录（导入进行中）的文件不被清理', async () => {
-    const { store, runtime } = newStore();
+    const { store } = newStore();
     const a = await importPng(store, 'a.png');
 
     // 并发：一边清理（A 的引用靠内存 records），一边导入 B

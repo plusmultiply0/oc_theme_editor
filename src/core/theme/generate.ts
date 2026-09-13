@@ -66,6 +66,8 @@ export async function analyzeImage(
 
   let meta: Metadata;
   try {
+    // metadata 只读头部、不分配像素，不带 limitInputPixels——
+    // 超限要在下面的 validateImage 按产品语义报 IMAGE_TOO_LARGE（R4）
     meta = await sharp(buffer).metadata();
   } catch (e) {
     return fail('IMAGE_DECODE_FAILED', '图片无法解码', '文件可能已损坏，请换一张图片。', String(e));
@@ -99,7 +101,8 @@ export async function analyzeImage(
 
   try {
     // rotate() 依据 EXIF 方向纠正，保证取到的颜色与用户看到的一致（T20）
-    const { data, info } = await sharp(buffer)
+    // limitInputPixels：产品像素限额显式交给解码器（R4），与上面的 validateImage 双保险
+    const { data, info } = await sharp(buffer, { limitInputPixels: limits.maxPixels })
       .rotate()
       .resize(ANALYZE_EDGE, ANALYZE_EDGE, { fit: 'inside' })
       .raw()

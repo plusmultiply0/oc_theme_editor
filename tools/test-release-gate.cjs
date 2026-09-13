@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 /**
- * tools/release-gate.sh 脚本层故障传播测试（R1 修复验收）。
+ * tools/release-gate.sh 脚本层故障传播测试（R1 验收 + S6 日志隔离验收）。
  *
- * 把真实 npm 替换为函数桩，不执行任何真实构建/测试/打包命令：
+ * 把真实 npm/node 替换为函数桩，不执行任何真实构建/测试/打包命令：
  *   - 依次令每一步失败，断言后续步骤未执行、退出码保留、不打印 ALL_GREEN；
  *   - 重点覆盖 dist=17（历史缺陷：dist 失败仍全绿）且 verify:package 桩本可
  *     返回 0 的情形——dist 失败时 verify 步骤根本不应被执行；
- *   - 断言固定日志 /tmp/a4-gate.txt 不再被覆盖（每次运行写独立 a4-gate-<ID>.txt）。
+ *   - S6：日志目录隔离——每个场景用独立临时目录（GATE_LOG_DIR 注入），
+ *     预先存在的旧证据文件必须原样保留；运行前后比较目录文件集合，
+ *     断言**恰好新增一个**本次 runId 日志且内容含本次步骤与退出码，
+ *     不再用全局通配符命中历史文件充数；
+ *   - S6：verify:package 的显式候选目录分支（GATE_CANDIDATE_DIR）也走 stub；
+ *   - S6：同一日志目录连续两次运行（模拟并发），证据互不覆盖。
  *
  * 用法：node tools/test-release-gate.cjs
  * 退出码：0 全部通过；1 有失败。
@@ -30,10 +35,25 @@ function findBash() {
   return 'bash';
 }
 
-/** 在隔离 cwd 中以函数桩执行门禁脚本。failStep 指定哪一步返回 failCode。 */
-function runGate({ failStep = '', failCode = 0 }) {
+/**
+ * 在隔离环境中以函数桩执行门禁脚本。
+ * - failStep 指定哪一步返回 failCode；
+ * - logDir 省略时在 runDir 下新建独立日志目录（场景隔离）；
+ *   显式传入可模拟「共享目录多次运行」；
+ * - candidateDir 设置后走 GATE_CANDIDATE_DIR 显式分支（node 桩执行）。
+ */
+function runGate({ failStep = '', failCode = 0, logDir, candidateDir = '' } = {}) {
   const runDir = fs.mkdtempSync(path.join(__dirname, 'gate-test-'));
   const callsFile = path.join(runDir, 'calls.txt').replace(/\\/g, '/');
+  const gateLogDir = (logDir || path.join(runDir, 'gate-logs')).replace(/\\/g, '/');
+  fs.mkdirSync(gateLogDir, { recursive: true });
+
+  // 预先存在的「共享旧证据」：运行后必须原样保留（S6：不再写共享 /tmp/a4-gate.txt）
+  const oldEvidence = path.join(gateLogDir, 'old-evidence.txt');
+  fs.writeFileSync(oldEvidence, 'OLD-EVIDENCE');
+
+  const before = fs.readdirSync(gateLogDir).sort().join(',');
+
   const original = fs.readFileSync(GATE, 'utf8');
   const patched = original.replace(/^cd ".*" ?\|\| exit 1$/m, ': # stay in isolated cwd');
   if (patched === original) throw new Error('gate patch failed: cd line not found');
@@ -42,27 +62,53 @@ function runGate({ failStep = '', failCode = 0 }) {
   const failGuard = failStep
     ? `if [ "$1" = "run" ] && [ "$2" = "${failStep}" ]; then return ${failCode}; fi`
     : ':';
-  // 哨兵：固定旧日志 /tmp/a4-gate.txt 放入标记内容，运行后必须原样保留；
-  // 并要求本次运行产生了新的独立 a4-gate-<ID>.txt 日志。trap EXIT 保住退出码。
+  // npm 桩记录调用并按需失败；node 桩记录调用（verify:package 显式分支）。
+  // trap EXIT 保住退出码。
   const prelude = [
-    'echo OLD-EVIDENCE > /tmp/a4-gate.txt',
     `npm() { echo "npm $*" >> '${callsFile}'; ${failGuard}; return 0; }`,
+    `node() { echo "node $*" >> '${callsFile}'; return 0; }`,
     "trap 'rc=$?",
-    `if [ "$(cat /tmp/a4-gate.txt 2>/dev/null)" = "OLD-EVIDENCE" ]; then echo SENTINEL_INTACT; else echo SENTINEL_OVERWRITTEN; fi`,
-    `ls /tmp/a4-gate-*.txt >/dev/null 2>&1 && echo UNIQUE_LOG_PRESENT || echo UNIQUE_LOG_MISSING`,
     'exit $rc\' EXIT',
     '',
   ].join('\n');
 
+  const env = { ...process.env, GATE_LOG_DIR: gateLogDir };
+  if (candidateDir) env.GATE_CANDIDATE_DIR = candidateDir;
+
   const out = spawnSync(findBash(), ['--noprofile', '--norc', '-s'], {
-    input: prelude + patched, encoding: 'utf8', timeout: 60000, windowsHide: true,
+    input: prelude + patched, encoding: 'utf8', timeout: 60000, windowsHide: true, env,
   });
   const calls = fs.existsSync(callsFile)
     ? fs.readFileSync(callsFile, 'utf8').split('\n').filter(Boolean)
     : [];
+
+  // —— S6 断言数据（在清理 runDir 之前收集）——
+  const sentinelIntact = fs.readFileSync(oldEvidence, 'utf8') === 'OLD-EVIDENCE';
+  const after = fs.readdirSync(gateLogDir).sort();
+  const added = after.filter((f) => !before.split(',').includes(f));
+  const gateLogAdded = added.filter((f) => /^a4-gate-\d{8}-\d{6}-\d+\.txt$/.test(f));
+  const gateLogContent = gateLogAdded.length === 1
+    ? fs.readFileSync(path.join(gateLogDir, gateLogAdded[0]), 'utf8')
+    : '';
+
   fs.rmSync(runDir, { recursive: true, force: true });
-  const executedSteps = calls.map((c) => c.replace(/^npm run /, ''));
-  return { status: out.status, stdout: out.stdout || '', stderr: out.stderr || '', executedSteps };
+  // 归一化为步骤名：npm 桩去掉 "npm run " 前缀；显式候选目录分支的 verify
+  // 走 node 桩（node tools/verify-package.cjs <dir>），它是门禁中唯一的
+  // node 调用，语义上就是 verify:package 这一步。原始调用保留在 nodeCalls。
+  const executedSteps = calls.map((c) =>
+    c.startsWith('node tools/verify-package.cjs') ? 'verify:package' : c.replace(/^npm run /, ''),
+  );
+  return {
+    status: out.status,
+    stdout: out.stdout || '',
+    stderr: out.stderr || '',
+    executedSteps,
+    nodeCalls: calls.filter((c) => c.startsWith('node ')),
+    sentinelIntact,
+    addedCount: added.length,
+    gateLogAdded: gateLogAdded.length,
+    gateLogContent,
+  };
 }
 
 const failures = [];
@@ -77,7 +123,7 @@ function scenario(name, opts, asserts) {
   asserts(r);
 }
 
-// 1) 依次令每一步失败：退出码保留、后续步骤未执行、无 ALL_GREEN
+// 1) 依次令每一步失败：退出码保留、后续步骤未执行、无 ALL_GREEN、日志隔离完好
 for (let i = 0; i < ALL_STEPS.length; i++) {
   const step = ALL_STEPS[i];
   const code = 20 + i;
@@ -87,8 +133,11 @@ for (let i = 0; i < ALL_STEPS.length; i++) {
       `${step} 失败后无后续步骤`, `实际执行 ${r.executedSteps.join(',')}`);
     expect(!r.stdout.includes('ALL_GREEN'), `${step} 失败时不打印 ALL_GREEN`);
     expect(r.stdout.includes('STOPPED at ' + step), `${step} 失败时打印 STOPPED`);
-    expect(r.stdout.includes('SENTINEL_INTACT'), '固定旧日志 /tmp/a4-gate.txt 未被覆盖');
-    expect(r.stdout.includes('UNIQUE_LOG_PRESENT'), '本次运行写了独立 a4-gate-<ID>.txt 日志');
+    expect(r.sentinelIntact, '场景目录中预先存在的旧证据未被访问/修改');
+    expect(r.gateLogAdded === 1 && r.addedCount === 1,
+      '恰好新增一个本次 runId 的独立日志', `新增 ${r.addedCount} 个文件`);
+    expect(r.gateLogContent.includes(`EXIT ${step} = ${code}`) && r.gateLogContent.includes('STOPPED'),
+      '本次日志内容含该步骤退出码与 STOPPED');
   });
 }
 
@@ -98,11 +147,40 @@ scenario('全绿路径', {}, (r) => {
   expect(r.executedSteps.join(',') === ALL_STEPS.join(','),
     '全绿时 10 步全部执行', `实际 ${r.executedSteps.join(',')}`);
   expect(r.stdout.includes('ALL_GREEN'), '全绿时打印 ALL_GREEN');
-  expect(r.stdout.includes('SENTINEL_INTACT'), '固定旧日志未被覆盖');
+  expect(r.sentinelIntact, '旧证据未被访问/修改');
+  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('ALL_GREEN'),
+    '恰好新增一个本次日志且含 ALL_GREEN');
 });
+
+// 3) GATE_CANDIDATE_DIR 显式分支：verify:package 走 node 桩并绑定指定目录
+scenario('显式候选目录分支', { candidateDir: 'candidate-X/win-unpacked.new' }, (r) => {
+  expect(r.status === 0, '显式候选目录时全链退出 0', `实际 ${r.status}`);
+  expect(r.executedSteps.join(',') === ALL_STEPS.join(','),
+    '显式候选目录时 10 步全部执行', `实际 ${r.executedSteps.join(',')}`);
+  expect(r.nodeCalls.some((c) => c.includes('tools/verify-package.cjs') && c.includes('candidate-X/win-unpacked.new')),
+    'verify:package 显式绑定指定候选目录', `实际 node 调用：${r.nodeCalls.join(' | ')}`);
+  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('ALL_GREEN'),
+    '显式分支同样恰好新增一个含 ALL_GREEN 的日志');
+});
+
+// 4) 同一日志目录连续两次运行：证据互不覆盖（并发安全的最小确定性模拟）
+{
+  console.log('\n== 共享日志目录两次运行互不覆盖 ==');
+  const shared = fs.mkdtempSync(path.join(__dirname, 'gate-shared-'));
+  const logDir = path.join(shared, 'gate-logs').replace(/\\/g, '/');
+  const a = runGate({ failStep: 'dist', failCode: 17, logDir });
+  const b = runGate({ logDir });
+  const files = fs.readdirSync(logDir).filter((f) => /^a4-gate-/.test(f));
+  const contents = files.map((f) => fs.readFileSync(path.join(logDir, f), 'utf8'));
+  fs.rmSync(shared, { recursive: true, force: true });
+  expect(a.status === 17 && b.status === 0, '两次运行退出码各自正确（17 与 0）');
+  expect(files.length === 2, '共享目录恰好留下两个独立日志', `实际 ${files.length} 个`);
+  expect(contents.some((c) => c.includes('STOPPED at dist')) && contents.some((c) => c.includes('ALL_GREEN')),
+    '两份日志内容各自完整（STOPPED 与 ALL_GREEN 各一份）');
+}
 
 if (failures.length) {
   console.error(`\n${failures.length} 项断言失败`);
   process.exit(1);
 }
-console.log('\nR1 门禁故障传播测试：全部通过');
+console.log('\nR1/S6 门禁故障传播与日志隔离测试：全部通过');

@@ -7,7 +7,9 @@
 # 发布验收必须跑全，不能只跑 verify 就宣称全部门禁通过。
 #
 # 用法：bash tools/release-gate.sh
-#   - 日志写屏并写入本次独立的 /tmp/a4-gate-<构建ID>.txt（不固定覆盖上次证据）
+#   - 日志写屏并写入本次独立的 <GATE_LOG_DIR>/a4-gate-<构建ID>.txt（不固定覆盖
+#     上次证据）。GATE_LOG_DIR 可注入（测试用每场景独立临时目录做隔离），
+#     默认 /tmp（S6：默认目录固定为 /tmp，归属明确；不再写入固定的 a4-gate.txt）
 #   - dist 会自动带 electron 镜像（直连 GitHub 常 ETIMEDOUT）
 #   - dist 与其他步骤走同一条 run 路径：非 0 立即停止，保留该退出码，
 #     不执行 verify:package，不打印 ALL_GREEN
@@ -19,7 +21,9 @@ export PATH="/usr/bin:/bin:$PATH"
 cd "$(dirname "$0")/.." || exit 1
 
 GATE_ID="$(date +%Y%m%d-%H%M%S)-$$"
-LOG="/tmp/a4-gate-${GATE_ID}.txt"
+GATE_LOG_DIR="${GATE_LOG_DIR:-/tmp}"
+LOG="${GATE_LOG_DIR}/a4-gate-${GATE_ID}.txt"
+mkdir -p "$GATE_LOG_DIR" || exit 1
 : > "$LOG"
 
 run() {

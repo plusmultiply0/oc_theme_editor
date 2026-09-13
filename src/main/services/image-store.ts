@@ -248,25 +248,67 @@ export class ImageStore {
 
   /**
    * 界面回显用的缩小副本（data URL）。
-   * 只用工具自己生成的缩略图；即便缩略图没写成功，也从**私有副本**临时缩一张。
+   *
+   * 读取顺序（R3）：
+   *   1. 已登记缩略图可读 → 直接用；
+   *   2. 缩略图缺失或读不到（含被缓存清理误删的场景）→ 从**已校验私有副本**
+   *      回退重建，并尽力把缩略图落盘恢复；不再把「缩略图丢了」误报成
+   *      「图片已损坏」；
+   *   3. 尚未固定内容的记录 → 仍可从用户源文件生成预览（只读、受限）。
+   *
+   * 错误语义区分（R3）：副本丢失/被改动 = IMAGE_CONTENT_MISMATCH（缓存与副本
+   * 问题，重导入即可）；字节读到了但解码失败 = IMAGE_DECODE_FAILED（图片本身
+   * 可能损坏）。
    */
   async previewDataUrl(imageId: string): Promise<Result<string>> {
     const record = this.records.get(imageId);
     if (!record) {
       return fail('IMAGE_NOT_FOUND', '图片记录已失效', '请重新选择图片。');
     }
-    try {
-      if (record.thumbnailPath) {
+    if (record.thumbnailPath) {
+      try {
         const buf = await fs.readFile(record.thumbnailPath);
         return ok(`data:image/png;base64,${buf.toString('base64')}`);
+      } catch {
+        // 缩略图失效：清掉标记，走下面的回退重建
+        record.thumbnailPath = undefined;
       }
-      const source = record.copyPath
-        ? await fs.readFile(record.copyPath)
-        : await this.readCapped(record.sourcePath ?? '', this.limits.maxBytes).then((r) => {
-            if (!r.success) throw new Error(r.error.message);
-            return r.data;
-          });
+    }
+
+    if (record.copyPath && record.contentHash) {
+      const source = await this.readBytes(imageId);
+      if (!source.success) return source;
+      return this.renderPreview(record, source.data);
+    }
+
+    if (record.sourcePath) {
+      const read = await this.readCapped(record.sourcePath, this.limits.maxBytes);
+      if (!read.success) {
+        return fail(
+          'IMAGE_NOT_FOUND',
+          '无法读取该图片',
+          '文件可能已被移动或删除，请重新选择。',
+          read.error.detail,
+        );
+      }
+      return this.renderPreview(record, read.data);
+    }
+
+    return fail('IMAGE_NOT_FOUND', '图片内容不存在', '请重新导入这张图片。');
+  }
+
+  /** 用源字节生成 512 预览；同时尽力恢复 320 缩略图文件（恢复失败不阻断预览） */
+  private async renderPreview(record: ImageRecord, source: Buffer): Promise<Result<string>> {
+    try {
       const buf = await sharp(source).rotate().resize(512, 512, { fit: 'inside' }).png().toBuffer();
+      try {
+        await fs.mkdir(this.thumbsDir, { recursive: true });
+        const thumbnailPath = path.join(this.thumbsDir, `${record.thumbnailId}.png`);
+        await sharp(source).rotate().resize(320, 320, { fit: 'inside' }).png().toFile(thumbnailPath);
+        record.thumbnailPath = thumbnailPath;
+      } catch {
+        // 缩略图文件恢复失败不影响本次预览结果
+      }
       return ok(`data:image/png;base64,${buf.toString('base64')}`);
     } catch (e) {
       return fail('IMAGE_DECODE_FAILED', '无法生成预览图', '图片可能已损坏，请换一张。', String(e));
@@ -276,14 +318,34 @@ export class ImageStore {
   /**
    * 清理没人引用的私有副本与缩略图（启动时调用）。
    *
-   * 只动本工具自己的两个目录，**不递归、不触碰用户目录**；
-   * `keep` 由调用方给出（当前进程内已登记 + 仍有准备记录引用的 imageId），
-   * 保证「待恢复/待应用」引用的文件不会被清掉。
+   * 只动本工具自己的两个目录，**不递归、不触碰用户目录**。
+   * R3 修复：content 与 thumbnail 的保留集合**分开**计算，并且：
+   *   - content：文件名去扩展名后与 imageId **精确相等**才算引用
+   *     （imageId 来自调用方 keep 与内存 records；后者同时覆盖「导入进行中」，
+   *     先登记后写文件的顺序保证清理不会删掉正在写入的副本），
+   *     另加内存 records 的 copyPath 规范化路径兜底；
+   *   - thumbnail：只认内存 records 的 thumbnailPath 规范化路径与 thumbnailId。
+   *     旧实现用 imageId 前缀猜关联，而缩略图文件名是独立的 thumb-… 命名，
+   *     永远匹配不上 → 在用缩略图被当孤儿删除、预览误报「图片已损坏」。
+   *     重启后 keep 引用的 imageId 无法反推 thumbnailId（未持久化关联），
+   *     其缩略图允许被清 —— 预览会从已校验私有副本回退重建（派生数据）。
    */
   async cleanOrphanCaches(keep: Iterable<string>): Promise<number> {
-    const keepSet = new Set<string>([...keep, ...this.records.keys()]);
+    const keepContentIds = new Set<string>([...keep, ...this.records.keys()]);
+    const keepThumbIds = new Set<string>();
+    const keepContentPaths = new Set<string>();
+    const keepThumbPaths = new Set<string>();
+    for (const r of this.records.values()) {
+      if (r.copyPath) keepContentPaths.add(path.resolve(r.copyPath));
+      if (r.thumbnailPath) keepThumbPaths.add(path.resolve(r.thumbnailPath));
+      keepThumbIds.add(r.thumbnailId);
+    }
+
     let removed = 0;
-    for (const dir of [this.contentDir, this.thumbsDir]) {
+    for (const [dir, ids, paths] of [
+      [this.contentDir, keepContentIds, keepContentPaths],
+      [this.thumbsDir, keepThumbIds, keepThumbPaths],
+    ] as const) {
       let names: string[];
       try {
         names = await fs.readdir(dir);
@@ -292,8 +354,7 @@ export class ImageStore {
       }
       for (const name of names) {
         const id = name.replace(/\.[^.]+$/, '');
-        const referenced = keepSet.has(id) || [...keepSet].some((k) => name.startsWith(k));
-        if (referenced) continue;
+        if (ids.has(id) || paths.has(path.resolve(dir, name))) continue;
         try {
           await fs.rm(path.join(dir, name), { force: true });
           removed += 1;

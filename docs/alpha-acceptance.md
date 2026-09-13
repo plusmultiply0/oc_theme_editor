@@ -158,6 +158,29 @@ A5/A6 必须测同一份 zip（`92126171…`）。源码或包若有任何改动
 
 R5 完成后的测试范围（如实记录）：**全量单元+集成 295 项通过（23 文件，提交 `a83df6b` 源码）**。
 这验证的是**当前源码**，不是 zip 内代码；审查前历史数字（273 项）对应当时源码，均已过期不重复使用。
+
+### 2026-09-13 第二轮审查修复（S1–S6）：同样仅源码级，当前候选仍不含
+
+同日第二轮独立审查（计划 `handoff/review-2026-09-13-r2/REVIEW_AND_FIX_PLAN.md`）确认 6 项，
+逐项修复、独立提交。**当前候选（zip `92126171…`，源 `871703d`，`manual-repack-20260912`）依然不包含
+这些修复**；且 S3 之后新登记（schema `candidate-manifest/2`）才允许通过发布门禁，旧登记在
+`verify:release` 下失败关闭。包含修复必须：冻结源码 → `npm run build` → 全新候选目录 + 唯一 buildId →
+`node tools/candidate-manifest.cjs register` 重新登记 → `GATE_CANDIDATE_DIR/GATE_BUILD_ID` 绑定跑
+`bash tools/release-gate.sh`。禁止沿用现有 zip 名称/身份冒充已含修复。
+
+| 编号 | 内容 | 提交 |
+|---|---|---|
+| S1 | 诊断文件三处类型错误修复，typecheck/lint 恢复退出 0 | `98021ab` |
+| S2 | ImageStore 清理与导入竞态：删除判定时实时重建引用集合（同步 Map），确定性交错测试固定行为 | `c1bb98d` |
+| S4 | 缩略图返回前受限完整解码（1024² 像素、单帧、APNG 拒绝），坏缓存必进回退重建；预览临时文件+rename 落盘 | `4aa9c62` |
+| S5 | 测试包装脚本传播退出码（0/23/信号/spawn 错误），日志按 runId 隔离不覆盖 | `1933068` |
+| S6 | 门禁日志目录可注入（GATE_LOG_DIR）且按 runId 隔离；哨兵不写共享 /tmp；显式候选分支与并发互不覆盖入测 | `e33fb48` |
+| S3 | 发布门禁与旧候选核验**分离命名/输出**：`verify:release`（新 `tools/verify-release.cjs`）绑定唯一 buildId+候选目录+HEAD 冻结，登记 schema/2 记录锁文件 hash 与完整 out/** 冻结清单，包内 out 与清单逐文件一致（缺/多/差异都失败，至少覆盖 ImageStore/generate/image-probe），zip 与候选目录逐条目 CRC32 一致；门禁缺 `GATE_CANDIDATE_DIR/GATE_BUILD_ID` 绑定在构建前 exit 2，不回落默认候选；`verify:package` 定位为旧候选身份核验（输出明确不构成发布验收结论） | `2e17e2a` |
+
+S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通过（25 文件，提交 `2e17e2a` 源码，
+`node tools/r5-run-suite.cjs run` 退出 0）**；typecheck/lint 退出 0；门禁脚本层测试
+`node tools/test-release-gate.cjs` 全过（含缺失绑定的失败关闭场景）。验证对象均为**当前源码与脚本**，
+不是 zip 内代码。A8 维持 NO-GO：发布前必须完成全新候选的构建、登记、门禁与真实闭环（另需用户授权）。
 测试运行的已知环境注意事项：需用 `tools/r5-run-suite.cjs`（注入项目盘 TEMP）跑，
 否则本机安全进程会锁 %TEMP% 下的合成 asar 造成假失败；全量高并发下 D 盘冷缓存可能
 出现个别超时抖动（单文件重跑即恢复），与 FILE_LOCKED 无关。

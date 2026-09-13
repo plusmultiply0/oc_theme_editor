@@ -36,9 +36,8 @@ import { TargetService } from '../../src/main/services/target-service';
 import { OperationService } from '../../src/main/services/operation-service';
 import { OperationEventBus } from '../../src/main/services/events';
 import { makeSyntheticInstall } from '../fixtures/synthetic-install';
-import { jpegBytes, pngBytes } from '../fixtures/image-samples';
+import { jpegBytes } from '../fixtures/image-samples';
 import type { ThemeSpec } from '../../src/shared/schema';
-import { ADAPTER } from '../integration/helpers/adapter';
 
 const cleanups: (() => void)[] = [];
 const EVIDENCE: Record<string, unknown> = { startedAt: new Date().toISOString() };
@@ -75,6 +74,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 interface ProbeOutcome {
   ok: number;
   failures: { step: string; code?: string; message: string }[];
+}
+
+/** apply 闭环诊断日志的结构化形态（避免 Record<string, unknown> 展开报 TS2698） */
+interface ApplyLoopLog {
+  archivePath: string;
+  lockTimeline: Record<string, string>;
+  [key: string]: unknown;
 }
 
 /** 探针：n 次「写文件 → rename 覆盖 → unlink」，记录每个失败步骤与 errno */
@@ -165,13 +171,15 @@ describe('R5 诊断', () => {
       probe: idle,
     });
     // 逐步探测：锁从哪一步开始出现
-    const timeline: Record<string, unknown> = {};
+    const timeline: Record<string, string> = {};
     const stepProbe = async (label: string) => {
       const p = await probeTargetRename(install.archivePath);
       timeline[label] = p.ok ? 'unlocked' : `LOCKED(${p.code})`;
       return p.ok;
     };
-    EVIDENCE.applyLoop = { archivePath: install.archivePath, lockTimeline: timeline };
+    // 局部保持类型化引用，后续直接在此对象上补字段/展开，不经过 EVIDENCE 的 unknown
+    const applyLoop: ApplyLoopLog = { archivePath: install.archivePath, lockTimeline: timeline };
+    EVIDENCE.applyLoop = applyLoop;
     await stepProbe('afterInstall');
 
     const discovered = await targets.discover();
@@ -191,13 +199,11 @@ describe('R5 诊断', () => {
       spec: specOf(picked.data.imageId, imported.data.palette),
     });
     await stepProbe('afterStage');
-    const log: Record<string, unknown> = {
+    Object.assign(applyLoop, {
       targetId: discovered.data.targets[0].targetId,
       installPath: discovered.data.targets[0].installPath,
-      archivePath: install.archivePath,
-      ...EVIDENCE.applyLoop,
-    } as Record<string, unknown>;
-    EVIDENCE.applyLoop = log;
+    });
+    const log: ApplyLoopLog = applyLoop;
     if (!staged.success) {
       log.stage = { code: staged.error.code, message: staged.error.message, detail: staged.error.detail };
       expect.unreachable('stage 失败，见 evidence');
@@ -214,7 +220,7 @@ describe('R5 诊断', () => {
         entry.detail = applied.error.detail;
         entry.targetRenameProbe = await probeTargetRename(install.archivePath);
       }
-      (log[label] as Record<string, unknown>) = entry;
+      log[label] = entry;
       return applied;
     };
 

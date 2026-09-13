@@ -19,7 +19,8 @@
 import fs from 'node:fs';
 import { testTmpRoot } from '../fixtures/test-tmp';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import fsp from 'node:fs/promises';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ImageStore } from '../../src/main/services/image-store';
 import { pngBytes } from '../fixtures/image-samples';
 
@@ -120,6 +121,65 @@ describe('cleanOrphanCaches：在用文件保留（R3）', () => {
     for (const id of [a, importedB]) {
       const preview = await store.previewDataUrl(id);
       expect(preview.success).toBe(true);
+    }
+  });
+
+  it('S2 确定性交错：清理 readdir 挂起期间完成导入的图片不被误删', async () => {
+    const { store, runtime } = newStore();
+    await importPng(store, 'a.png');
+
+    // 用 deferred 固定审查报告的交错顺序（不靠 sleep/概率）：
+    //   1) 清理在 content 目录的 readdir 处挂起；
+    //   2) 导入 B 并等它完全写完（副本 + 缩略图 + 记录登记）；
+    //   3) 放行 readdir，让清理面对「已包含 B 文件的目录列表」。
+    const fspAwaited = fsp;
+    const realReaddir = fspAwaited.readdir;
+    const contentDir = path.join(runtime, 'content');
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let intercepted = false;
+    const spy = vi
+      .spyOn(fspAwaited, 'readdir')
+      .mockImplementation(((dir: Parameters<typeof realReaddir>[0], opts?: unknown) => {
+        if (!intercepted && dir === contentDir) {
+          intercepted = true;
+          return gate.then(() =>
+            realReaddir(dir, opts as Parameters<typeof realReaddir>[1]),
+          );
+        }
+        return realReaddir(dir, opts as Parameters<typeof realReaddir>[1]);
+      }) as typeof fspAwaited.readdir);
+
+    try {
+      // 入口只固化 keep（空）；records 引用集合在删除判定时实时重建
+      const cleanPromise = store.cleanOrphanCaches([]);
+      expect(intercepted).toBe(true); // readdir 已挂起，交错窗口打开
+      const importedB = await importPng(store, 'b.png');
+      release();
+      const removed = await cleanPromise;
+
+      const rb = store.peek(importedB);
+      if (!rb?.copyPath) throw new Error('缺少 B 副本');
+      // 交错后：B 的副本与缩略图都还在，readBytes/preview 均成功
+      expect(fs.existsSync(rb.copyPath)).toBe(true);
+      if (rb.thumbnailPath) expect(fs.existsSync(rb.thumbnailPath)).toBe(true);
+      const read = await store.readBytes(importedB);
+      expect(read.success).toBe(true);
+      const preview = await store.previewDataUrl(importedB);
+      expect(preview.success).toBe(true);
+
+      // 真孤儿仍会被删：放一个孤儿再清理一次
+      const orphan = path.join(runtime, 'content', 'orphan-s2.png');
+      fs.writeFileSync(orphan, 'x');
+      const removed2 = await store.cleanOrphanCaches([]);
+      expect(removed2).toBe(1);
+      expect(fs.existsSync(orphan)).toBe(false);
+      expect(fs.existsSync(rb.copyPath)).toBe(true);
+      expect(removed).toBe(0);
+    } finally {
+      spy.mockRestore();
     }
   });
 });

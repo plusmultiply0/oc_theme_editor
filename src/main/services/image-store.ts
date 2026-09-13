@@ -351,30 +351,59 @@ export class ImageStore {
    * 只动本工具自己的两个目录，**不递归、不触碰用户目录**。
    * R3 修复：content 与 thumbnail 的保留集合**分开**计算，并且：
    *   - content：文件名去扩展名后与 imageId **精确相等**才算引用
-   *     （imageId 来自调用方 keep 与内存 records；后者同时覆盖「导入进行中」，
-   *     先登记后写文件的顺序保证清理不会删掉正在写入的副本），
+   *     （imageId 来自调用方 keep 与内存 records），
    *     另加内存 records 的 copyPath 规范化路径兜底；
    *   - thumbnail：只认内存 records 的 thumbnailPath 规范化路径与 thumbnailId。
    *     旧实现用 imageId 前缀猜关联，而缩略图文件名是独立的 thumb-… 命名，
    *     永远匹配不上 → 在用缩略图被当孤儿删除、预览误报「图片已损坏」。
    *     重启后 keep 引用的 imageId 无法反推 thumbnailId（未持久化关联），
    *     其缩略图允许被清 —— 预览会从已校验私有副本回退重建（派生数据）。
+   *
+   * S2 修复：引用集合**不再在函数入口生成一次快照**。旧实现在 readdir
+   * （await，让出执行权）之前固定快照，清理期间新导入的图片不在快照里，
+   * 恢复执行后会把刚写完的副本/缩略图当孤儿删掉。现在：
+   *   - 调用方 keep（持久化记录）在入口固化一次——它在清理期间不会变化；
+   *   - 内存 records 部分**每个文件的删除判定前实时重建**。正确性依据：
+   *     导入流程「先登记 record 再写文件」，所以「文件已在盘上而记录未登记」
+   *     不存在；「记录已登记而文件未写完」时 imageId/thumbnailId 已在集合中，
+   *     不会被删。判定是同步的，判定到删除之间登记的新记录也不受影响
+   *     （其文件要么不在本次 readdir 结果里，要么在集合中）。
    */
   async cleanOrphanCaches(keep: Iterable<string>): Promise<number> {
-    const keepContentIds = new Set<string>([...keep, ...this.records.keys()]);
-    const keepThumbIds = new Set<string>();
-    const keepContentPaths = new Set<string>();
-    const keepThumbPaths = new Set<string>();
-    for (const r of this.records.values()) {
-      if (r.copyPath) keepContentPaths.add(path.resolve(r.copyPath));
-      if (r.thumbnailPath) keepThumbPaths.add(path.resolve(r.thumbnailPath));
-      keepThumbIds.add(r.thumbnailId);
+    const persistentIds = new Set(keep);
+
+    interface RefSets {
+      contentIds: Set<string>;
+      contentPaths: Set<string>;
+      thumbIds: Set<string>;
+      thumbPaths: Set<string>;
     }
+    const collectRefs = (): RefSets => {
+      const refs: RefSets = {
+        contentIds: new Set(persistentIds),
+        contentPaths: new Set<string>(),
+        thumbIds: new Set<string>(),
+        thumbPaths: new Set<string>(),
+      };
+      for (const r of this.records.values()) {
+        refs.contentIds.add(r.imageId);
+        if (r.copyPath) refs.contentPaths.add(path.resolve(r.copyPath));
+        if (r.thumbnailPath) refs.thumbPaths.add(path.resolve(r.thumbnailPath));
+        refs.thumbIds.add(r.thumbnailId);
+      }
+      return refs;
+    };
 
     let removed = 0;
-    for (const [dir, ids, paths] of [
-      [this.contentDir, keepContentIds, keepContentPaths],
-      [this.thumbsDir, keepThumbIds, keepThumbPaths],
+    for (const [dir, refsOf] of [
+      [
+        this.contentDir,
+        (r: RefSets) => ({ ids: r.contentIds, paths: r.contentPaths }),
+      ],
+      [
+        this.thumbsDir,
+        (r: RefSets) => ({ ids: r.thumbIds, paths: r.thumbPaths }),
+      ],
     ] as const) {
       let names: string[];
       try {
@@ -383,6 +412,7 @@ export class ImageStore {
         continue;
       }
       for (const name of names) {
+        const { ids, paths } = refsOf(collectRefs());
         const id = name.replace(/\.[^.]+$/, '');
         if (ids.has(id) || paths.has(path.resolve(dir, name))) continue;
         try {

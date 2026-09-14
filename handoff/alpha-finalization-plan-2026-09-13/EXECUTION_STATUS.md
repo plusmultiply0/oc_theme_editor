@@ -9,9 +9,24 @@
 | P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
 | P2 新登记与冻结分离 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（含缺 manifest 失败关闭场景）；全量 `r5-run-suite run` → 0（26 文件 / 346 项）；`candidate-manifest.test.ts` 14 项 | 下方「P2 明细」 | agent / 2026-09-14 08:3x |
 | P3 完整发布链与双重校验 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（71 项）；`vitest run tests/unit` → 0（11 文件 / 174 项）；`tests/integration/candidate-manifest.test.ts` → 14 项通过；`discover+main-services+electron-runtime` → 0（29 项） | 下方「P3 明细」；`RUNBOOK.md` | agent / 2026-09-14 10:5x |
-| P4 新候选构建与GUI冒烟 | **阻塞**（`已实现但未整链验证` + `完整测试有基础设施错误`；未产出候选） | 当前 HEAD `55ba0e4`；上次构建源码来源 `5689cf7` | `node tools/release-build.cjs build 20260914-alpha1-p3full` → **1**（typecheck 0 / lint 0 / test:unit 0 / **test:integration 1** → `STOPPED at test:integration`）；受控并发复跑 → 15 文件/172 项通过但**仍有 1 个 RPC 错误、exit 1** | 下方「P4 明细」；**`P4-BLOCKERS-DIAGNOSIS.md`**；**`diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`**；`node_modules/.cache/ots-test-logs/` | agent / 2026-09-14 12:0x |
+| P4 新候选构建与GUI冒烟 | **阻塞**（`候选工程验证通过` 的部分已就绪：任务 A–D 已实施并定向测试通过；**整链重跑待授权**；未产出候选） | 当前 HEAD `492322b`；上次构建源码来源 `5689cf7` | 任务 A–D 定向验证：`test-release-gate.cjs` → 0（全部通过）；受控并发 `unit` 12 文件/188 项 → 0；`integration` 15 文件/173 项 → 0，Unhandled Error 0；`tsc --noEmit` → 0；`eslint .` → 0。**整链 `release-build.cjs build` 尚未重跑（授权关口）** | 下方「P4 明细」「P4 复诊纠偏」；`P4-BLOCKERS-DIAGNOSIS.md`；`diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md` | agent / 2026-09-14 13:0x |
 | P5 真实安装闭环 | 等待当次授权，未执行 | — | — | — | — |
 | P6 材料与GO/NO-GO | 待执行 | — | — | — | — |
+
+## 任务 A–E 实施登记（2026-09-14，按 `diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`）
+
+每项**独立提交**；状态词按五档约定（`已实现但未整链验证` / `定向测试通过` / `完整测试有基础设施错误` / `候选工程验证通过` / `真实闭环通过`）。
+
+| 任务 | 提交 | 状态 | 证据 |
+|---|---|---|---|
+| A 测试 worker 异步化 | `5679c06` | **定向测试通过** | 候选套件 15/15、exit 0、Unhandled Error 0（44.93s）；完整集成连跑两次均 exit 0（15 文件/173 项）；最大事件循环延迟 12ms（RPC 上限 60000ms） |
+| B 受控并发 + 完整性检查 | `602708f` | **定向测试通过** | `unit` 11 文件/179 项 exit 0；`integration`（`--pool=forks --maxWorkers=1 --no-file-parallelism`）15 文件/173 项 exit 0、Unhandled Error 0（54.68s）；包装层测试 10 项全过（含完整性负例 5 项） |
+| C 发布资格与必需步骤契约 | `076a38e` | **定向测试通过** | 新增 `tools/release-eligibility.cjs`（唯一事实来源）；`test-release-gate.cjs` 全部通过（含 skip-gui/skip-e2e/skipped/非 0/测试注入/缺字段 六类负例全被拒） |
+| D GUI 冒烟真实校验 | `492322b` | **定向测试通过**（真实 exe 冒烟待整链） | 冒烟改为 `.cjs` 纯 node 运行（去掉未声明的 `npx tsx`）；四条界面断言 + `--self-test-negative`；`smoke-packaged.test.ts` 9 项全过；`smoke:gui` 失败传播入闸门测试 |
+| E 文档与阶段状态纠偏 | `673b39b`（首轮）+ 本表更新 | **完成** | 见「P4 复诊纠偏」与 `RUNBOOK.md` 前提块 |
+
+**关键限定**：以上均为**定向测试**结果，不等于整链通过。任务 F 的整链重跑（发布模式、不跳步骤、无测试注入）尚未执行；在整链 `ALL_GREEN` 之前，P4 仍为**阻塞**，不得据定向结果宣称发布资格。
+
 
 ## P0 明细（2026-09-13）
 
@@ -237,9 +252,16 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
 `verify-release` 只核对 build-record hash、不检查发布必需步骤是否执行
 → 「跳过检查仍可发布」。已登记为任务 C。
 
-**下一阶段（任务 A–F，待授权执行）**：
-A 测试 worker 异步化；B 受控并发 + 完整性检查接入发布链；C 发布资格与必需步骤契约；
-D GUI 冒烟真实校验；E 文档纠偏（本轮进行）；F 恢复 P4 重跑（授权关口）。
+**下一阶段（任务 A–F）**：
+- A 测试 worker 异步化 —— **已实施**（`5679c06`，定向测试通过）。
+- B 受控并发 + 完整性检查接入发布链 —— **已实施**（`602708f`，定向测试通过）。
+- C 发布资格与必需步骤契约 —— **已实施**（`076a38e`，定向测试通过）。
+- D GUI 冒烟真实校验 —— **已实施**（`492322b`，定向测试通过；真实 exe 冒烟待整链）。
+- E 文档纠偏 —— **已完成**（`673b39b` + 本表）。
+- F 恢复 P4 重跑 —— **未开始，授权关口**：须在取得实施/构建授权后，以**发布模式**
+  （不加 `--skip-gui`/`--skip-e2e`、不注入 `OTS_STEP_STUB`/`OTS_NODE_BIN`）重跑
+  `node tools/release-build.cjs build <新buildId>` 整链；得到 `ALL_GREEN` 后方可进入 P5。
+
 
 ## 新增接口及RUNBOOK交付
 

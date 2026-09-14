@@ -9,10 +9,14 @@
 （schema `/1`）仍是历史记录，发布链**不会**自动回落它。
 
 > **[2026-09-14 重要前提] 「已实现命令」≠「整链实测通过」。**
-> 截至本版，发布链**尚未**完整跑通：`test:integration` 存在 **RPC 基础设施错误**
-> （`onTaskUpdate` 超时 → 退出码 1），当前**未达到 `ALL_GREEN`**。
+> 截至本版，发布链**整链仍未重跑**：`onTaskUpdate` RPC 超时的**根因已修**
+> （任务 A 把 worker 侧子进程等待异步化，`5679c06`），候选套件与完整集成已
+> **连跑两次均 exit 0、Unhandled Error 0**；受控并发（任务 B `602708f`）、
+> 发布资格契约（任务 C `076a38e`）、GUI 冒烟真实校验（任务 D `492322b`）亦已落地并
+> **定向测试通过**。但**整链 `release-build.cjs build` 尚未以发布模式重跑**
+> （授权关口，任务 F），故**尚无 `ALL_GREEN`、无候选产物**。
 > 详见 `P4-BLOCKERS-DIAGNOSIS.md` 与 `diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`。
-> 本手册描述的是**接口形状**，不代表候选已产出或已通过。
+> 本手册描述的是**接口形状 + 已落地的判据**，不代表候选已产出或已通过。
 
 ## 状态词（五者含义不同，**不得互相代替**）
 
@@ -50,16 +54,36 @@
 npm run typecheck                       # 类型
 npm run lint                            # 静态检查
 node tools/r5-run-suite.cjs run         # 全量单元+集成（推荐入口，注入临时目录策略）
-node tools/test-release-gate.cjs        # 发布编排链路行为测试（71 项断言）
+node tools/test-release-gate.cjs        # 发布编排链路行为测试（102 项断言）
 ```
 
 单项：
 ```bash
 node tools/r5-run-suite.cjs run tests/unit
-node tools/r5-run-suite.cjs run tests/integration
+node tools/r5-run-suite.cjs run tests/integration --pool=forks --maxWorkers=1 --no-file-parallelism
 ```
 
-日志位置：`node_modules/.cache/ots-test-logs/suite-<runId>.log`（按 runId 独立，不覆盖历史）。
+**受控并发（任务 B 起，发布链固定使用）**：集成测试必须带
+`--pool=forks --maxWorkers=1 --no-file-parallelism`（**不用 `singleFork`**，
+该选项与文件级并行控制语义重叠）。理由是并行资源竞争会在高负载机器上造成
+假失败与 RPC 超时；受控并发把这类环境噪声排除掉。（不删用例、不跳用例、不调阈值。）
+
+**日志完整性判据（任务 B 起强制）**：包装层不靠「最后显示全 ✓」放行，必须同时满足：
+
+| 判据 | 说明 |
+|---|---|
+| 有汇总块 | 必须解析出 `Test Files ... (N)` 与 `Tests ... (N)`；缺失即判据不足 |
+| 失败为 0 | 汇总里 `failed` 计数必须为 0 |
+| Unhandled Error 为 0 | `Errors N error` / `Vitest caught N unhandled error` / `Unhandled Error` 任一命中即失败 |
+| 文件数相符 | 传入 `expectedFiles` 时，实际完成文件数必须相等（防「少跑文件」） |
+| 无 skipped/todo | 传 `expectNoSkip` 时二者必须为 0 |
+| 退出码 | 进程退出码必须为 0；**进程自称 0 但完整性不通过时强制拉成 1** |
+
+不通过时输出 `COMPLETENESS_FAIL:` 并逐条列出原因。每次运行的日志写在
+`node_modules/.cache/ots-test-logs/suite-<runId>.log`（含 command/cwd/独立 tempRoot/
+status/signal/timeout/spawnError + 完整 stdout/stderr），**每次运行独立临时子目录**
+`<tmpRoot>/run-<runId>`，不同运行互不干扰。
+
 
 ## 2. 构建并登记新候选（完整链，唯一一次构建+打包）
 
@@ -133,21 +157,29 @@ node tools/verify-package.cjs <候选目录> --manifest <登记路径>
 
 打好的包启动冒烟（Playwright，与真实双击启动同一机制）：
 ```bash
-npx tsx tools/smoke-packaged.ts candidate-<buildId>/win-unpacked
+node tools/smoke-packaged.cjs candidate-<buildId>/win-unpacked
 ```
-成功打印 `SMOKE_OK`，失败打印 `SMOKE_FAIL:`。
+成功打印 `SMOKE_OK`；失败打印 `SMOKE_FAIL: <原因>` 并 **exit 1**。
 
-> **[2026-09-14 已知问题]** 该入口依赖 `npx tsx`，但 **`tsx` 既未被 `package.json`/锁文件
-> 声明，本机 `node_modules` 里也没有**。发布链**不得**临时下载未锁定的工具。
-> 处置（任务 D，二选一）：把小冒烟脚本改为 **CJS**，直接
-> `node tools/smoke-packaged.cjs <候选目录>` 并使用项目已声明的 Playwright 测试包；
-> 或正式固定 `tsx` 依赖并同步锁文件。
->
-> **[2026-09-14 验收漏洞]** 现行冒烟的**验收条件不足**：隔离模拟探针显示，
-> mock 窗口返回**空标题/空 body**、或 `innerText` **直接抛异常**时，
-> 两种情况**均输出 `SMOKE_OK`、exit 0**。这不代表真实打包程序一定是空白，
-> 只说明**当前判据不能证明界面可用**。任务 D 将改为断言关键控件存在、
-> 监听页面错误/崩溃，并让坏页面返回非 0。
+> **[2026-09-14 已修（任务 D）]** 原先用 `npx tsx tools/smoke-packaged.ts` ——
+> `tsx` **既未被 `package.json`/锁文件声明，本机也没有**，发布链不得临时下载未锁定工具。
+> 现改为 **`.cjs`**，由 `node` 直接运行，只依赖已声明的 Playwright 测试包；
+> 发布编排器的 `smoke:gui` 步骤同步改用该入口。
+
+**冒烟判据（任务 D 起强制；任一不满足即失败）**：
+
+| 判据 | 说明 |
+|---|---|
+| 渲染进程真的起来 | 能拿到窗口（`firstWindow`） |
+| 顶栏标题正确 | `.topbar h1` 精确等于「OpenCode 换肤助手」 |
+| 关键控件可见 | 「应用到 OpenCode」按钮可见 |
+| 非空白页 | body 可见文本 ≥ 40 字符 |
+| 无致命错误 | 渲染进程 `console error` / `pageerror` 计数为 0 |
+
+> **[2026-09-14 验收漏洞已修]** 旧版只打印前 3 行文本就无条件 `SMOKE_OK`——
+> 空白页、白屏崩溃、渲染进程挂掉都能「通过」。现在上述四条任一不满足即非 0。
+> 可用 `--self-test-negative` 自检：脚本会清空 DOM，**必须**判为失败并打印
+> `SMOKE_SELFTEST_OK`，用于证明断言真的会失败（避免「永远通过的检查」）。
 
 - 必须清掉子进程环境里的 `ELECTRON_RUN_AS_NODE`（脚本内已 `delete`）。某些开发
   环境全局导出它，Electron 会退化成纯 Node、不建窗口即退出 0，误判为「包坏了」。
@@ -160,22 +192,25 @@ npx tsx tools/smoke-packaged.ts candidate-<buildId>/win-unpacked
 
 ## 5.1 发布资格 vs 开发构建（任务 C 起）
 
-> **[2026-09-14 已登记缺口]** 当前 `--skip-e2e` / `--skip-gui` 省略的步骤**不进入
+> **[2026-09-14 已修]** 原缺口：`--skip-e2e` / `--skip-gui` 省略的步骤**不进入
 > build-record**，编排器结尾**仍打印 `ALL_GREEN`**；`verify-release` 只核对
 > build-record 的 hash，**不检查发布必需步骤是否执行** → **「跳过检查仍可发布」**。
-> 这是代码审查确认的后续风险，**不是**本轮真实构建复现。
+> 任务 C（`076a38e`）已关闭：新增 `tools/release-eligibility.cjs` 作为**唯一事实来源**，
+> 构建与核验共用同一把尺子。
 
-任务 C 落地后：
-
+- **必需步骤 14 项**：typecheck、lint、test:unit、test:integration、build、test:e2e、
+  test:e2e:electron、audit、dist、smoke:gui、verify-package、zip、register、verify:release。
 - **开发构建**：可以跳检查，但只能标 `DEV_BUILD_COMPLETE` 且 `releaseEligible=false`，
   **不得**输出发布 `ALL_GREEN`，也**不被 release verify 接受**。
-- **发布候选**：必须跑齐必需步骤集合
-  （typecheck、lint、unit、integration、build、两类 E2E、audit、dist、GUI 冒烟、
-  包可用性、zip）；build-record 逐步记录 `passed/failed/skipped` 与退出码，
+- **发布候选**：必须跑齐上述 14 项；build-record 逐步记录
+  `{ step, status: passed|failed|skipped|pending, exit, seconds }`，
   **不以缺字段隐含跳过**。
+- **绝不乐观放行**：`releaseEligible` 缺失、`testInjectedEnvironment=true`、
+  有步骤 `skipped`、有步骤非 `passed`、退出码非 0 —— 任一都判为不可发布。
 - 生产入口检测到 `OTS_STEP_STUB` / `OTS_NODE_BIN` 等**测试注入环境**时，
-  必须明确拒绝或进入带不可发布标记的测试模式 —— 不能让遗留环境变量把 mock 成功
-  伪装成真实通过。
+  在 build-record 打标并拒绝发布资格 —— 不能让遗留环境变量把 mock 成功伪装成真实通过。
+- `--strict` 模式：本次构建不可发布时直接 `exit 1`（供 CI 使用）。
+
 
 ## 6. 真实安装闭环（授权关口，P5）
 

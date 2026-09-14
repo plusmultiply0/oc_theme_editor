@@ -27,6 +27,29 @@
 
 **关键限定**：以上均为**定向测试**结果，不等于整链通过。任务 F 的整链重跑见下节；在整链 `ALL_GREEN` 之前，P4 仍为**阻塞**，不得据定向结果宣称发布资格。
 
+## 复审修复矩阵（按提交/工作树标识划分，2026-09-14 → 09-15）
+
+**用途**：把「哪份代码上做了什么修复、证据是什么」与「旧提交上跑出的历史事实」分开登记。
+旧表（P0–P4、任务 A–E）的**结论不因本表而改写**；本表只追加，不覆写。
+「门禁」= `node tools/test-release-gate.cjs`（编排器**行为**测试，含大量桩注入，
+**不等于真实整链产物已产出**）；日志在 `node_modules/.gate-log-*.txt`（**不入库**）。
+
+| 编号 | 提交 | 主题 | 验证 | 状态 |
+|---|---|---|---|---|
+| R1+R2 | `4ddf644` | 发布生命周期去自引用（build-record/2 登记前事实 + release-receipt/1 完成回执）；资格校验改由共享校验器重算 | 门禁 160 项全过；unit 24/24、integration 19/19（140s、0 Unhandled） | 已提交 |
+| R3 | `33925dd` | 完整性检查升级为**完成集合相等**的机器校验（预期集合 + JSON 结果 + runId 绑定）；顺带修 `--require-release-eligibility` 从未被解析、`gitsha(root)` 签名、asar 异步包装、zip 条目分隔符 | 门禁 160 项全过 | 已提交 |
+| R4 | `a794c08` | `build` 提前到 `test:integration` 之前（集成与打包共用同一份 out）；删除 `prepare:out` 前置；打包前 out 快照复核 | 门禁 167 项全过（含新场景 5b3/5b4） | 已提交 |
+| S1 | `6947483` | record↔manifest/receipt **同一次构建身份**交叉校验（共享 `checkRecordBinding`；锁文件 hash 必填） | 门禁 179 项全过（含 5e 负例翻转、9b 手工改名拒绝、5e-fn 函数级负例） | 已提交 |
+| S2 | 未提交 | core 与发布级成功标记分离（`CORE_VERIFY_GREEN` / `RELEASE_GREEN`）；`ALL_GREEN` 仅在发布级只读终检真实退出 0 后输出；shell 不再自行补标记 | 门禁验证中 | 进行中 |
+| S3 | `2cc2e31` | 机器报告 schema：缺失/非数组 `assertionResults` 失败关闭（不兜底成零项成功）；零项文件与全零报告拒绝；计数类型校验；suite 级 pending/failed 必须为 0 | 门禁 194 项全过（新增 9.18–9.23 六类畸形报告负例）；真实严格入口 212/212 通过 | 已提交 |
+| S4 | `b146d87` | 参数解析：两段式报告参数**连值一起剔除**（过滤条件不被污染）；strict 默认禁 skip（与纯函数一致），放行需显式 `--allow-skip` | 门禁 204 项全过（新增 9.24–9.28） | 已提交 |
+| S5 | 进行中 | 打包方式必须显式声明（取消 `manual-repack` 兜底默认）；`reproducibleBuild` 语义文档化 | 门禁验证中 | 进行中 |
+| S6 | 进行中 | 文档纠偏：修复矩阵、RUNBOOK 同步、删除「换会话清计数 / 关防护 / 全目录信任」类建议 | 文档核对 | 进行中 |
+
+**基建（非产品）**：门禁夹具清理原为进程内 `fs.rmSync`，本机存在间歇性文件锁会
+**无限期阻塞**（实测 >9 分钟、CPU 增量 0、无子进程）。已改为**有界子进程删除**
+（超时 20s，失败只告警）——夹具均为 `mkdtemp` 唯一目录，残留不污染断言。
+
 ## 任务 F · 整链重跑明细（2026-09-14）
 
 **命令**：`node tools/release-build.cjs build 20260914-alpha1-p4full`（发布模式：不加
@@ -87,36 +110,45 @@
 - 因此**本轮对话的删除配额已耗尽**，`rmSync('out')` 必被拦；这是环境机制，
   与仓库代码无关。**未采取任何绕过手段**（未设 `CODEBUDDY_SAFE_DELETE_ENABLED=0`、
   未改系统设置、未强杀进程）。
-- **处置**：在**新会话**中重跑（新 requestId → 计数归零），即可通过 `build` 继续整链。
-  无需改任何代码。
+- **处置**（2026-09-14 纠偏，r3-S6）：删除审批护栏是**独立的策略审批拦截**，
+  与 rename EPERM 不是同一机制。正确做法：核对精确生成目标（out/ 为 tsc 产物，
+  可重建）后走平台正规审批；**未获审批即保留阻塞**。不通过「换新会话使删除
+  计数归零」等方式绕过或重置护栏。
 
 **遗留阻塞（P4 仍为阻塞）**：
-- P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件锁）——**已定性（2026-09-14 补证），
-  非产品缺陷**。证据：最小复现（纯 Node，无 Electron / 无本仓库代码）在临时目录反复
-  「写 staged → rename 覆盖 target」，**300 次命中 18 次 `EPERM`（6%）**；`%TEMP%` 与
-  `HOME` 下均有命中。持锁者已定位：本机 `WinDefend`/`WdNisSvc` 均为 `Stopped`，而
-  **`QQPCRtp`（腾讯电脑管家实时防护）`Running`**。应用侧 `physical-fs`（Electron 下走
+- P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件访问失败）——
+  **归因降级（2026-09-14 纠偏，r3-S6）：持锁者待证实**。已证实的事实：
+  最小复现（纯 Node，无 Electron / 无本仓库代码）在临时目录反复
+  「写 staged → rename 覆盖 target」，**300 次命中 18 次 `EPERM`（6%）**；
+  `%TEMP%` 与 `HOME` 下均有命中——说明**脱离产品代码也能出现访问失败**。
+  此前「QQPCRtp Running、WinDefend Stopped」只是服务状态快照，**没有失败
+  时目标文件的句柄或文件系统事件证据，不足以确认锁来源**；界面错误标签
+  `FILE_LOCKED` 本身也不是持锁证据（EACCES 也可能是权限问题，现有代码把
+  EPERM/EBUSY/EACCES 一律显示 FILE_LOCKED）。应用侧 `physical-fs`（Electron 下走
   `original-fs`）与 `archive-io`（`noAsar` 窗口 + `uncacheArchive`）**均无缺陷**；失败点是
   `commit.ts:98` 的 `rename` 覆盖已存在的 `app.asar`。详见 `P4_DIAGNOSIS_AND_FIX_PLAN.md` §2.3.1。
   验收项「EPERM/首次 apply 失败有具体错误码及诊断信息，未靠关闭防护或吞异常放行」**已满足**
   （错误码 `FILE_LOCKED`、诊断明确、未吞异常、未关闭防护）。
-  **处置**：维持「不关防护、不改系统设置、不强杀进程」；需人工把仓库根与 `%TEMP%` 加入
-  电脑管家信任区（或暂停实时防护），再以发布模式重跑整链。
-- ~~P4-F2（新发现，待确认）~~ → **已修复（提交 `690eea6`）**：编排器把
-  `test:integration` 排在 `build` **之前**，而部分集成用例**依赖 `out/` 产物**
-  （`electron-runtime.test.ts` 显式断言 `out/main/index.js` 存在并抛
-  「请先 npm run build 再跑本用例」；`pack.ts::resolvePackWorkerPath` 由源码运行时
-  回落到 `out/core/patch/pack-worker.js`）。在**无 `out/` 的干净环境**（新克隆 / CI）
-  下 `test:integration` 必然失败，属**真实顺序缺陷**。
-  修复＝在 `test:unit` 与 `test:integration` 之间加入 `ensureIntegrationPrereq()`：
-  `out/main/index.js` 存在即跳过（幂等），缺失则先跑 `build:main`，失败即停；
-  **刻意不写入 build-record 必需步骤**（前置准备 ≠ 发布闸门，后续完整 `build` 语义不变）。
-  验证：闸门测试新增场景 5b3 全绿；`tsc --noEmit` 0；unit 13 文件 / 200 项全过。
-  （顺带修掉测试基建段解析的多行正则缺陷，详见该提交说明。）
-- 本次另遇**本机环境护栏**：构建环境的 `node-safe-delete-shim` 对单次进程内
-  批量删除设有阈值（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`），`build:main` 的
-  `rmSync('out')` 在累计超阈值时被拦。**属环境机制，不是仓库缺陷**；
-  未通过关闭护栏（`CODEBUDDY_SAFE_DELETE_ENABLED=0` 等）绕过。
+  **处置**（纠偏）：维持「不关防护、不改系统设置、不强杀进程」；**不把加入
+  信任区/暂停实时防护作为默认步骤**。如需确定持锁者，由有权限的操作者取得
+  针对该文件的句柄或文件系统事件证据并与失败时间对应；拿不到则保持「待证实」。
+  文件访问失败优先保持防护、收集 code/errno/syscall/时间/目标路径/前后 hash、
+  稍后有限次数重试。
+- ~~P4-F2（新发现，待确认）~~ → **已修复（`690eea6` 首版 → 被 r2-R4 方案取代，现行为 `a794c08`）**：
+  编排器把 `test:integration` 排在 `build` **之前**，而部分集成用例**依赖 `out/` 产物**。
+  首版方案（`690eea6`）在集成前加 `ensureIntegrationPrereq()`（仅凭 `out/main/index.js`
+  存在即跳过）。**r2 复审指出该方案会让集成用到旧 out worker**；r2-R4 已改为：
+  **干净 `build` 提前到 `test:unit` 之后、`test:integration` 之前**（唯一一次构建），
+  删除 `ensureIntegrationPrereq`；构建后记录 out 快照、打包前逐一复核（含 sha256），
+  测试期间 out 被更改即拒绝（`a794c08`）。闸门场景 5b3 已改断言「build 在集成之前、
+  prepare:out 不再出现」，并新增 5b4 快照复核负例。
+- 本次另遇**本机环境护栏**（**与 P4-F1 的 rename EPERM 是两类不同机制**，
+  r3-S6 纠偏：前者是删除策略审批拦截，后者是文件操作失败，不得混为同一根因）：
+  构建环境的 `node-safe-delete-shim` 对单次进程内批量删除设有阈值
+  （`SAFE_DELETE_BULK_CONFIRM_REQUIRED`），`build:main` 的 `rmSync('out')`
+  在累计超阈值时被拦。**属环境机制，不是仓库缺陷**；未通过关闭护栏
+  （`CODEBUDDY_SAFE_DELETE_ENABLED=0` 等）、未通过换会话重置计数、未通过
+  扩大防护豁免绕过。
 
 
 
@@ -359,11 +391,12 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
   `ensureIntegrationPrereq()`（幂等补 out，不计入发布必需步骤），并新增闸门场景 5b3
   锁定该顺序。**端到端真实验证**：清空 out 后重跑整链，prepare:out 真实补建、
   integration 173/173 全过 exit 0。
-- F 剩余动作：**在「新会话」中以发布模式重跑整链**。原因：本会话的批量删除护栏
-  计数桶（按 conversation request、TTL 7 天、阈值 300）已被本轮多次整链耗尽，
-  `build` 步的 `rmSync('out')` 必被拦；新会话计数归零即可继续。此外仍需按 P4-F1
-  处置（把仓库根与 `%TEMP%` 加入电脑管家信任区）以让 `test:e2e` 稳定通过。
-  在拿到 `ALL_GREEN` 之前，P4 仍为**阻塞**、无候选产物、总体 **NO-GO**。
+- F 剩余动作（2026-09-14 纠偏，r3-S6）：**以发布模式重跑整链**。此前登记的
+  两个前置按纠偏后口径处理：①批量删除护栏若再拦截，核对精确生成目标后走
+  平台正规审批，**不得换新会话重置计数**，未获审批即保留阻塞；②`test:e2e`
+  的文件访问失败在**保持防护**的前提下收集证据、有限次数重试，**不加信任区、
+  不暂停实时防护**；持锁者待有句柄/事件证据再归因。在拿到发布级 `ALL_GREEN`
+  之前，P4 仍为**阻塞**、无候选产物、总体 **NO-GO**。
 
 
 ## 新增接口及RUNBOOK交付

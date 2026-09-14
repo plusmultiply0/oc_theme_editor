@@ -8,15 +8,22 @@
 已收敛为它的薄入口（只加日志与绑定预检）。旧的 `candidate-manifest.json`
 （schema `/1`）仍是历史记录，发布链**不会**自动回落它。
 
-> **[2026-09-14 重要前提] 「已实现命令」≠「整链实测通过」。**
-> 截至本版，发布链**整链仍未重跑**：`onTaskUpdate` RPC 超时的**根因已修**
-> （任务 A 把 worker 侧子进程等待异步化，`5679c06`），候选套件与完整集成已
-> **连跑两次均 exit 0、Unhandled Error 0**；受控并发（任务 B `602708f`）、
-> 发布资格契约（任务 C `076a38e`）、GUI 冒烟真实校验（任务 D `492322b`）亦已落地并
-> **定向测试通过**。但**整链 `release-build.cjs build` 尚未以发布模式重跑**
-> （授权关口，任务 F），故**尚无 `ALL_GREEN`、无候选产物**。
-> 详见 `P4-BLOCKERS-DIAGNOSIS.md` 与 `diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`。
-> 本手册描述的是**接口形状 + 已落地的判据**，不代表候选已产出或已通过。
+> **[2026-09-15 重要前提] 「已实现命令」≠「整链实测通过」；历史记录不得当作当前版本结论。**
+> 本手册混合两类事实，**必须区分**：
+>
+> | 类别 | 含义 | 当前状态 |
+> |---|---|---|
+> | **旧提交执行记录** | 在**旧代码**上跑出的结果，只描述当时那版 | 任务 A/B/C/D 的定向测试、`onTaskUpdate` 超时根因修复（`5679c06`） |
+> | **当前工作树结论** | HEAD 及其改动下的实测 | 见下；**未跑整链前不宣称 `ALL_GREEN`** |
+>
+> 截至本版：发布链**整链仍未以发布模式重跑**（授权关口，任务 F），
+> **尚无 `ALL_GREEN`、无候选产物**。已落地的代码修复按提交登记：
+> R1/R2（`4ddf644`，生命周期去自引用 + 资格校验信任边界）、R3（`33925dd`，
+> 严格完整性＝完成集合相等的机器校验）、R4（`a794c08`，`build` 提前到集成之前
+> + 打包前 out 快照复核）、S1（`6947483`，record↔manifest/receipt 同一次构建身份校验）。
+> 每项的证据是 `node tools/test-release-gate.cjs` 全量门禁（逐项全绿，最新 179 项断言
+> 全过，日志 `node_modules/.gate-log-*.txt`，**不入库**）+ typecheck/lint 0。
+> 门禁测的是**编排器行为**（含大量桩注入），**不等于真实整链产物已产出**。
 
 ## 状态词（五者含义不同，**不得互相代替**）
 
@@ -54,7 +61,7 @@
 npm run typecheck                       # 类型
 npm run lint                            # 静态检查
 node tools/r5-run-suite.cjs run         # 全量单元+集成（推荐入口，注入临时目录策略）
-node tools/test-release-gate.cjs        # 发布编排链路行为测试（102 项断言）
+node tools/test-release-gate.cjs        # 发布编排链路行为测试（约 179 项断言，逐项增长）
 ```
 
 单项：
@@ -68,16 +75,34 @@ node tools/r5-run-suite.cjs run tests/integration --pool=forks --maxWorkers=1 --
 该选项与文件级并行控制语义重叠）。理由是并行资源竞争会在高负载机器上造成
 假失败与 RPC 超时；受控并发把这类环境噪声排除掉。（不删用例、不跳用例、不调阈值。）
 
-**日志完整性判据（任务 B 起强制）**：包装层不靠「最后显示全 ✓」放行，必须同时满足：
+**严格完整性判据（R3 `33925dd` 起；发布链固定开启 `--strict-completeness --expect-no-skip`）**：
+
+包装层**不依赖「最后显示全 ✓」的文本汇总**。严格模式下：
+
+1. 运行前用**同配置同过滤条件**的 `vitest list --filesOnly` 收集**预期文件集合**
+   （任何不可解析行 → 失败关闭）；
+2. 运行时附加 `--reporter=json --outputFile.json=<logDir>/result-<runId>.json`；
+3. 比对的是**规范化后的完成文件集合相等**，不是「数量/分母/计划数」；
+4. 机器结果 `numTotalTests`/`numFailedTests` 必须与逐条聚合一致且 `success===true`；
+   JSON 缺失、不可解析、或 `startTime` 不在本次运行窗口（runId 绑定）→ 失败关闭；
+5. 文件级失败 0、文件收集错误（`message` 非空）0、测试失败 0；
+6. **`pending > 0` 即拒绝**（worker 未跑完视同未完成）；`skipped`/`todo` 仅
+   `--skip-allow` 名单豁免（精确 id / `entry::` 前缀 / 尾 `*` 通配）；
+7. 进程退出码必须 0；**进程自称 0 但完整性不通过时强制拉成 1**。
+
+不通过时输出 `COMPLETENESS_FAIL:` / `STRICT_FAIL:` 并逐条列出原因。
+文本汇总只在**机器结果不可用**时兜底（保留 Unhandled Error 启发式）。
 
 | 判据 | 说明 |
 |---|---|
-| 有汇总块 | 必须解析出 `Test Files ... (N)` 与 `Tests ... (N)`；缺失即判据不足 |
-| 失败为 0 | 汇总里 `failed` 计数必须为 0 |
-| Unhandled Error 为 0 | `Errors N error` / `Vitest caught N unhandled error` / `Unhandled Error` 任一命中即失败 |
-| 文件数相符 | 传入 `expectedFiles` 时，实际完成文件数必须相等（防「少跑文件」） |
-| 无 skipped/todo | 传 `expectNoSkip` 时二者必须为 0 |
-| 退出码 | 进程退出码必须为 0；**进程自称 0 但完整性不通过时强制拉成 1** |
+| 预期集合可收集 | `vitest list --filesOnly` 成功且每行都能 stat 到 |
+| 完成集合相等 | 实际完成文件集合 == 预期集合（规范化路径比对） |
+| 机器结果可信 | JSON 存在、可解析、`startTime` 落在本次运行窗口 |
+| 失败为 0 | 文件级失败、收集错误、断言失败均为 0 |
+| 无 pending | 任何 pending 都拒绝 |
+| skipped/todo | 默认 0，仅 allowlist 豁免 |
+| Unhandled Error 为 0 | 文本兜底时仍检查 |
+| 退出码 | 必须为 0；不满足上述任一条时强制拉成 1 |
 
 不通过时输出 `COMPLETENESS_FAIL:` 并逐条列出原因。每次运行的日志写在
 `node_modules/.cache/ots-test-logs/suite-<runId>.log`（含 command/cwd/独立 tempRoot/
@@ -97,11 +122,21 @@ node tools/release-build.cjs build 20260914-0830-abcdef1-x7k2
 编排器依次执行（任一步非 0 立即停止、保留原始退出码）：
 
 ```
-冻结预检 → typecheck → lint → test:unit → test:integration → build
-→ test:e2e → test:e2e:electron → audit → dist（electron-builder，唯一目录）
-→ verify-package（包结构/依赖可用性）→ zip（从候选目录）→ register（登记）
-→ verify:release（来源/内容/zip 绑定）→ 构建后冻结复核
+冻结预检 → typecheck → lint → test:unit
+→ build（唯一一次完整构建，产出 out/）
+→ test:integration（用同一份 out/）→ test:e2e → test:e2e:electron → audit
+→ out 快照复核（与构建时逐文件 hash 一致，防止中途被改）
+→ dist（electron-builder，唯一目录）→ verify-package（包结构/依赖可用性）
+→ zip（从候选目录）→ register（登记）→ core verify:release（来源/内容/zip 绑定）
+→ 完成回执 release-receipt/1（仅当 manifest 真实存在时写出）
+→ 构建后冻结复核 → 发布级只读终检（S2）→ ALL_GREEN
 ```
+
+> **[R4 `a794c08`]** 旧顺序把 `build` 排在 `test:integration` **之后**，而集成用例
+> 依赖 `out/` 产物（`electron-runtime.test.ts` 断言 `out/main/index.js`），
+> 在干净环境必然失败。现改为**先构建、集成与打包共用同一份 `out/`**；
+> 原 `prepare:out` 前置补建步骤已删除（不再是「两套构建并存」）。
+> 打包前用**构建时的 out 快照**复核：missing/extra/changed 任一差异即拒绝。
 
 产物（均落在已忽略范围，不入库）：
 
@@ -120,6 +155,14 @@ candidate-<buildId>.zip        分发 zip
   任务 C 起，带 skip 的构建只能标 `DEV_BUILD_COMPLETE` / `releaseEligible=false`，
   **不得**输出发布 `ALL_GREEN`，也不被 release verify 接受。
 - **不得携带测试注入变量**（`OTS_STEP_STUB`/`OTS_NODE_BIN`）跑发布模式。
+- **`--pack-method` 必填（S5）**：`electron-builder`（自动化打包链）或
+  `manual-repack`（手工重封）。登记器**不提供默认值**——缺参即拒绝登记。
+  来源方式不能由工具替调用方猜测；编排器的真实 builder 分支已显式传
+  `electron-builder`。
+- **`reproducibleBuild` 的真实含义（S5）**：该字段**只表示**「本次由
+  electron-builder 自动化链产出」，**不是**两次构建字节级一致的证明
+  （本仓库从未做过位级可复现验证）。字段名保留以维持 `candidate-manifest/3`
+  结构稳定，但**不得**把它当作可复现性证据写进对外材料。
 
 ## 3. 只读核验既有候选（不构建、不改变任何产物 hash）
 
@@ -140,6 +183,24 @@ node tools/verify-release.cjs --manifest candidate-<buildId>/candidate-manifest.
 build-record/2 事实外，还要求 12 项必检步骤齐全真实通过、**持有完成回执
 release-receipt/1 且其 buildId/sourceCommit/manifestHash/buildRecordHash 与
 当前产物完全绑定**。缺回执、绑定错误、注入环境、跳过必检一律不得给绿色结果。
+
+**两类成功标记含义不同（S2，不得混用）**：
+
+| 标记 | 由谁输出 | 含义 |
+|---|---|---|
+| `CORE_VERIFY_GREEN` | core 核验（**不带** `--require-release-eligibility`） | 只证明**事实/产物/来源**自洽，**不等于可发布** |
+| `RELEASE_GREEN` | 发布级核验（**带**该旗标） | 额外要求完整资格 + 回执绑定，才是发布结论 |
+
+> 旧版 core 与发布级共用 `RELEASE_GREEN`，且 `release-gate.sh` 在编排器成功后
+> **自行再补一句 `ALL_GREEN`** → 阶段性结论被当成最终结论。S2 已分开；shell
+> 只做日志落盘，不再自行补成功标记。**`ALL_GREEN` 只能由编排器在发布级只读
+> 终检真实退出 0 后输出一次**（不是自判输出）。
+
+**身份交叉校验（S1 `6947483`）**：`record.buildId` 必须是非空字符串；显式
+`--build-id` 若提供必须与之相等；`sourceCommit`/`version`/`lockfileSha256`/`out`
+四项必须一致（锁文件 hash 为**必填**，不是「有才比」）。登记器与核验器共用同一
+纯函数 `checkRecordBinding`，核验端**不假设** manifest 一定由当前登记器正确写出。
+因此「拿 A 的记录配 B 的 manifest/receipt」在**登记阶段**即被拒绝。
 
 两个职责必须都通过：`verify-package` = 结构/依赖可用性（入口、unpacked 实体、
 依赖完整性、隐私扫描、包内 sharp 真实出图）；`verify-release` = 来源/内容/zip 绑定
@@ -261,15 +322,19 @@ node tools/smoke-packaged.cjs candidate-<buildId>/win-unpacked
 
 ## 9. 已知限制
 
-- **发布链未跑通**：`test:integration` 存在 RPC 基础设施错误（`onTaskUpdate` 超时），
-  当前**未达 `ALL_GREEN`**；本手册命令为**已实现但未整链验证**。
-- **GUI 冒烟判据不足**：空白页/读取失败仍可能返回 `SMOKE_OK`；入口依赖未声明的 `npx tsx`。
+- **整链仍未以发布模式重跑**（授权关口，任务 F）：`onTaskUpdate` RPC 超时的根因
+  已修（`5679c06`），**但「根因已修」≠「整链已通过」**——当前**未达 `ALL_GREEN`、
+  无候选产物**。本手册命令状态为**已实现 + 定向/门禁验证通过，但未整链验证**。
+- ~~**GUI 冒烟判据不足**~~：已由任务 D（`492322b`）关闭——入口改 `.cjs`、不依赖未声明
+  的 `npx tsx`；空白页/白屏/渲染进程挂掉均判失败，并提供 `--self-test-negative` 自检。
+- `EPERM` 访问被拒：**归因未证实**。日志保留 `code`/`errno`/`syscall`/时间/目标路径，
+  但**没有目标句柄或事件对应证据**，因此**不指认具体进程**、不关闭防护、不强杀进程、
+  不把整仓或整个临时目录加入信任区。同类阻塞按「审批阻塞」独立登记，不与产品错误混写。
 - ~~**跳过检查仍可发布**~~：已由任务 C + R1/R2 关闭——skip 构建只能得
   `DEV_BUILD_COMPLETE`；发布级 verify 额外要求完整资格与完成回执绑定。
 - ~~**发布记录自引用**~~（R1，2026-09-14 已修）：旧 build-record/1 把尚未发生的
   register/verify:release 写成 pending，正常链永远拿不到发布资格；现由
   build-record/2（登记前事实）+ release-receipt/1（完成回执）分离承担。
-- `EPERM` 访问被拒：**原因未定**（日志无持锁者证据），不指认安全进程，不关闭防护。
 - A6 干净机器验证：用户决定跳过，**未验证**，不得记为通过。
 - 候选未签名；fuse 为 Electron 默认值（未加固）。
 - 旧候选（buildId `manual-repack-20260912`，schema `/1`）为历史记录，禁止作为最新分发。

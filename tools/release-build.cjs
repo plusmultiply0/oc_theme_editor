@@ -9,9 +9,11 @@
  * 传新目录、dist 仍写旧目录），登记又在打包前生成——manifest 记录的是
  * 「打包前」的 out 清单，无法证明 zip 与候选同源。本脚本把顺序固定为：
  *
- *   冻结源码 → 类型/lint/单元/集成（注入项目临时目录策略）
- *   → 干净构建（唯一一次）→ GUI/运行期测试
- *   → 打包到唯一目录（唯一一次）→ 包结构/依赖核验（verify-package）
+ *   冻结源码 → 类型/lint/单元（注入项目临时目录策略）
+ *   → 干净构建（唯一一次，R4 提前）→ out 快照（R4）
+ *   → 集成/GUI/运行期测试（共用同一份新构建产物）
+ *   → 打包前 out 复核（R4：测试期间被更改则拒绝）→ 打包到唯一目录（唯一一次）
+ *   → 包结构/依赖核验（verify-package）
  *   → 生成 zip（从候选目录内容）
  *   → 写 build-record/2（**登记前事实**，登记后不可变，不含 register/verify:release）
  *   → 登记（candidate-manifest register，绑定构建记录 + out 清单）
@@ -331,58 +333,6 @@ function usage() {
   console.error('  可选：--strict（要求发布资格；不可发布则非 0 退出）');
 }
 
-/**
- * 集成测试的前置构建（P4-F2）。
- *
- * 部分集成用例依赖仓库根的 `out/` 编译产物：
- *   - `tests/integration/electron-runtime.test.ts` 断言 `out/main/index.js` 存在；
- *   - `src/core/patch/pack.ts::resolvePackWorkerPath` 在从源码跑时会回落到
- *     `out/core/patch/pack-worker.js`。
- * 因此在**无 `out/` 的干净环境**（新克隆 / CI）里，若直接跑 `test:integration`
- * 会失败。这里在集成测试前补一次主进程编译产物。
- *
- * 说明：
- *  - 这不是发布闸门步骤，**不写入 build-record 的必需步骤**；判据仍由后续
- *    完整 `build` 步骤 + 各质量步骤决定。
- *  - 若 `out/main/index.js` 已存在则跳过，避免无谓重建。
- *  - 补建时**直接跑 `tsc -p tsconfig.node.json`**，而不调 `npm run build:main`：
- *    后者首动作是 `rmSync('out')`，而进入本分支的前提恰恰是 `out/` 不存在，
- *    那次删除必为空操作、纯属多余。少一次全目录删除对 CI 是净收益（也少一次
- *    撞批量删除护栏的机会）。编译语义与 `build:main` 完全一致。
- *  - 失败即停（缺少该前置时集成测试无意义），退出码保留原样。
- */
-function ensureIntegrationPrereq() {
-  const marker = path.join(ROOT, 'out', 'main', 'index.js');
-  // 测试注入环境：不真的构建（夹具里没有可编译的工程），仅打印段落以验证顺序。
-  if (stepStub('build:main') !== null || process.env.OTS_STEP_STUB) {
-    console.log('\n=== prepare:out（集成测试前置）===');
-    console.log('  [stub] 测试注入环境：跳过真实 build:main');
-    return;
-  }
-  if (fs.existsSync(marker)) {
-    console.log('\n=== prepare:out（集成测试前置）===');
-    console.log(`  已存在 ${path.relative(ROOT, marker)}，跳过`);
-    return;
-  }
-  console.log('\n=== prepare:out（集成测试前置）===');
-  console.log('  缺少 out/ 编译产物，先执行 tsc -p tsconfig.node.json（集成用例依赖它）');
-  const r = spawnSync(nodeBin, [path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.node.json'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    windowsHide: true,
-    stdio: 'inherit',
-  });
-  if (r.error || r.status !== 0) {
-    const code = typeof r.status === 'number' ? r.status : 1;
-    console.error(`[FAIL] prepare:out 失败（tsc 退出 ${code}）：集成测试无法在缺少 out/ 时通过`);
-    process.exit(code);
-  }
-  if (!fs.existsSync(marker)) {
-    console.error(`[FAIL] prepare:out 后仍缺少 ${path.relative(ROOT, marker)}`);
-    process.exit(1);
-  }
-}
-
 // ---------------- verify（只读） ----------------
 function runVerify(buildId) {
   const candidateDir = path.join(ROOT, `candidate-${buildId}`, 'win-unpacked');
@@ -453,16 +403,31 @@ function runBuild(buildId, opts) {
     { env: testEnv() },
   );
 
-  // 2.5) 集成测试的**前置构建**（P4-F2）：部分集成用例依赖 out/ 编译产物
-  //      （如 electron-runtime.test.ts 断言 out/main/index.js 存在、
-  //        pack.ts 的 resolvePackWorkerPath 要 out/core/patch/pack-worker.js）。
-  //      在干净环境（新克隆 / CI，无 out/）下若直接跑集成会失败，故此处先补一次
-  //      `build:main`。**这不是发布闸门步骤**，故不写入 build-record 的必需步骤；
-  //      后面的完整 `build` 步骤仍然照跑（唯一一次完整构建，语义不变）。
-  ensureIntegrationPrereq();
+  // 3) R4：干净构建**提前到集成之前**（唯一一次）——
+  //    集成/e2e/打包共用同一份新构建产物，从结构上消除「集成用到旧 out
+  //    worker、打包才重建」的缓存协议；旧的 prepare:out 前置（仅凭
+  //    out/main/index.js 存在即跳过，可能用旧源码产物跑集成）随之删除。
+  step('build', npmBin, ['run', 'build']);
 
-  // 集成测试用受控并发（任务 B）：并行资源竞争会造成超时/假失败
-  // R3：同样启用严格完整性（预期集合 + JSON 机器结果 + 完成集合相等）
+  // 3.5) R4：构建成功后记录 out 完整清单快照（相对路径+bytes+sha256）。
+  //      打包前复核（见下）与之逐一比对：测试期间 out 被更改 → 拒绝。
+  //      测试注入环境（OTS_STEP_STUB）没有真实构建产物，快照/复核整体跳过。
+  const stubBuild = stepStub('build');
+  let outSnapshot = null;
+  if (stubBuild === null && !process.env.OTS_STEP_STUB) {
+    const { outManifestOfDir } = require('./verify-release.cjs');
+    try {
+      outSnapshot = outManifestOfDir(path.join(ROOT, 'out'));
+    } catch (e) {
+      console.error(`[FAIL] 构建成功但 out 清单不可用：${e.message}`);
+      process.exit(1);
+    }
+    console.log(`  out 快照：${Object.keys(outSnapshot.files).length} 个文件（构建后）`);
+  }
+
+  // 4) 集成测试（受控并发（任务 B）：并行资源竞争会造成超时/假失败）
+  //    R3：同样启用严格完整性（预期集合 + JSON 机器结果 + 完成集合相等）
+  //    R4：此时跑的是步骤 3 刚构建出的同一份 out
   step(
     'test:integration',
     nodeBin,
@@ -477,15 +442,34 @@ function runBuild(buildId, opts) {
     { env: testEnv() },
   );
 
-  // 3) 干净构建（唯一一次）
-  step('build', npmBin, ['run', 'build']);
-
-  // 4) 运行期测试
+  // 5) 运行期测试
   if (!opts.skipE2e) {
     step('test:e2e', npmBin, ['run', 'test:e2e']);
     step('test:e2e:electron', npmBin, ['run', 'test:e2e:electron']);
   }
   step('audit', npmBin, ['run', 'audit']);
+
+  // 5.5) R4：打包前 out 复核——与构建后快照逐一比对（含 sha256），
+  //      测试期间输出被更改则拒绝；不得仅凭入口文件存在判断可用。
+  if (outSnapshot) {
+    const { outManifestOfDir, diffOutManifest } = require('./verify-release.cjs');
+    let after;
+    try {
+      after = outManifestOfDir(path.join(ROOT, 'out'));
+    } catch (e) {
+      console.error(`[FAIL] 打包前 out 复核失败：${e.message}`);
+      process.exit(1);
+    }
+    const d = diffOutManifest(outSnapshot, after);
+    if (d.missing.length || d.extra.length || d.changed.length) {
+      console.error('[FAIL] 打包前 out 复核失败：测试期间 out/ 被更改，产物同源性无法保证');
+      for (const k of d.missing) console.error(`  - 缺失 ${k}`);
+      for (const k of d.extra) console.error(`  - 新增 ${k}`);
+      for (const k of d.changed) console.error(`  - 变更 ${k}`);
+      process.exit(1);
+    }
+    console.log(`  out 复核通过：${Object.keys(after.files).length} 个文件与构建后快照一致`);
+  }
 
   // 5) 打包到唯一目录（唯一一次，且不重复 build）。
   //    刻意不用 `npm run dist`——它内部会再跑一次 `npm run build`，违反「只构建一次」；

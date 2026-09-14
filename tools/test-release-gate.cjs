@@ -75,13 +75,13 @@ if (!process.env.OTS_GATE_TMP_REDIRECTED) {
  *  默认测试传 --skip-gui（开发构建），此时步骤里不含 smoke:gui；
  *  releaseMode 时不加 skip，步骤含 smoke:gui。 */
 const STEP_ORDER = [
-  'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
+  'typecheck', 'lint', 'test:unit', 'build', 'test:integration',
   'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'verify-package',
   'zip', 'register', 'verify:release',
 ];
 /** 发布模式（不跳任何步骤）下的完整步骤顺序 */
 const STEP_ORDER_RELEASE = [
-  'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
+  'typecheck', 'lint', 'test:unit', 'build', 'test:integration',
   'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'smoke:gui', 'verify-package',
   'zip', 'register', 'verify:release',
 ];
@@ -164,18 +164,10 @@ function executedSteps(stdout) {
   return sections(stdout);
 }
 
-/** 解析 `=== name ===` 段的**出现顺序**（含 prepare:out 这类非闸门段）。 */
-function allSections(stdout) {
-  return sections(stdout);
-}
-
-/** 前置准备段（P4-F2）：非发布闸门步骤，断言「闸门步骤序列」时须剔除。
- *  它只在 `test:integration` 前补齐 `out/`，本身不计入 build-record 的必需步骤。 */
-const PREREQ_SECTIONS = ['prepare:out（集成测试前置）'];
-
-/** 只保留闸门步骤（剔除前置准备段），用于与 STEP_ORDER* 做顺序比对。 */
+/** R4：旧 prepare:out 前置段已随 ensureIntegrationPrereq 删除，
+ *  输出里的 `=== name ===` 段全部是闸门步骤，直接用于顺序比对。 */
 function gateSteps(stdout) {
-  return sections(stdout).filter((s) => !PREREQ_SECTIONS.includes(s));
+  return sections(stdout);
 }
 
 const failures = [];
@@ -271,27 +263,64 @@ for (const name of FAIL_STEPS) {
   rmDir(root);
 }
 
-// ---------- 5b3) 任务 F / P4-F2：集成测试前必须补齐 out/ 前置 ----------
+// ---------- 5b3) R4：干净构建提前到集成之前（同一份 out 供集成与打包） ----------
 {
-  console.log('\n== P4-F2：集成测试前置构建（无 out/ 时补 build:main）==');
+  console.log('\n== R4：build 在 test:integration 之前；prepare:out 前置已删除 ==');
   const root = makeFixture('orch-prereq-');
   const stub = {};
   for (const s of STEP_ORDER_RELEASE) stub[s] = 0;
-  // 夹具里没有 out/（makeFixture 不建），编排器应在 test:integration 前
-  // 打 prepare:out 段；由于这是测试桩环境，build:main 也会被桩接住。
   const r = runOrch(root, ['build', 'b-prereq'], { stepStub: stub, releaseMode: true });
-  const sections = allSections(r.stdout);
-  const idxPrepare = sections.indexOf('prepare:out（集成测试前置）');
-  const idxIntegration = sections.indexOf('test:integration');
-  expect(idxPrepare >= 0, '无 out/ 时出现 prepare:out 段', sections.join(','));
+  const secs = sections(r.stdout);
+  const idxBuild = secs.indexOf('build');
+  const idxIntegration = secs.indexOf('test:integration');
   expect(
-    idxPrepare >= 0 && idxIntegration >= 0 && idxPrepare < idxIntegration,
-    'prepare:out 出现在 test:integration 之前',
-    `prepare@${idxPrepare} integration@${idxIntegration}`,
+    idxBuild >= 0 && idxIntegration >= 0 && idxBuild < idxIntegration,
+    'build 出现在 test:integration 之前',
+    `build@${idxBuild} integration@${idxIntegration}`,
   );
-  // 它是前置准备，不是发布必需步骤：不得出现在步骤顺序断言里
-  expect(!STEP_ORDER_RELEASE.includes('prepare:out'), 'prepare:out 不进入发布必需步骤集合');
+  expect(!secs.some((s) => s.startsWith('prepare:out')), 'prepare:out 前置段不再出现（已删除）');
+  // 桩环境：build 被桩接住、out 不存在 → 快照/复核整体跳过且不崩溃
+  expect(r.status === 0, '桩环境全链路仍退出 0', `实际 ${r.status}`);
+  expect(r.stdout.includes('ALL_GREEN') === false, '桩环境不打印发布 ALL_GREEN');
   rmDir(root);
+}
+
+// ---------- 5b4) R4：out 快照复核语义（函数级：任何差异都必须被识别） ----------
+{
+  console.log('\n== R4：out 快照复核（missing/extra/changed 全覆盖）==');
+  const { outManifestOfDir, diffOutManifest } = require(path.join(ROOT, 'tools', 'verify-release.cjs'));
+  const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'out-snap-'));
+  const writeFile = (rel, body) => {
+    const p = path.join(fx, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, body);
+  };
+  writeFile('main/index.js', 'entry');
+  writeFile('core/patch/pack-worker.js', 'worker-v1');
+  const snap = outManifestOfDir(fx);
+  expect(Object.keys(snap.files).length === 2, '快照收录全部文件（路径+bytes+sha256）');
+  const noChange = diffOutManifest(snap, outManifestOfDir(fx));
+  expect(
+    noChange.missing.length === 0 && noChange.extra.length === 0 && noChange.changed.length === 0,
+    '未更改时复核通过', JSON.stringify(noChange),
+  );
+  // changed：测试期间文件内容被改
+  writeFile('core/patch/pack-worker.js', 'worker-v2-stale');
+  let d = diffOutManifest(snap, outManifestOfDir(fx));
+  expect(d.changed.length === 1, '内容变更被识别为 changed', JSON.stringify(d));
+  // missing：测试期间文件被删
+  fs.rmSync(path.join(fx, 'core', 'patch', 'pack-worker.js'));
+  d = diffOutManifest(snap, outManifestOfDir(fx));
+  expect(d.missing.length === 1, '文件缺失被识别为 missing', JSON.stringify(d));
+  // extra：测试期间冒出新文件
+  writeFile('extra.js', 'x');
+  d = diffOutManifest(snap, outManifestOfDir(fx));
+  expect(d.extra.length === 1, '新增文件被识别为 extra', JSON.stringify(d));
+  // 空目录/不存在目录 → 生成清单直接抛错（失败关闭）
+  let threw = false;
+  try { outManifestOfDir(path.join(fx, 'does-not-exist')); } catch { threw = true; }
+  expect(threw, '空/不存在目录生成清单时抛错（失败关闭）');
+  fs.rmSync(fx, { recursive: true, force: true });
 }
 
 // ---------- 5b2) 任务 D：smoke:gui 失败必须传播（不得被当成「界面可用」放行）----------

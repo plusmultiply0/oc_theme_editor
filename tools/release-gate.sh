@@ -58,4 +58,6 @@ if [ "$CODE" -ne 0 ]; then
   echo "STOPPED at release-$MODE" | tee -a "$LOG"
   exit "$CODE"
 fi
-echo "ALL_GREEN" | tee -a "$LOG"
+# S2：结论标记只由编排器输出——ALL_GREEN=发布级终检通过；DEV_BUILD_COMPLETE=
+# 不可发布的开发构建；CORE_VERIFY_GREEN=core 基础核验。薄入口只透传退出码，
+# 不再把「子进程返回 0」升级为发布成功标记。

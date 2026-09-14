@@ -596,6 +596,19 @@ function runBuild(buildId, opts) {
   }
 
   if (eligibility.ok && hasReceipt) {
+    // S2：build 侧不得凭自判输出发布成功——写完回执后调用与独立 verify
+    // **同一判据**的发布级只读终检（全绑定 + --require-release-eligibility），
+    // 真实退出 0 才输出唯一 ALL_GREEN；不回写 record（登记后不可变）。
+    console.log('\n=== 发布级只读终检（S2：与独立 verify 同一判据）===');
+    const fr = spawnSync(nodeBin, [
+      VERIFY_RELEASE, '--manifest', manifest, '--candidate-dir', outDir, '--build-id', buildId,
+      '--root', ROOT, '--require-release-eligibility',
+    ], { cwd: ROOT, encoding: 'utf8', stdio: 'inherit', windowsHide: true });
+    if (fr.error || fr.status !== 0) {
+      const code = typeof fr.status === 'number' && fr.status !== 0 ? fr.status : 1;
+      console.error(`[FAIL] 发布级终检未通过（退出 ${code}）：不得输出发布 ALL_GREEN`);
+      process.exit(code);
+    }
     console.log(`\nALL_GREEN buildId=${buildId}`);
   } else {
     // 开发构建：明确区别于发布 ALL_GREEN，且标注不可发布

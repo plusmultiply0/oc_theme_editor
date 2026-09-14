@@ -20,7 +20,9 @@
  *      zip hash 与登记一致；分发验收禁止 --no-identity（本工具无该开关）。
  *
  * 用法：node tools/verify-release.cjs --candidate-dir <候选目录> --build-id <本次构建ID> [--source-commit <sha>]
- * 退出码：0 打印 RELEASE_GREEN；1 有失败项（逐条列出）。
+ * 退出码：0 时——发布级（--require-release-eligibility）打印 RELEASE_GREEN、
+ *          core 基础核验打印 CORE_VERIFY_GREEN（S2：core ≠ 发布资格）；
+ *          1 有失败项（逐条列出）。
  */
 'use strict';
 const crypto = require('node:crypto');
@@ -697,7 +699,16 @@ function main() {
   for (const r of failed) console.log(`[FAIL] ${r.label} | ${r.detail}`);
   console.log(`\n发布门禁核验 ${results.length} 项，失败 ${failed.length} 项`);
   if (failed.length === 0) {
-    console.log(`RELEASE_GREEN buildId=${opts.buildId}`);
+    if (opts.requireReleaseEligibility) {
+      // S2：发布级（资格 + 回执绑定全过）才允许输出最终发布标记
+      console.log(`RELEASE_GREEN buildId=${opts.buildId}（发布级：资格+回执全过）`);
+      console.log('stage=final publishable=true');
+    } else {
+      // S2：core 基础核验 ≠ 发布资格——不再输出 RELEASE_GREEN，避免日志
+      // 扫描器或人把它当成最终发布结论。
+      console.log(`CORE_VERIFY_GREEN buildId=${opts.buildId}（仅基础核验；发布级判定需 --require-release-eligibility）`);
+      console.log('stage=core publishable=false');
+    }
     process.exit(0);
   }
   console.log('RELEASE_VERIFY FAILED（本结论只认显式绑定，不回落默认候选）');

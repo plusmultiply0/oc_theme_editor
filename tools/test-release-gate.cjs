@@ -47,7 +47,31 @@ const crypto = require('node:crypto');
 const sha256Buf = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const sha256File = (f) => sha256Buf(fs.readFileSync(f));
 
-const rmDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+/**
+ * 夹具清理（**必须是有界的**）。
+ *
+ * 本机存在**间歇性文件锁**：安全软件会延迟打开刚写入/待删除的文件，此时
+ * `fs.rmSync` 会在内核等待上**无限期阻塞**——实测 2026-09-15：同一份门禁
+ * 连续跑数十个场景后，`rmSync` 阻塞 >9 分钟，进程 CPU 增量为 0、无任何
+ * 子进程、日志完全停滞（不是死锁，也不是 CPU 忙等）。父进程内直接调用
+ * 同步删除会把整个门禁拖死，且无法从进程内中断。
+ *
+ * 因此改为**子进程 + 超时**：删除子进程被卡住时由父进程超时杀死（它没有
+ * 孙进程，管道随之关闭，父进程不会被管道持有问题二次阻塞）。失败只告警、
+ * 不影响判定——每个场景的夹具都是 `mkdtemp` 唯一目录，残留不会污染后续
+ * 断言，也不会让「旧夹具」被误当成新结果。
+ */
+const rmDir = (dir) => {
+  const r = spawnSync(
+    process.execPath,
+    ['-e', 'require("node:fs").rmSync(process.argv[1],{recursive:true,force:true,maxRetries:5,retryDelay:100})', dir],
+    { encoding: 'utf8', windowsHide: true, timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  if (r.error || r.status !== 0) {
+    const why = r.error ? `${r.error.code || r.error.message}` : `exit ${r.status}`;
+    console.log(`  [warn] 夹具未能完全删除（有界清理，不影响判定）：${path.basename(dir)} — ${why}`);
+  }
+};
 
 // 门禁自身需要与 vitest 相同的临时目录处置（R3/5e）：os.tmpdir() 下新建的
 // *.asar 会被本机安全进程延迟打开并**持久锁住**（见 tests/fixtures/test-tmp.ts
@@ -94,7 +118,10 @@ function makeFixture(prefix) {
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'fx', version: '0.1.0-alpha.1' }, null, 2));
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3 }, null, 2));
   fs.writeFileSync(path.join(root, '.gitignore'), 'out/\ndist/\ncandidate-*/\nnode_modules/\n');
-  const g = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
+  // 同上：git 子进程同样必须有界（本机 git 偶发被锁/被扫描拖住）。
+  const g = (args) => spawnSync('git', args, {
+    cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000,
+  });
   g(['init', '-q', '-b', 'main']);
   g(['config', 'user.email', 't@example.invalid']);
   g(['config', 'user.name', 't']);
@@ -529,10 +556,14 @@ for (const name of FAIL_STEPS) {
     '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId], root);
   expect(reg.status === 0, '真实 register 退出 0', reg.stderr);
 
-  // 3) 真实 core verify（无旗标）：只校验事实/产物/来源，不要求回执
+  // 3) 真实 core verify（无旗标）：只校验事实/产物/来源，不要求回执。
+  //    S2：core 只能打 CORE_VERIFY_GREEN（stage=core publishable=false），
+  //    不得出现最终发布标记 RELEASE_GREEN。
   const vrCore = runCli(coreArgs, root);
   expect(vrCore.status === 0, 'core 核验（无旗标）通过', vrCore.stdout + vrCore.stderr);
-  expect(/RELEASE_GREEN/.test(vrCore.stdout), 'core 核验打印 RELEASE_GREEN');
+  expect(/CORE_VERIFY_GREEN/.test(vrCore.stdout), 'core 核验打印 CORE_VERIFY_GREEN');
+  expect(/stage=core publishable=false/.test(vrCore.stdout), 'core 输出结构化阶段标记');
+  expect(!/RELEASE_GREEN/.test(vrCore.stdout), 'core 不得打印发布级 RELEASE_GREEN（S2）');
 
   // 4) 真实 receipt writer：登记 + core 核验均退出 0 后写回执
   const receiptPath = rb.writeReleaseReceipt(candRoot, buildId, gsha, manifest, recordPath);
@@ -540,9 +571,11 @@ for (const name of FAIL_STEPS) {
   expect(JSON.parse(fs.readFileSync(manifest, 'utf8')).buildRecord.sha256 === sha256Buf(recJson),
     '写回执不改记录（登记后 build-record/2 不可变）');
 
-  // 5) 最终 verify（发布级）：完整资格 + 回执绑定
+  // 5) 最终 verify（发布级）：完整资格 + 回执绑定 → 唯一允许的发布标记
   const vrFull = runCli(fullArgs, root);
   expect(vrFull.status === 0, '最终 verify（发布级）通过', vrFull.stdout + vrFull.stderr);
+  expect(/RELEASE_GREEN/.test(vrFull.stdout), '发布级 verify 打印 RELEASE_GREEN（S2）');
+  expect(/stage=final publishable=true/.test(vrFull.stdout), '发布级输出结构化阶段标记');
 
   // 6) 幂等：连续两次只读 verify 通过，产物 hash 完全不变
   const before = [recordPath, manifest, zipPath, path.join(outDir, 'resources', 'app.asar')].map(sha256File);

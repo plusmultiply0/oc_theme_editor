@@ -29,7 +29,11 @@
  *   node tools/r5-run-suite.cjs                    # 全量 vitest run
  *   node tools/r5-run-suite.cjs run tests/unit     # 透传 vitest 参数
  *   node tools/r5-run-suite.cjs run tests/integration --maxWorkers=1 --no-file-parallelism \
- *        --strict-completeness --expect-no-skip [--skip-allow=ID1,ID2] [--timeout-ms=N]
+ *        --strict-completeness [--expect-no-skip | --allow-skip --skip-allow=ID1,ID2]
+ *        [--timeout-ms=N]
+ *
+ * 严格模式（--strict-completeness）**默认禁止 skip/todo**，与纯函数默认一致；
+ * 确需放行必须显式 `--allow-skip` 并逐个 `--skip-allow=` 精确授权。
  */
 const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -152,9 +156,16 @@ function collectExpectedFiles({ repo, vitestArgs, spawn, env, timeoutMs = 120000
   for (let i = 0; i < vitestArgs.length; i++) {
     const a = vitestArgs[i];
     if (i === 0 && a === 'run') continue;
-    // 防御性剔除运行期报告参数（预期清单收集不需要它们）
-    if (a === '--reporter' || a.startsWith('--reporter=')) continue;
-    if (a === '--outputFile.json' || a.startsWith('--outputFile.json=')) continue;
+    // 防御性剔除运行期报告参数（预期清单收集不需要它们）。
+    // **两段式必须把「值」一起剔除**（S4）：只剔键会把 `dot` / 报告路径当成
+    // 过滤条件传给 `vitest list --filesOnly`，当它们碰巧匹配到别的测试文件时，
+    // 预期集合被污染 → 严格校验误报或运行范围偏离。等号形式不受影响。
+    if (a === '--reporter') { i++; continue; }
+    if (a.startsWith('--reporter=')) continue;
+    if (a.startsWith('--outputFile')) {
+      if (!a.includes('=')) i++; // 两段式：吃掉下一个 token（报告路径）
+      continue;
+    }
     listArgs.push(a);
   }
   const vitestPath = path.join(repo, 'node_modules', 'vitest', 'vitest.mjs');
@@ -553,10 +564,17 @@ function runSuite(options = {}) {
   };
 }
 
-module.exports = { runSuite, checkCompleteness, parseVitestSummary, checkStrictCompleteness, collectExpectedFiles, readJsonResult, normalizeRelFile };
-
-if (require.main === module) {
-  const args = process.argv.slice(2);
+/**
+ * CLI 参数解析（纯函数，导出以便门禁直接断言默认语义，无需真跑 vitest）。
+ *
+ * S4 要点：
+ * - 严格模式（--strict-completeness）**默认禁止 skip/todo** —— 与纯函数
+ *   `checkStrictCompleteness` 的默认一致；需要放行必须显式 `--allow-skip`，
+ *   并逐个 `--skip-allow=` 精确授权。
+ * - 包装器自有参数被剥离后，其余参数**原样透传**给 vitest。
+ */
+function parseCliArgs(argv) {
+  const args = [...argv];
   let tmpRoot;
   const tmpFlag = args.indexOf('--tmp');
   if (tmpFlag >= 0) {
@@ -566,13 +584,16 @@ if (require.main === module) {
   // 提取包装器自有参数，其余透传 vitest
   const vitestArgs = [];
   let strictEnabled = false;
-  let expectNoSkip = false;
+  // null = 未显式指定：**strict 启用时默认禁止 skip**（与纯函数默认一致，S4）。
+  // 需要放行必须显式 --allow-skip，并逐个 --skip-allow= 精确授权。
+  let expectNoSkip = null;
   const skipAllowlist = [];
   let timeoutMs;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--strict-completeness') { strictEnabled = true; continue; }
     if (a === '--expect-no-skip') { expectNoSkip = true; continue; }
+    if (a === '--allow-skip') { expectNoSkip = false; continue; }
     if (a.startsWith('--skip-allow=')) {
       for (const id of a.slice('--skip-allow='.length).split(',')) if (id.trim()) skipAllowlist.push(id.trim());
       continue;
@@ -588,11 +609,28 @@ if (require.main === module) {
     if (a.startsWith('--timeout-ms=')) { timeoutMs = Number(a.slice('--timeout-ms='.length)); continue; }
     vitestArgs.push(a);
   }
-  const { exitCode } = runSuite({
+  const resolvedExpectNoSkip = expectNoSkip === null ? strictEnabled : expectNoSkip;
+  return {
     tmpRoot,
     vitestArgs,
     timeoutMs,
-    strict: { enabled: strictEnabled, expectNoSkip, skipAllowlist },
-  });
+    strict: { enabled: strictEnabled, expectNoSkip: resolvedExpectNoSkip, skipAllowlist },
+  };
+}
+
+module.exports = {
+  runSuite,
+  checkCompleteness,
+  parseVitestSummary,
+  checkStrictCompleteness,
+  collectExpectedFiles,
+  readJsonResult,
+  normalizeRelFile,
+  parseCliArgs,
+};
+
+if (require.main === module) {
+  const { tmpRoot, vitestArgs, timeoutMs, strict } = parseCliArgs(process.argv.slice(2));
+  const { exitCode } = runSuite({ tmpRoot, vitestArgs, timeoutMs, strict });
   process.exitCode = exitCode;
 }

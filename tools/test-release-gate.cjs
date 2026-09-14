@@ -943,6 +943,53 @@ for (const name of FAIL_STEPS) {
     expect(/numTotalTests 不是非负整数/.test(p), '9.23 指出计数类型非法', p);
   }
 
+  // ---------- S4：参数解析（过滤条件不被污染 + strict 默认禁 skip） ----------
+  // 9.24 两段式报告参数：值（dot / 报告路径）不得被当成过滤条件传给 vitest list
+  {
+    const seen = [];
+    runSuite({
+      ...base,
+      vitestArgs: ['run', 'tests/unit', '--reporter', 'dot', '--outputFile.json', 'my-report.json'],
+      spawn: (execPath, cmdArgs) => {
+        if (cmdArgs.includes('list')) seen.push(...cmdArgs);
+        const flag = cmdArgs.find((a) => String(a).startsWith('--outputFile.json='));
+        if (flag) fs.writeFileSync(flag.slice('--outputFile.json='.length), mkJson(EXPECT.map((f) => passFile(f))));
+        return { status: 0, signal: null, error: null, stdout: GOOD_TEXT, stderr: '' };
+      },
+    });
+    expect(seen.length > 0, '9.24 收集预期时确实调用了 vitest list');
+    expect(!seen.includes('dot'), '9.24 两段式 --reporter 的值未被当作过滤条件', seen.join(' '));
+    expect(!seen.includes('my-report.json'), '9.24 两段式 --outputFile.json 的值未被当作过滤条件', seen.join(' '));
+    expect(seen.includes('tests/unit'), '9.24 真正的过滤参数被保留', seen.join(' '));
+  }
+  // 9.25 strict 默认禁止 skip（与纯函数一致）：只给 --strict-completeness
+  {
+    const parsed = require('./r5-run-suite.cjs').parseCliArgs(['run', 'tests/unit', '--strict-completeness']);
+    expect(parsed.strict.enabled === true && parsed.strict.expectNoSkip === true,
+      '9.25 仅 --strict-completeness 时 expectNoSkip 默认为 true', JSON.stringify(parsed.strict));
+  }
+  // 9.26 显式 --allow-skip 才放行（且仍需 --skip-allow 精确授权）
+  {
+    const parsed = require('./r5-run-suite.cjs').parseCliArgs(['run', 'tests/unit', '--strict-completeness', '--allow-skip']);
+    expect(parsed.strict.enabled === true && parsed.strict.expectNoSkip === false,
+      '9.26 显式 --allow-skip 时放行 skip', JSON.stringify(parsed.strict));
+  }
+  // 9.27 非严格模式不因默认值变化而变严（保持旧行为）
+  {
+    const parsed = require('./r5-run-suite.cjs').parseCliArgs(['run', 'tests/unit']);
+    expect(parsed.strict.enabled === false, '9.27 不带旗标时严格模式关闭', JSON.stringify(parsed.strict));
+    expect(parsed.vitestArgs.join(' ') === 'run tests/unit', '9.27 未声明的参数原样透传', parsed.vitestArgs.join(' '));
+  }
+  // 9.28 strict 默认禁 skip 的端到端：机器结果含 skipped 且未授权 → 拒绝
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[0].assertionResults = [{ fullName: 'skipped one', status: 'skipped', title: 'skipped one' }];
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files) }) });
+    const p = strictProblems(r);
+    expect(r.exitCode === 1, '9.28 严格模式下出现未授权 skip → 拒绝', p);
+    expect(/非允许 skip/.test(p), '9.28 指出非允许 skip', p);
+  }
+
   rmDir(fxRepo);
 }
 

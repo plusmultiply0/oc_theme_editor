@@ -9,7 +9,7 @@
 | P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
 | P2 新登记与冻结分离 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（含缺 manifest 失败关闭场景）；全量 `r5-run-suite run` → 0（26 文件 / 346 项）；`candidate-manifest.test.ts` 14 项 | 下方「P2 明细」 | agent / 2026-09-14 08:3x |
 | P3 完整发布链与双重校验 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（71 项）；`vitest run tests/unit` → 0（11 文件 / 174 项）；`tests/integration/candidate-manifest.test.ts` → 14 项通过；`discover+main-services+electron-runtime` → 0（29 项） | 下方「P3 明细」；`RUNBOOK.md` | agent / 2026-09-14 10:5x |
-| P4 新候选构建与GUI冒烟 | **阻塞**（未产出候选；已出诊断，按用户决定本轮不改代码） | 源码冻结 `5689cf7` | `node tools/release-build.cjs build 20260914-alpha1-p3full` → **1**（typecheck 0 / lint 0 / test:unit 0 / **test:integration 1** → `STOPPED at test:integration`）；串行复测 → **0 断言失败**，仅 `onTaskUpdate` Unhandled Error | 下方「P4 明细」；**`P4-BLOCKERS-DIAGNOSIS.md`**；`node_modules/.cache/ots-test-logs/suite-2026-09-14T03-04-20-111Z-9072.log` | agent / 2026-09-14 11:3x |
+| P4 新候选构建与GUI冒烟 | **阻塞**（`已实现但未整链验证` + `完整测试有基础设施错误`；未产出候选） | 当前 HEAD `55ba0e4`；上次构建源码来源 `5689cf7` | `node tools/release-build.cjs build 20260914-alpha1-p3full` → **1**（typecheck 0 / lint 0 / test:unit 0 / **test:integration 1** → `STOPPED at test:integration`）；受控并发复跑 → 15 文件/172 项通过但**仍有 1 个 RPC 错误、exit 1** | 下方「P4 明细」；**`P4-BLOCKERS-DIAGNOSIS.md`**；**`diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`**；`node_modules/.cache/ots-test-logs/` | agent / 2026-09-14 12:0x |
 | P5 真实安装闭环 | 等待当次授权，未执行 | — | — | — | — |
 | P6 材料与GO/NO-GO | 待执行 | — | — | — | — |
 
@@ -187,30 +187,59 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
 | 全量 `tests/integration` | 串行（单 fork，经 `r5-run-suite.cjs`） | **0 项断言失败**；退出码 1（仅 Unhandled Error） | `Tests 84 passed (84)`，逐项全 ✓；`Errors 1 error: onTaskUpdate`；376.15s |
 
 - **决定性结论**：串行下**没有任何一项断言失败**——并行时报的 16 项全部消失。
-  → 并行失败 100% 是**资源竞争假失败**，不是代码回归。
-- **唯一遗留问题**：`onTaskUpdate` 心跳超时（`candidate-manifest.test.ts` 单文件 214s，
-  其 14 项各 10.3–26.5s，每项反复 spawn `git.exe`）。它独立于断言，
-  但把退出码拉成 1 → **发布链永远到不了 `ALL_GREEN`**。
+  → 并行失败包含超时、访问被拒与首次应用失败；**受控复测未复现业务断言失败**，
+  具体环境来源待证实。（**复诊更正**：原「100% 假失败」说法证据不足，见下方「复诊纠偏」）
+- **唯一遗留问题**：`onTaskUpdate` **任务更新 RPC** 超时（`candidate-manifest.test.ts` 单文件 214s，
+  其 14 项各 10.3–26.5s，每项反复 spawn `git.exe`）。它与 `testTimeout`/`hookTimeout` 不同层，
+  独立于断言，但把退出码拉成 1 → **当前到不了 `ALL_GREEN`**（可修，非不可逆）。
 - 汇总行 `Test Files 7 passed (15)` / `Tests 84 passed (84)` 不一致，
-  是 vitest 在 RPC 中断后**丢报**的表现，进一步印证属 worker 通信问题。
+  **复诊更正**：说明**还有 8 个文件未被完整计入**，不能据此断言「实际都跑完了」。
 
-**另发现一处真实潜在 bug（登记工具，非本次回归）**：
-`tools/candidate-manifest.cjs:283` 的 `git log -1 --format=%s <sourceCommit>`
-使用 `cwd: ROOT` 而非已解析的 `--root` 目标 → 夹具场景下 `sourceCommitSubject`
-取到的是**宿主仓库的提交主题**。属元数据错误（不影响冻结/来源绑定主权，
-主权在 `sourceCommit`/锁文件/`out` 三项核对），但 `--root` 契约不完整。
+**~~另发现一处真实潜在 bug~~ —— 复诊判定撤销（误读）**：
+`tools/candidate-manifest.cjs:283` 的 `git log -1 --format=%s <sourceCommit>` 用 `cwd: ROOT`，
+但 `:40` 声明的是 `let ROOT`、`:134` `applyRoot` 执行 `ROOT = r`，`register` 先 `applyRoot`
+再用 `ROOT` → **`ROOT` 就是 `--root` 目标根**。端到端实测 `sourceCommitSubject='fixture init'`
+与夹具一致。**不安排代码修复**。
 
-**P4 三条阻塞点（均非源码逻辑缺陷）**：
-1. `onTaskUpdate` 心跳超时（发布链阻塞主因）；2. `image-content-fixed` 的 `EPERM`
-临时文件锁；3. 上述 `sourceCommitSubject` 的 `--root` 契约缺陷。
+**P4 阻塞点（复诊后：2 项成立）**：
+1. `onTaskUpdate` 任务更新 RPC 超时（发布链阻塞主因；优先修 worker 同步阻塞）；
+2. `image-content-fixed` 的 `EPERM`（环境相关访问失败，**原因未定**，不指认持锁者）。
+（原第 3 项 `--root` 缺陷已撤销。）
 
 **处置（用户 2026-09-14 决定）：本轮只出诊断，不改代码。**
 - 未修编排器串行策略、未调 vitest RPC 超时、未修 `candidate-manifest.cjs:283`
   （用户明确「记入清单，本轮不修」）。
 - 未删/未跳过任何用例、未放宽任何阈值。
-- **零源码改动**，工作树仍冻结在 `5689cf7`（仅 `handoff/` 路径未跟踪/改动，属豁免）。
-- 完整诊断见同目录 **`P4-BLOCKERS-DIAGNOSIS.md`**（含三轮复测对比表、证据文件路径、
-  三条可选处置方案）。
+- **零源码改动**；当时工作树冻结在 `5689cf7`（仅 `handoff/` 路径未跟踪/改动，属豁免）。
+- 完整诊断见同目录 **`P4-BLOCKERS-DIAGNOSIS.md`**。
+
+### P4 复诊纠偏（2026-09-14 复诊轮）
+
+复诊报告：`diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`（本轮仅诊断，未改业务源码）。
+
+| 原判定 | 复诊结论 |
+|---|---|
+| 「16 项失败**全部**是资源竞争假失败」 | **证据不足，收窄**：受控复测**未复现**业务断言失败，来源待证实（原串行汇总仅 `7 passed (15)`，8 文件未完整计入） |
+| 「发布链**永远**到不了 `ALL_GREEN`」 | **收窄为**当前阻塞，可由任务 A/B 解决 |
+| 「`onTaskUpdate` 是独立心跳」 | **更正**：是**任务更新 RPC** 超时（默认 60s），与 `testTimeout`/`hookTimeout` 不同层；项目侧无对应配置项，**不得凭空造字段或改 `node_modules`** |
+| 「EPERM 是安全软件持锁」 | **更正**：无持锁者证据，改述「环境相关访问失败，原因未定」 |
+| 「no-op 用例失败 = no-op 逻辑问题」 | **更正**：失败在**第一次 `applyTheme` 的 `success=false`**（`transaction.test.ts:160`），未进入 no-op 判定；断言未记录 `error.code/detail` |
+| 「`candidate-manifest.cjs:283` `--root` 契约缺陷」 | **判定撤销（误读）**：`:40` 声明 `let ROOT`、`:134` `applyRoot` 执行 `ROOT=r`，实测 `sourceCommitSubject='fixture init'` 与夹具一致 —— **不安排修复** |
+
+**复诊新增阻塞判定**：优先修复**测试 worker 侧同步子进程阻塞**
+（`candidate-manifest.test.ts` 大量 `execFileSync`/`spawnSync`，等待期间事件循环无法处理 IPC
+→ `onTaskUpdate` 回执超时）。本轮观察：独立候选套件 42.10s 无 RPC 错误；
+完整单 worker 集成中 72.372s、断言全过但出现 60s RPC 错误。
+这是**高优先级假说，非已证明唯一根因**；异步化后若仍报错须继续调查 IPC/reporter/环境。
+
+**本轮发现的新缺口（代码审查确认的后续风险，非本轮真实构建复现）**：
+`--skip-e2e` / `--skip-gui` 省略的步骤不进入 build-record，编排器仍打印 `ALL_GREEN`，
+`verify-release` 只核对 build-record hash、不检查发布必需步骤是否执行
+→ 「跳过检查仍可发布」。已登记为任务 C。
+
+**下一阶段（任务 A–F，待授权执行）**：
+A 测试 worker 异步化；B 受控并发 + 完整性检查接入发布链；C 发布资格与必需步骤契约；
+D GUI 冒烟真实校验；E 文档纠偏（本轮进行）；F 恢复 P4 重跑（授权关口）。
 
 ## 新增接口及RUNBOOK交付
 

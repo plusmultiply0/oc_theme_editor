@@ -8,6 +8,22 @@
 已收敛为它的薄入口（只加日志与绑定预检）。旧的 `candidate-manifest.json`
 （schema `/1`）仍是历史记录，发布链**不会**自动回落它。
 
+> **[2026-09-14 重要前提] 「已实现命令」≠「整链实测通过」。**
+> 截至本版，发布链**尚未**完整跑通：`test:integration` 存在 **RPC 基础设施错误**
+> （`onTaskUpdate` 超时 → 退出码 1），当前**未达到 `ALL_GREEN`**。
+> 详见 `P4-BLOCKERS-DIAGNOSIS.md` 与 `diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`。
+> 本手册描述的是**接口形状**，不代表候选已产出或已通过。
+
+## 状态词（五者含义不同，**不得互相代替**）
+
+| 状态词 | 含义 |
+|---|---|
+| `已实现但未整链验证` | 接口/脚本已写好，但从未完整跑通 |
+| `定向测试通过` | 指定子集测试通过（不代表全量） |
+| `完整测试有基础设施错误` | 测试框架层报错（如 RPC 超时），结论不可采信 |
+| `候选工程验证通过` | 候选产物通过 verify-package + verify-release |
+| `真实闭环通过` | 在真实安装上完成应用→重启→换图→恢复 |
+
 ## 0. 环境前提
 
 - Node ≥ 22；依赖已安装（`npm install`）。
@@ -15,11 +31,18 @@
   `shell:true`，对 node 直接调用 `process.execPath`）。
 - 若需要 shell 入口，用**已安装的 Git Bash**，不要依赖 PATH 里的 WSL bash：
   - Git Bash 路径：`D:\SOFTWARE\Git\bin\bash.exe`
-  - 提示：本机某些自动化 shell 的 `PATH` 可能缺 `/usr/bin`，导致 `dirname` 等
-    不可用；`tools/release-gate.sh` 内已显式 `export PATH="/usr/bin:/bin:$PATH"`。
-- 测试临时目录策略：单元/集成测试通过 `tools/r5-run-suite.cjs` 注入
-  `TEMP/TMP=<repo>/node_modules/.cache/ots-test-tmp`（可用 `OTS_TEST_TMP` 覆盖），
-  避免 `%TEMP%` 下新建的 `*.asar` 被安全进程锁住。CI 无此干扰时自动回退系统默认。
+  - 提示：本机某些自动化 shell 的 `PATH` 可能连 `/usr/bin` 都没有
+    （`dirname`/`mkdir`/`ls` 全不可用），显式 `export PATH` 也无效。
+    此时改用 `node -e` 做文件操作，或直接读日志文件。
+- **测试临时目录策略（按真实行为）**：单元/集成测试经 `tools/r5-run-suite.cjs` 运行时，
+  若外部已注入 `TEMP`/`TMP`，则沿用；本仓库脚本会传 `<repo>/node_modules/.cache/ots-test-tmp`。
+  可用 `OTS_TEST_TMP` 覆盖根目录。
+  **注意**：`tests/fixtures/test-tmp.ts` 在**未注入** `TEMP`/`TMP` 时回退到 `os.tmpdir()`
+  （系统默认），**不是**「CI 自动识别并回落」——是「未注入就用系统默认」。
+  发布链（任务 B 起）会为每次运行分配**独立**临时子目录，不再共用同一个固定目录。
+- **受控并发（任务 B 起）**：发布模式的集成测试固定使用
+  `--pool=forks --maxWorkers=1 --no-file-parallelism`（**不使用 `singleFork`**，
+  避免把所有文件长期塞进同一 worker 状态）。**单靠该配置仍会 RPC 报错，必须配合任务 A 的异步化。**
 
 ## 1. 代码测试（不产出候选）
 
@@ -69,7 +92,10 @@ candidate-<buildId>.zip        分发 zip
 
 - **禁止覆盖**：同名 `candidate-<buildId>/` 已存在即拒绝，换一个 buildId。
 - 源码未冻结（已跟踪文件有改动、或新增未跟踪源码/脚本）→ 构建前拒绝。
-- 快速迭代可加 `--skip-e2e --skip-gui`，但**发布链不得省略**这两步。
+- 快速迭代可加 `--skip-e2e --skip-gui`，但**发布链不得省略**这两步；
+  任务 C 起，带 skip 的构建只能标 `DEV_BUILD_COMPLETE` / `releaseEligible=false`，
+  **不得**输出发布 `ALL_GREEN`，也不被 release verify 接受。
+- **不得携带测试注入变量**（`OTS_STEP_STUB`/`OTS_NODE_BIN`）跑发布模式。
 
 ## 3. 只读核验既有候选（不构建、不改变任何产物 hash）
 
@@ -111,11 +137,45 @@ npx tsx tools/smoke-packaged.ts candidate-<buildId>/win-unpacked
 ```
 成功打印 `SMOKE_OK`，失败打印 `SMOKE_FAIL:`。
 
+> **[2026-09-14 已知问题]** 该入口依赖 `npx tsx`，但 **`tsx` 既未被 `package.json`/锁文件
+> 声明，本机 `node_modules` 里也没有**。发布链**不得**临时下载未锁定的工具。
+> 处置（任务 D，二选一）：把小冒烟脚本改为 **CJS**，直接
+> `node tools/smoke-packaged.cjs <候选目录>` 并使用项目已声明的 Playwright 测试包；
+> 或正式固定 `tsx` 依赖并同步锁文件。
+>
+> **[2026-09-14 验收漏洞]** 现行冒烟的**验收条件不足**：隔离模拟探针显示，
+> mock 窗口返回**空标题/空 body**、或 `innerText` **直接抛异常**时，
+> 两种情况**均输出 `SMOKE_OK`、exit 0**。这不代表真实打包程序一定是空白，
+> 只说明**当前判据不能证明界面可用**。任务 D 将改为断言关键控件存在、
+> 监听页面错误/崩溃，并让坏页面返回非 0。
+
 - 必须清掉子进程环境里的 `ELECTRON_RUN_AS_NODE`（脚本内已 `delete`）。某些开发
   环境全局导出它，Electron 会退化成纯 Node、不建窗口即退出 0，误判为「包坏了」。
 - 不修改系统全局变量，不关闭 Chromium sandbox。
+- 保持 `contextIsolation`/`sandbox`/`webSecurity` 不变。
+- 现有禁 GPU 启动只是**自动化诊断配置**，**不等于普通双击环境已验证**；
+  真实 P5 仍需要正常用户启动证据。
 - 包内依赖探针（如 sharp）可用 Electron 的 Node 模式（`ELECTRON_RUN_AS_NODE=1`），
   见 `verify-package.cjs`，不需要窗口与 GPU。
+
+## 5.1 发布资格 vs 开发构建（任务 C 起）
+
+> **[2026-09-14 已登记缺口]** 当前 `--skip-e2e` / `--skip-gui` 省略的步骤**不进入
+> build-record**，编排器结尾**仍打印 `ALL_GREEN`**；`verify-release` 只核对
+> build-record 的 hash，**不检查发布必需步骤是否执行** → **「跳过检查仍可发布」**。
+> 这是代码审查确认的后续风险，**不是**本轮真实构建复现。
+
+任务 C 落地后：
+
+- **开发构建**：可以跳检查，但只能标 `DEV_BUILD_COMPLETE` 且 `releaseEligible=false`，
+  **不得**输出发布 `ALL_GREEN`，也**不被 release verify 接受**。
+- **发布候选**：必须跑齐必需步骤集合
+  （typecheck、lint、unit、integration、build、两类 E2E、audit、dist、GUI 冒烟、
+  包可用性、zip）；build-record 逐步记录 `passed/failed/skipped` 与退出码，
+  **不以缺字段隐含跳过**。
+- 生产入口检测到 `OTS_STEP_STUB` / `OTS_NODE_BIN` 等**测试注入环境**时，
+  必须明确拒绝或进入带不可发布标记的测试模式 —— 不能让遗留环境变量把 mock 成功
+  伪装成真实通过。
 
 ## 6. 真实安装闭环（授权关口，P5）
 
@@ -136,7 +196,18 @@ npx tsx tools/smoke-packaged.ts candidate-<buildId>/win-unpacked
 | 单元/集成测试 | `node_modules/.cache/ots-test-logs/suite-<runId>.log` |
 | 发布核验（verify-release） | 标准输出（`RELEASE_GREEN buildId=...` 通过，`RELEASE_VERIFY FAILED` 失败） |
 | 包可用性（verify-package） | 标准输出（`核对 N 项，失败 M 项`） |
-| 构建记录 | `candidate-<buildId>/build-record.json`（含每步退出码） |
+| 构建记录 | `candidate-<buildId>/build-record.json`（含逐步状态与退出码） |
+
+**日志完整性判据（任务 B 起，不得只看「最后显示全 ✓」）**：
+
+放行必须同时满足 —— **应运行文件集合 = 实际完成文件集合**、失败 0、
+`pending`/`skipped`/`todo` 与预期一致、**Unhandled Error 0**、进程退出 0。
+日志需记录 spawn error、signal、超时、日志路径与**执行命令**（不能只输出最后六行而丢失摘要）。
+`RPC 错误`或**少跑文件**一律不得放行。
+
+**踩坑提醒**：本机 Git Bash 下 `/tmp` 实际映射为
+`C:\Users\ylzho\AppData\Local\Temp`。把 `/tmp/x.log` 直接传给 node 会被解析成
+`D:\tmp\x.log` 而 `ENOENT`；读日志请用真实路径或 Read 工具。
 
 ## 8. Shell 入口（历史兼容）
 
@@ -149,6 +220,11 @@ npx tsx tools/smoke-packaged.ts candidate-<buildId>/win-unpacked
 
 ## 9. 已知限制
 
+- **发布链未跑通**：`test:integration` 存在 RPC 基础设施错误（`onTaskUpdate` 超时），
+  当前**未达 `ALL_GREEN`**；本手册命令为**已实现但未整链验证**。
+- **GUI 冒烟判据不足**：空白页/读取失败仍可能返回 `SMOKE_OK`；入口依赖未声明的 `npx tsx`。
+- **跳过检查仍可发布**：`--skip-e2e`/`--skip-gui` 不进入 build-record，仍打印 `ALL_GREEN`。
+- `EPERM` 访问被拒：**原因未定**（日志无持锁者证据），不指认安全进程，不关闭防护。
 - A6 干净机器验证：用户决定跳过，**未验证**，不得记为通过。
 - 候选未签名；fuse 为 Electron 默认值（未加固）。
 - 旧候选（buildId `manual-repack-20260912`，schema `/1`）为历史记录，禁止作为最新分发。

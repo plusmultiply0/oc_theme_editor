@@ -252,6 +252,15 @@ function cmdRegister(argv) {
     for (const p of facts.problems) console.error(`       - ${p}`);
     process.exit(1);
   }
+  // S1：构建身份交叉校验（与核验端共用 checkRecordBinding）——
+  // record.buildId 必填、显式 --build-id 必须与记录一致、锁文件 hash 必填。
+  const { checkRecordBinding } = require('./verify-release.cjs');
+  const bindProblems = checkRecordBinding(record, { buildId: opts.buildId });
+  if (bindProblems.length) {
+    console.error('[FAIL] 构建身份校验失败（S1：同一构建的身份不能缺失或改名）：');
+    for (const p of bindProblems) console.error(`       - ${p}`);
+    process.exit(1);
+  }
   if (!record.sourceCommit || !record.out || !record.out.files) {
     console.error('[FAIL] 构建记录缺少必需字段（sourceCommit / out.files）：拒绝登记。');
     process.exit(1);
@@ -273,7 +282,9 @@ function cmdRegister(argv) {
     process.exit(1);
   }
   const lockfileSha256 = sha256(lockfilePath);
-  if (record.lockfileSha256 && record.lockfileSha256 !== lockfileSha256) {
+  // S1：lockfileSha256 必填已在 checkRecordBinding 校验（record 侧）；
+  // 这里比对磁盘锁文件与记录是否同一份依赖。
+  if (record.lockfileSha256 !== lockfileSha256) {
     console.error('[FAIL] 构建记录里的锁文件 hash 与当前 package-lock.json 不一致（依赖已变），需重新构建。');
     process.exit(1);
   }
@@ -300,7 +311,9 @@ function cmdRegister(argv) {
   const manifest = {
     schema: SCHEMA,
     version: readPkg().version,
-    buildId: opts.buildId || record.buildId,
+    // S1：--build-id 与 record.buildId 的相等性已在 checkRecordBinding 校验；
+    // manifest.buildId 恒取记录侧身份，不允许静默改名。
+    buildId: record.buildId,
     sourceCommit,
     sourceCommitSubject: execFileSync('git', ['log', '-1', '--format=%s', sourceCommit], { cwd: ROOT, encoding: 'utf8' }).trim(),
     registeredAt: new Date().toISOString(),

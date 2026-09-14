@@ -86,6 +86,47 @@ function checkReleaseReceipt({ receipt, manifestHash, buildRecordHash, buildId, 
   return problems;
 }
 
+/**
+ * S1：构建身份交叉校验（纯函数，登记端与核验端共用同一把尺子）。
+ * buildId 是一次构建的身份，不能静默改名：record.buildId 必须是非空字符串；
+ * 显式 --build-id、manifest.buildId、manifest.sourceCommit、manifest.version
+ * 一旦提供必须与记录一致；record.lockfileSha256 必填（锁文件身份不能
+ * 「字段有才比较」）。核验端独立执行本检查，不假设所有 manifest 都由
+ * 当前登记器正确写出。
+ * @returns {string[]} 问题列表（空 = 通过）
+ */
+function checkRecordBinding(record, { buildId, manifest } = {}) {
+  const problems = [];
+  if (!record || typeof record !== 'object') {
+    problems.push('构建记录缺失或不可解析');
+    return problems;
+  }
+  if (typeof record.buildId !== 'string' || !record.buildId) {
+    problems.push('构建记录缺少 buildId（一次构建的身份不能缺失）');
+  } else {
+    if (buildId !== undefined && buildId !== null && record.buildId !== buildId) {
+      problems.push(`构建记录 buildId=${record.buildId} 与显式目标 buildId=${buildId} 不一致`);
+    }
+    if (manifest && typeof manifest.buildId === 'string' && manifest.buildId && record.buildId !== manifest.buildId) {
+      problems.push(`构建记录 buildId=${record.buildId} 与登记 manifest.buildId=${manifest.buildId} 不一致（同一构建身份不得改名）`);
+    }
+  }
+  if (manifest) {
+    if (record.sourceCommit && manifest.sourceCommit && record.sourceCommit !== manifest.sourceCommit) {
+      problems.push(
+        `构建记录 sourceCommit=${String(record.sourceCommit).slice(0, 12)} 与登记 manifest.sourceCommit=${String(manifest.sourceCommit).slice(0, 12)} 不一致`,
+      );
+    }
+    if (record.version && manifest.version && record.version !== manifest.version) {
+      problems.push(`构建记录 version=${record.version} 与登记 manifest.version=${manifest.version} 不一致`);
+    }
+  }
+  if (typeof record.lockfileSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(record.lockfileSha256)) {
+    problems.push('构建记录缺少合法 lockfileSha256（锁文件身份必填，不做条件比较）');
+  }
+  return problems;
+}
+
 /*
  * 清单键规范（统一，三处必须一致）：项目逻辑路径 `out/...`，正斜杠分隔。
  *   - outManifestOfDir(<root>/out)：磁盘基准是 out 目录本身，键加一次 `out/`；
@@ -535,6 +576,12 @@ function main() {
           const facts = checkRecordFacts(rec);
           check(facts.ok, '构建记录事实校验通过（build-record/2 结构、策略版本、已记录步骤均真实通过）',
             facts.problems.join('；'));
+          // S1：构建身份交叉校验（core 即查，不等发布级旗标）——record.buildId
+          // 必须与 manifest.buildId 及显式 CLI buildId 一致，锁文件 hash 必填。
+          const bindingProblems = checkRecordBinding(rec, { buildId: opts.buildId, manifest });
+          check(bindingProblems.length === 0,
+            '构建记录与登记身份交叉一致（record.buildId/来源提交/版本/锁文件 hash）',
+            bindingProblems.join('；'));
           if (opts.requireReleaseEligibility) {
             // 4b) 发布级资格（R1/R2）：12 项登记前步骤齐全且真实通过、无注入；
             //     必检集合按可信策略锁定，记录不能自行缩减。
@@ -679,4 +726,5 @@ module.exports = {
   loadReleaseManifest,
   RECEIPT_SCHEMA,
   checkReleaseReceipt,
+  checkRecordBinding,
 };

@@ -567,15 +567,25 @@ for (const name of FAIL_STEPS) {
   expect(runCli(coreArgs, root).status === 0, 'core 核验不查回执 → 仍通过（core ≠ 发布级）');
   fs.writeFileSync(receiptPath, rcJson);
 
-  // 9) 负例 c：换成另一 buildId 的登记 → 绑定失败（禁止回落/混用）
+  // 9) 负例 c（S1 翻转）：--build-id 与 record.buildId 不一致 → 登记阶段即拒绝
   const manifest2 = path.join(candRoot, 'candidate-manifest-alt.json');
   const reg2 = runCli([CAND, 'register', '--root', root, '--manifest', manifest2,
     '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', 'b-life-2'], root);
-  expect(reg2.status === 0, '第二份登记（另一 buildId）成功', reg2.stderr);
-  const vrSwap = runCli([...coreArgs.slice(0, coreArgs.indexOf('--manifest') + 2),
-    '--candidate-dir', outDir, '--build-id', buildId, '--require-release-eligibility']
-    .map((a, i) => (i === coreArgs.indexOf('--manifest') + 1 ? manifest2 : a)), root);
-  expect(vrSwap.status === 1, '用另一 buildId 的 manifest 核验 → 失败', vrSwap.stdout);
+  expect(reg2.status !== 0, 'S1：--build-id 与记录不一致 → 登记拒绝', reg2.stdout + reg2.stderr);
+  expect(/不一致/.test(reg2.stdout + reg2.stderr), '点名构建身份不一致', reg2.stdout + reg2.stderr);
+
+  // 9b) 负例 c'（S1）：绕过登记器手工改名 manifest（record=A、manifest=B）→ 核验端拒绝。
+  //     核验端不假设所有 manifest 都由当前登记器正确写出，独立执行交叉校验。
+  const reg2b = runCli([CAND, 'register', '--root', root, '--manifest', manifest2,
+    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId], root);
+  expect(reg2b.status === 0, '同身份第二份登记（别名 manifest 文件）仍可进行', reg2b.stderr);
+  const m2raw = JSON.parse(fs.readFileSync(manifest2, 'utf8'));
+  m2raw.buildId = 'b-life-2';
+  fs.writeFileSync(manifest2, JSON.stringify(m2raw, null, 2) + '\n');
+  const vrSwap = runCli([VERIFY_RELEASE, '--root', root, '--manifest', manifest2,
+    '--candidate-dir', outDir, '--build-id', 'b-life-2'], root);
+  expect(vrSwap.status === 1, 'record=A、manifest=B → 交叉校验拒绝', vrSwap.stdout);
+  expect(/manifest\.buildId/.test(vrSwap.stdout), '点名 record 与 manifest 身份不一致', vrSwap.stdout);
 
   // 10) 负例 d：缺 smoke:gui 的开发记录 → 可登记（core 不要求齐全），发布级拒绝
   const buildId3 = 'b-life-3';
@@ -598,6 +608,23 @@ for (const name of FAIL_STEPS) {
   expect(/缺失必需步骤/.test(vr3.stdout), '点名缺失步骤');
 
   rmDir(root);
+}
+
+// ---------- 5e-fn) S1：checkRecordBinding 纯函数负例 ----------
+{
+  console.log('\n== S1：checkRecordBinding 身份交叉校验（函数级）==');
+  const { checkRecordBinding } = require(path.join(ROOT, 'tools', 'verify-release.cjs'));
+  const good = { buildId: 'b-x', sourceCommit: 'c'.repeat(40), version: '0.1.0', lockfileSha256: 'd'.repeat(64) };
+  expect(checkRecordBinding(good, { buildId: 'b-x' }).length === 0, '全一致 → 通过');
+  expect(checkRecordBinding(good, { buildId: 'b-y' }).some((p) => /显式目标/.test(p)), '显式 buildId 不一致 → 拒绝');
+  expect(checkRecordBinding({ ...good, buildId: undefined }, {}).length >= 1, '缺 buildId → 拒绝');
+  expect(checkRecordBinding({ ...good, lockfileSha256: '' }, {}).some((p) => /lockfileSha256/.test(p)), '缺锁文件 hash → 拒绝');
+  expect(checkRecordBinding({ ...good, lockfileSha256: 'zz' }, {}).some((p) => /lockfileSha256/.test(p)), '锁文件 hash 非法格式 → 拒绝');
+  const mDiff = { buildId: 'b-y', sourceCommit: 'c'.repeat(40), version: '0.1.0' };
+  expect(checkRecordBinding(good, { manifest: mDiff }).some((p) => /manifest\.buildId/.test(p)), 'record 与 manifest 身份不一致 → 拒绝');
+  expect(checkRecordBinding(good, { manifest: { ...mDiff, version: '0.2.0' } }).some((p) => /version/.test(p)), '版本不一致 → 拒绝');
+  expect(checkRecordBinding(good, { manifest: { ...mDiff, sourceCommit: 'e'.repeat(40) } }).some((p) => /sourceCommit/.test(p)), '来源提交不一致 → 拒绝');
+  expect(checkRecordBinding(null, {}).length >= 1, '记录缺失 → 拒绝');
 }
 
 // ---------- 6) verify 模式：缺 buildId → exit 2 ----------

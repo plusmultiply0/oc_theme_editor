@@ -262,12 +262,16 @@ function usage() {
  *   - `src/core/patch/pack.ts::resolvePackWorkerPath` 在从源码跑时会回落到
  *     `out/core/patch/pack-worker.js`。
  * 因此在**无 `out/` 的干净环境**（新克隆 / CI）里，若直接跑 `test:integration`
- * 会失败。这里在集成测试前补一次 `build:main`（仅主进程编译产物，快且幂等）。
+ * 会失败。这里在集成测试前补一次主进程编译产物。
  *
  * 说明：
  *  - 这不是发布闸门步骤，**不写入 build-record 的必需步骤**；判据仍由后续
  *    完整 `build` 步骤 + 各质量步骤决定。
  *  - 若 `out/main/index.js` 已存在则跳过，避免无谓重建。
+ *  - 补建时**直接跑 `tsc -p tsconfig.node.json`**，而不调 `npm run build:main`：
+ *    后者首动作是 `rmSync('out')`，而进入本分支的前提恰恰是 `out/` 不存在，
+ *    那次删除必为空操作、纯属多余。少一次全目录删除对 CI 是净收益（也少一次
+ *    撞批量删除护栏的机会）。编译语义与 `build:main` 完全一致。
  *  - 失败即停（缺少该前置时集成测试无意义），退出码保留原样。
  */
 function ensureIntegrationPrereq() {
@@ -284,17 +288,16 @@ function ensureIntegrationPrereq() {
     return;
   }
   console.log('\n=== prepare:out（集成测试前置）===');
-  console.log('  缺少 out/ 编译产物，先执行 build:main（集成用例依赖它）');
-  const r = spawnSync(npmBin, ['run', 'build:main'], {
+  console.log('  缺少 out/ 编译产物，先执行 tsc -p tsconfig.node.json（集成用例依赖它）');
+  const r = spawnSync(nodeBin, [path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.node.json'], {
     cwd: ROOT,
     encoding: 'utf8',
-    shell: isWin,
     windowsHide: true,
     stdio: 'inherit',
   });
   if (r.error || r.status !== 0) {
     const code = typeof r.status === 'number' ? r.status : 1;
-    console.error(`[FAIL] prepare:out 失败（build:main 退出 ${code}）：集成测试无法在缺少 out/ 时通过`);
+    console.error(`[FAIL] prepare:out 失败（tsc 退出 ${code}）：集成测试无法在缺少 out/ 时通过`);
     process.exit(code);
   }
   if (!fs.existsSync(marker)) {

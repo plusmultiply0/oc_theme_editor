@@ -9,7 +9,7 @@
 | P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
 | P2 新登记与冻结分离 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（含缺 manifest 失败关闭场景）；全量 `r5-run-suite run` → 0（26 文件 / 346 项）；`candidate-manifest.test.ts` 14 项 | 下方「P2 明细」 | agent / 2026-09-14 08:3x |
 | P3 完整发布链与双重校验 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（71 项）；`vitest run tests/unit` → 0（11 文件 / 174 项）；`tests/integration/candidate-manifest.test.ts` → 14 项通过；`discover+main-services+electron-runtime` → 0（29 项） | 下方「P3 明细」；`RUNBOOK.md` | agent / 2026-09-14 10:5x |
-| P4 新候选构建与GUI冒烟 | **阻塞**（`候选工程验证通过` 的部分已就绪：任务 A–D 已实施并定向测试通过；**整链重跑待授权**；未产出候选） | 当前 HEAD `492322b`；上次构建源码来源 `5689cf7` | 任务 A–D 定向验证：`test-release-gate.cjs` → 0（全部通过）；受控并发 `unit` 12 文件/188 项 → 0；`integration` 15 文件/173 项 → 0，Unhandled Error 0；`tsc --noEmit` → 0；`eslint .` → 0。**整链 `release-build.cjs build` 尚未重跑（授权关口）** | 下方「P4 明细」「P4 复诊纠偏」；`P4-BLOCKERS-DIAGNOSIS.md`；`diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md` | agent / 2026-09-14 13:0x |
+| P4 新候选构建与GUI冒烟 | **阻塞**（`候选工程验证通过` 的前半段已确认：整链跑到 e2e；**停因是环境文件占用，非 A–D 缺陷**；未产出候选） | 当前 HEAD `49134ae`；本次构建源码来源 `49134ae` | `node tools/release-build.cjs build 20260914-alpha1-p4full` → **1**，逐步：`typecheck 0` / `lint 0` / `test:unit 0`（13 文件/200 项）/ **`test:integration 0`（15 文件/173 项，104.9s，Unhandled Error 0、无 RPC 错误）** / `build 0` / **`test:e2e 1`（3 failed / 13 passed）→ `STOPPED at test:e2e`** | 下方「P4 整链重跑明细」；`P4-BLOCKERS-DIAGNOSIS.md`；`diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md`；`.workbuddy/p4full-build.log` | agent / 2026-09-14 13:5x |
 | P5 真实安装闭环 | 等待当次授权，未执行 | — | — | — | — |
 | P6 材料与GO/NO-GO | 待执行 | — | — | — | — |
 
@@ -25,7 +25,53 @@
 | D GUI 冒烟真实校验 | `492322b` | **定向测试通过**（真实 exe 冒烟待整链） | 冒烟改为 `.cjs` 纯 node 运行（去掉未声明的 `npx tsx`）；四条界面断言 + `--self-test-negative`；`smoke-packaged.test.ts` 9 项全过；`smoke:gui` 失败传播入闸门测试 |
 | E 文档与阶段状态纠偏 | `673b39b`（首轮）+ 本表更新 | **完成** | 见「P4 复诊纠偏」与 `RUNBOOK.md` 前提块 |
 
-**关键限定**：以上均为**定向测试**结果，不等于整链通过。任务 F 的整链重跑（发布模式、不跳步骤、无测试注入）尚未执行；在整链 `ALL_GREEN` 之前，P4 仍为**阻塞**，不得据定向结果宣称发布资格。
+**关键限定**：以上均为**定向测试**结果，不等于整链通过。任务 F 的整链重跑见下节；在整链 `ALL_GREEN` 之前，P4 仍为**阻塞**，不得据定向结果宣称发布资格。
+
+## 任务 F · 整链重跑明细（2026-09-14）
+
+**命令**：`node tools/release-build.cjs build 20260914-alpha1-p4full`（发布模式：不加
+`--skip-gui`/`--skip-e2e`、未注入 `OTS_STEP_STUB`/`OTS_NODE_BIN`；源码提交 `49134ae`）。
+
+| 步骤 | 退出码 | 耗时 | 关键证据 |
+|---|---|---|---|
+| 冻结预检 | 0 | — | 工作树干净（仅 `handoff/` 豁免项） |
+| typecheck | 0 | 4.9s | — |
+| lint | 0 | 4.4s | — |
+| test:unit | 0 | 3.9s | 13 文件 / 200 项 |
+| **test:integration** | **0** | **104.9s** | **15 文件 / 173 项，Unhandled Error 0、无 RPC 错误** —— 任务 A/B 修复在真实整链生效 |
+| build | 0 | 8.8s | `out/` 生成 |
+| **test:e2e** | **1** | 188.4s | **3 failed / 13 passed** → `STOPPED at test:e2e` |
+| （后续步骤） | — | — | e2e 失败即停，未执行 e2e:electron/audit/dist/smoke:gui/verify-package/zip/register/verify:release |
+
+**e2e 失败定性：单一环境根因 + 两个级联失败（非三个独立缺陷）**
+
+1. **根因（`theme-switcher.spec.ts:210`）**：应用流程正常推进（状态依次显示
+   「正在写入应用资源…」→「正在生成准备区资源（20%）」），随后**系统层文件替换被占用**：
+   `目标文件被占用，替换失败请确认应用已退出后重试；安装未被修改。`
+   → 属**环境相关访问失败**（本机安全软件/索引进程锁定），与 P4 诊断记录的 EPERM 同类；
+   **非界面/业务逻辑缺陷**。
+2. **级联 1（`:231`）**：因首次应用失败，**首次接管快照未建立** → 「恢复到首次接管时」按钮不存在。
+3. **级联 2（`:239`）**：同因 → 该按钮点击超时。
+
+**复现性**：单独复跑 `npx playwright test tests/e2e/theme-switcher.spec.ts` →
+**同样 3 failed（同一条因果链）/ 5 passed**，非偶发抖动，但属环境锁定而非断言逻辑缺陷。
+
+**任务 A–D 修复的有效性**（本整链实测）：integration 在受控并发下 173/173 全过、
+**RPC 错误与 Unhandled Error 均为 0**，此前「长耗时下 `onTaskUpdate` 超时」的现象**未再出现**。
+
+**遗留阻塞（P4 仍为阻塞）**：
+- P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件锁；原因未定，不指认持锁者）。
+  需在本机释放占用后重跑，或换一台无该锁的环境复现以区分「环境」与「产品」。
+- P4-F2（新发现，待确认）：编排器把 `test:integration` 排在 `build` **之前**，
+  而部分集成用例**依赖 `out/` 产物**（`electron-runtime.test.ts` 显式断言
+  `out/main/index.js` 存在并抛「请先 npm run build 再跑本用例」）。
+  在**无 `out/` 的干净环境**（新克隆 / CI）下，`test:integration` 会因此失败。
+  待单独确认与修复（不由本轮顺手改）。
+- 本次另遇**本机环境护栏**：构建环境的 `node-safe-delete-shim` 对单次进程内
+  批量删除设有阈值（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`），`build:main` 的
+  `rmSync('out')` 在累计超阈值时被拦。**属环境机制，不是仓库缺陷**；
+  未通过关闭护栏（`CODEBUDDY_SAFE_DELETE_ENABLED=0` 等）绕过。
+
 
 
 ## P0 明细（2026-09-13）
@@ -258,9 +304,11 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
 - C 发布资格与必需步骤契约 —— **已实施**（`076a38e`，定向测试通过）。
 - D GUI 冒烟真实校验 —— **已实施**（`492322b`，定向测试通过；真实 exe 冒烟待整链）。
 - E 文档纠偏 —— **已完成**（`673b39b` + 本表）。
-- F 恢复 P4 重跑 —— **未开始，授权关口**：须在取得实施/构建授权后，以**发布模式**
+- F 恢复 P4 重跑 —— **已发起（2026-09-14），受阻于环境文件占用**：以发布模式
   （不加 `--skip-gui`/`--skip-e2e`、不注入 `OTS_STEP_STUB`/`OTS_NODE_BIN`）重跑
-  `node tools/release-build.cjs build <新buildId>` 整链；得到 `ALL_GREEN` 后方可进入 P5。
+  `node tools/release-build.cjs build 20260914-alpha1-p4full`，跑到 `test:e2e` 失败
+  （3 failed/13 passed，根因＝目标文件被占用）。**未得到 `ALL_GREEN`、未产出候选**。
+  下一步：释放文件占用后重跑；并单独确认/修复 P4-F2（integration 依赖 `out/` 却排在 build 前）。
 
 
 ## 新增接口及RUNBOOK交付

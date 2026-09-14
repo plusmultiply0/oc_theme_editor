@@ -59,6 +59,37 @@
 **任务 A–D 修复的有效性**（本整链实测）：integration 在受控并发下 173/173 全过、
 **RPC 错误与 Unhandled Error 均为 0**，此前「长耗时下 `onTaskUpdate` 超时」的现象**未再出现**。
 
+### P4-F2 修复的端到端真实验证（2026-09-14，提交 `690eea6` + `9cd840a`）
+
+在**手工清空 `out/`** 后以发布模式重跑整链（`build 20260914-alpha1-p4f2b`），
+`prepare:out` 段**真实出现**并成功补建 out，随后 `test:integration` **15 文件 / 173 项
+全过、exit 0（61.2s）**——即 P4-F2 的修复在真实整链（非仅闸门测试）下生效。
+（日志：`.workbuddy/p4f2b-build.log`、`.workbuddy/p4f2d-build.log`）
+
+**次生优化（`9cd840a`）**：原 `prepare:out` 调 `npm run build:main`，而该脚本首动作是
+`rmSync('out')`——但进入该分支的前提正是 `out/` 不存在，该删除必为空操作。
+改为直调 `node_modules/typescript/bin/tsc -p tsconfig.node.json`，编译语义等价，
+对 CI 少一次全目录删除。优化后再次实跑，`prepare:out` 段与补建行为均正常。
+
+### 环境护栏新证据：整链在本会话内已无法跑到 `build`（非仓库缺陷）
+
+重跑时 `build` 步稳定停在：
+
+```
+[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] {"count":408,"threshold":300,"scope":"turn",...}
+```
+
+**机制已查明**（读 `safe-delete-bulk-guard.cjs` + 状态文件）：
+- 计数 key 为 `requestId`（= `CODEBUDDY_CONVERSATION_REQUEST_ID`，取不到才回落 tool call id），
+  TTL 7 天；**同一轮对话的所有工具调用共享同一个计数桶**，阈值 300。
+- 状态文件实测：本会话两个 request 桶 count 分别为 **361** 与 **371/408**，
+  与本轮三次整链报出的 314 → 361 → 408 **单调递增序列吻合**。
+- 因此**本轮对话的删除配额已耗尽**，`rmSync('out')` 必被拦；这是环境机制，
+  与仓库代码无关。**未采取任何绕过手段**（未设 `CODEBUDDY_SAFE_DELETE_ENABLED=0`、
+  未改系统设置、未强杀进程）。
+- **处置**：在**新会话**中重跑（新 requestId → 计数归零），即可通过 `build` 继续整链。
+  无需改任何代码。
+
 **遗留阻塞（P4 仍为阻塞）**：
 - P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件锁）——**已定性（2026-09-14 补证），
   非产品缺陷**。证据：最小复现（纯 Node，无 Electron / 无本仓库代码）在临时目录反复
@@ -323,11 +354,16 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
   （不加 `--skip-gui`/`--skip-e2e`、不注入 `OTS_STEP_STUB`/`OTS_NODE_BIN`）重跑
   `node tools/release-build.cjs build 20260914-alpha1-p4full`，跑到 `test:e2e` 失败
   （3 failed/13 passed，根因＝目标文件被占用）。**未得到 `ALL_GREEN`、未产出候选**。
-- F2 缺陷修复 —— **已完成**（`690eea6`）：`test:integration` 依赖 `out/` 却排在
-  `build` 之前，干净环境必失败。已在集成测试前加 `ensureIntegrationPrereq()`
-  （幂等补 `build:main`，不计入发布必需步骤），并新增闸门场景 5b3 锁定该顺序。
-- F 剩余动作：**释放本机文件占用（P4-F1）后以发布模式重跑整链**，争取 `ALL_GREEN`
-  并产出候选；在拿到 `ALL_GREEN` 之前，P4 仍为**阻塞**、无候选产物、总体 **NO-GO**。
+- F2 缺陷修复 —— **已完成**（`690eea6` 修复 + `9cd840a` 次生优化）：`test:integration`
+  依赖 `out/` 却排在 `build` 之前，干净环境必失败。已在集成测试前加
+  `ensureIntegrationPrereq()`（幂等补 out，不计入发布必需步骤），并新增闸门场景 5b3
+  锁定该顺序。**端到端真实验证**：清空 out 后重跑整链，prepare:out 真实补建、
+  integration 173/173 全过 exit 0。
+- F 剩余动作：**在「新会话」中以发布模式重跑整链**。原因：本会话的批量删除护栏
+  计数桶（按 conversation request、TTL 7 天、阈值 300）已被本轮多次整链耗尽，
+  `build` 步的 `rmSync('out')` 必被拦；新会话计数归零即可继续。此外仍需按 P4-F1
+  处置（把仓库根与 `%TEMP%` 加入电脑管家信任区）以让 `test:e2e` 稳定通过。
+  在拿到 `ALL_GREEN` 之前，P4 仍为**阻塞**、无候选产物、总体 **NO-GO**。
 
 
 ## 新增接口及RUNBOOK交付

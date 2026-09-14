@@ -85,9 +85,40 @@ function runOrch(root, args, { stepStub, releaseMode, allowStubEnv, ...env } = {
   return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
+/** 解析 `=== name ===` 段（按行切分）。
+ *  **不要**改用 `^=== (.+) ===$` 之类的多行正则：段标题可能含全角括号等
+ *  多字节字符，此时 `m` 标志下的 `^` 会在行中途误判为行首，导致
+ *  1) 相邻段被 `(.+)` 贪婪吞并，或 2) 含全角字符的段整段匹配不上。
+ *  逐行 `trim()` + 前后缀剥离是唯一稳定的解析方式。 */
+function sections(stdout) {
+  const out = [];
+  for (const raw of String(stdout).split('\n')) {
+    const line = raw.trim();
+    if (line.length >= 8 && line.startsWith('===') && line.endsWith('===')) {
+      const name = line.slice(3, -3).trim();
+      if (name) out.push(name);
+    }
+  }
+  return out;
+}
+
 /** 从输出里解析实际执行的步骤序列（`=== name ===` 段）。 */
 function executedSteps(stdout) {
-  return [...stdout.matchAll(/^=== (.+) ===$/gm)].map((m) => m[1]);
+  return sections(stdout);
+}
+
+/** 解析 `=== name ===` 段的**出现顺序**（含 prepare:out 这类非闸门段）。 */
+function allSections(stdout) {
+  return sections(stdout);
+}
+
+/** 前置准备段（P4-F2）：非发布闸门步骤，断言「闸门步骤序列」时须剔除。
+ *  它只在 `test:integration` 前补齐 `out/`，本身不计入 build-record 的必需步骤。 */
+const PREREQ_SECTIONS = ['prepare:out（集成测试前置）'];
+
+/** 只保留闸门步骤（剔除前置准备段），用于与 STEP_ORDER* 做顺序比对。 */
+function gateSteps(stdout) {
+  return sections(stdout).filter((s) => !PREREQ_SECTIONS.includes(s));
 }
 
 const failures = [];
@@ -165,7 +196,7 @@ for (const name of FAIL_STEPS) {
   const stub = {};
   for (const s of STEP_ORDER) stub[s] = 0;
   const r = runOrch(root, ['build', 'b-green'], { stepStub: stub });
-  const steps = executedSteps(r.stdout);
+  const steps = gateSteps(r.stdout);
   expect(r.status === 0, '全绿时退出 0', `实际 ${r.status}`);
   expect(steps.join(',') === STEP_ORDER.join(','), '步骤顺序与预期完全一致', `实际 ${steps.join(',')}`);
   // 任务 C：带 --skip-gui 属开发构建 → 只能 DEV_BUILD_COMPLETE，不得发布 ALL_GREEN
@@ -175,6 +206,29 @@ for (const name of FAIL_STEPS) {
   expect(rec.releaseEligible === false, '开发构建 releaseEligible=false', `实际 ${rec.releaseEligible}`);
   expect(Array.isArray(rec.missingRequiredSteps) && rec.missingRequiredSteps.includes('smoke:gui'),
     '缺失步骤显式列出 smoke:gui', JSON.stringify(rec.missingRequiredSteps));
+  rmDir(root);
+}
+
+// ---------- 5b3) 任务 F / P4-F2：集成测试前必须补齐 out/ 前置 ----------
+{
+  console.log('\n== P4-F2：集成测试前置构建（无 out/ 时补 build:main）==');
+  const root = makeFixture('orch-prereq-');
+  const stub = {};
+  for (const s of STEP_ORDER_RELEASE) stub[s] = 0;
+  // 夹具里没有 out/（makeFixture 不建），编排器应在 test:integration 前
+  // 打 prepare:out 段；由于这是测试桩环境，build:main 也会被桩接住。
+  const r = runOrch(root, ['build', 'b-prereq'], { stepStub: stub, releaseMode: true });
+  const sections = allSections(r.stdout);
+  const idxPrepare = sections.indexOf('prepare:out（集成测试前置）');
+  const idxIntegration = sections.indexOf('test:integration');
+  expect(idxPrepare >= 0, '无 out/ 时出现 prepare:out 段', sections.join(','));
+  expect(
+    idxPrepare >= 0 && idxIntegration >= 0 && idxPrepare < idxIntegration,
+    'prepare:out 出现在 test:integration 之前',
+    `prepare@${idxPrepare} integration@${idxIntegration}`,
+  );
+  // 它是前置准备，不是发布必需步骤：不得出现在步骤顺序断言里
+  expect(!STEP_ORDER_RELEASE.includes('prepare:out'), 'prepare:out 不进入发布必需步骤集合');
   rmDir(root);
 }
 
@@ -208,7 +262,7 @@ for (const name of FAIL_STEPS) {
   const stub = {};
   for (const s of STEP_ORDER_RELEASE) stub[s] = 0;
   const r = runOrch(root, ['build', 'b-relgreen'], { stepStub: stub, releaseMode: true });
-  const steps = executedSteps(r.stdout);
+  const steps = gateSteps(r.stdout);
   expect(r.status === 0, '发布模式全绿退出 0', `实际 ${r.status}`);
   expect(steps.join(',') === STEP_ORDER_RELEASE.join(','), '发布模式步骤含 smoke:gui 且顺序一致', `实际 ${steps.join(',')}`);
   const rec = JSON.parse(fs.readFileSync(path.join(root, 'candidate-b-relgreen', 'build-record.json'), 'utf8'));

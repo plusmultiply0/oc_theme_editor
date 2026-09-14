@@ -254,6 +254,55 @@ function usage() {
   console.error('  可选：--strict（要求发布资格；不可发布则非 0 退出）');
 }
 
+/**
+ * 集成测试的前置构建（P4-F2）。
+ *
+ * 部分集成用例依赖仓库根的 `out/` 编译产物：
+ *   - `tests/integration/electron-runtime.test.ts` 断言 `out/main/index.js` 存在；
+ *   - `src/core/patch/pack.ts::resolvePackWorkerPath` 在从源码跑时会回落到
+ *     `out/core/patch/pack-worker.js`。
+ * 因此在**无 `out/` 的干净环境**（新克隆 / CI）里，若直接跑 `test:integration`
+ * 会失败。这里在集成测试前补一次 `build:main`（仅主进程编译产物，快且幂等）。
+ *
+ * 说明：
+ *  - 这不是发布闸门步骤，**不写入 build-record 的必需步骤**；判据仍由后续
+ *    完整 `build` 步骤 + 各质量步骤决定。
+ *  - 若 `out/main/index.js` 已存在则跳过，避免无谓重建。
+ *  - 失败即停（缺少该前置时集成测试无意义），退出码保留原样。
+ */
+function ensureIntegrationPrereq() {
+  const marker = path.join(ROOT, 'out', 'main', 'index.js');
+  // 测试注入环境：不真的构建（夹具里没有可编译的工程），仅打印段落以验证顺序。
+  if (stepStub('build:main') !== null || process.env.OTS_STEP_STUB) {
+    console.log('\n=== prepare:out（集成测试前置）===');
+    console.log('  [stub] 测试注入环境：跳过真实 build:main');
+    return;
+  }
+  if (fs.existsSync(marker)) {
+    console.log('\n=== prepare:out（集成测试前置）===');
+    console.log(`  已存在 ${path.relative(ROOT, marker)}，跳过`);
+    return;
+  }
+  console.log('\n=== prepare:out（集成测试前置）===');
+  console.log('  缺少 out/ 编译产物，先执行 build:main（集成用例依赖它）');
+  const r = spawnSync(npmBin, ['run', 'build:main'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    shell: isWin,
+    windowsHide: true,
+    stdio: 'inherit',
+  });
+  if (r.error || r.status !== 0) {
+    const code = typeof r.status === 'number' ? r.status : 1;
+    console.error(`[FAIL] prepare:out 失败（build:main 退出 ${code}）：集成测试无法在缺少 out/ 时通过`);
+    process.exit(code);
+  }
+  if (!fs.existsSync(marker)) {
+    console.error(`[FAIL] prepare:out 后仍缺少 ${path.relative(ROOT, marker)}`);
+    process.exit(1);
+  }
+}
+
 // ---------------- verify（只读） ----------------
 function runVerify(buildId) {
   const candidateDir = path.join(ROOT, `candidate-${buildId}`, 'win-unpacked');
@@ -311,6 +360,15 @@ function runBuild(buildId, opts) {
 
   // 2) 测试（注入项目临时目录策略，不直接调不带策略的 npm run test:integration）
   step('test:unit', nodeBin, [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/unit'], { env: testEnv() });
+
+  // 2.5) 集成测试的**前置构建**（P4-F2）：部分集成用例依赖 out/ 编译产物
+  //      （如 electron-runtime.test.ts 断言 out/main/index.js 存在、
+  //        pack.ts 的 resolvePackWorkerPath 要 out/core/patch/pack-worker.js）。
+  //      在干净环境（新克隆 / CI，无 out/）下若直接跑集成会失败，故此处先补一次
+  //      `build:main`。**这不是发布闸门步骤**，故不写入 build-record 的必需步骤；
+  //      后面的完整 `build` 步骤仍然照跑（唯一一次完整构建，语义不变）。
+  ensureIntegrationPrereq();
+
   // 集成测试用受控并发（任务 B）：并行资源竞争会造成超时/假失败
   step(
     'test:integration',

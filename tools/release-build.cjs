@@ -62,14 +62,25 @@ function sha256File(f) {
 }
 
 /**
- * 项目临时目录策略（R5/S5）：把 TEMP/TMP 指向项目盘安全根，避免
- * %TEMP% 下新建的 *.asar 被安全进程持久锁住，同时让 safe-delete-shim 的
- * rmSync 获得临时目录豁免。CI 可用 OTS_TEST_TMP 覆盖，不硬编码个人路径。
+ * 集成测试专用受控并发（任务 B）：
+ * `--pool=forks --maxWorkers=1 --no-file-parallelism`
+ * —— 不用 `singleFork`（避免把所有文件长期塞进同一 worker 状态）。
+ * 并行资源竞争会造成大量超时/假失败；受控并发是可审计的保守默认。
+ * **注意**：单靠并发参数不解决 RPC 回执超时，必须配合任务 A 的异步化。
+ */
+const INTEGRATION_CONCURRENCY_ARGS = ['--pool=forks', '--maxWorkers=1', '--no-file-parallelism'];
+
+/**
+ * 项目临时目录策略（R5/S5；任务 B 改为**每次运行独立**子目录）：
+ * 把 TEMP/TMP 指向项目盘安全根下的唯一运行目录，避免 %TEMP% 下新建的 *.asar
+ * 被安全进程持久锁住，同时让 safe-delete-shim 的 rmSync 获得临时目录豁免，
+ * 且不同运行之间不互相干扰。根可用 OTS_TEST_TMP 覆盖，不硬编码个人路径。
  */
 function testEnv() {
   const tmpRoot = process.env.OTS_TEST_TMP || path.join(ROOT, 'node_modules', '.cache', 'ots-test-tmp');
-  fs.mkdirSync(tmpRoot, { recursive: true });
-  return { ...process.env, TEMP: tmpRoot, TMP: tmpRoot };
+  const runDir = path.join(tmpRoot, `run-${process.pid}-${Date.now()}`);
+  fs.mkdirSync(runDir, { recursive: true });
+  return { ...process.env, TEMP: runDir, TMP: runDir };
 }
 
 /**
@@ -143,7 +154,16 @@ function freezeProblems() {
   return problems;
 }
 
-/** 生成并写入构建记录（build-record/1），返回路径 */
+/**
+ * 发布必需步骤集合（任务 C）—— **唯一事实来源在 `tools/release-eligibility.cjs`**。
+ * 这里重新导出以便测试与外部引用。校验逻辑同样复用该共享模块，
+ * 保证「构建端判定」与「核验端校验」用同一把尺子。
+ */
+const { RELEASE_REQUIRED_STEPS, checkReleaseEligibility } = require('./release-eligibility.cjs');
+
+/** 生成并写入构建记录（build-record/1），返回路径。
+ *  任务 C：逐步记录 `passed/failed/skipped` + 退出码，不以缺字段隐含跳过；
+ *  并给出 `releaseEligible` 与缺失步骤清单，供 register/verify-release 校验。 */
 function writeBuildRecord(candidateDir, buildId, steps) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const lock = fs.readFileSync(path.join(ROOT, 'package-lock.json'));
@@ -154,6 +174,22 @@ function writeBuildRecord(candidateDir, buildId, steps) {
     throw new Error(`构建记录要求 out/ 有内容，但 ${path.relative(ROOT, outDir)} 为空或不存在（先 npm run build）`);
   }
   const outFiles = hasOut ? require(VERIFY_RELEASE).outManifestOfDir(outDir).files : {};
+
+  const stepRecords = steps.map((s) => ({
+    step: s.name,
+    // 状态显式三态：不得以缺字段隐含 skipped
+    status: s.name === 'register' || s.name === 'verify:release' ? 'pending' : s.code === 0 ? 'passed' : 'failed',
+    exit: s.code,
+    seconds: s.secs,
+  }));
+
+  // 缺哪些「发布必需步骤」：显式列出，而不是让读者从字段缺失去推断
+  const recorded = new Set(steps.map((s) => s.name));
+  const missingRequired = RELEASE_REQUIRED_STEPS.filter((n) => !recorded.has(n));
+  // 测试注入环境（OTS_STEP_STUB/OTS_NODE_BIN）一律不可发布
+  const testInjected = Boolean(process.env.OTS_STEP_STUB || process.env.OTS_NODE_BIN);
+  const releaseEligible = missingRequired.length === 0 && !testInjected;
+
   const record = {
     schema: 'build-record/1',
     buildId,
@@ -161,7 +197,11 @@ function writeBuildRecord(candidateDir, buildId, steps) {
     sourceCommit: gitsha(),
     lockfileSha256: crypto.createHash('sha256').update(lock).digest('hex'),
     out: { fileCount: Object.keys(outFiles).length, files: outFiles },
-    steps: steps.map((s) => ({ step: s.name, exit: s.code, seconds: s.secs })),
+    steps: stepRecords,
+    releaseEligible,
+    releaseRequiredSteps: RELEASE_REQUIRED_STEPS,
+    missingRequiredSteps: missingRequired,
+    ...(testInjected ? { testInjectedEnvironment: true } : {}),
   };
   const recordPath = path.join(candidateDir, 'build-record.json');
   fs.mkdirSync(path.dirname(recordPath), { recursive: true });
@@ -188,6 +228,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--skip-e2e') opts.skipE2e = true;
     else if (a === '--skip-gui') opts.skipGui = true;
+    else if (a === '--strict') opts.strict = true;
     else if (a === '--root') opts.root = argv[++i];
     else positional.push(a);
   }
@@ -209,7 +250,8 @@ function usage() {
   console.error('  node tools/release-build.cjs build  <buildId>   # 完整链：构建+打包+登记+核验');
   console.error('  node tools/release-build.cjs verify <buildId>   # 只读核验既有候选（不构建）');
   console.error('  buildId 省略时自动生成（时间-源码短SHA-随机后缀）。');
-  console.error('  可选：--skip-e2e / --skip-gui（仅用于本地快速迭代，发布链不得省略）');
+  console.error('  可选：--skip-e2e / --skip-gui（仅开发构建，发布链不得省略）');
+  console.error('  可选：--strict（要求发布资格；不可发布则非 0 退出）');
 }
 
 // ---------------- verify（只读） ----------------
@@ -269,7 +311,13 @@ function runBuild(buildId, opts) {
 
   // 2) 测试（注入项目临时目录策略，不直接调不带策略的 npm run test:integration）
   step('test:unit', nodeBin, [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/unit'], { env: testEnv() });
-  step('test:integration', nodeBin, [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/integration'], { env: testEnv() });
+  // 集成测试用受控并发（任务 B）：并行资源竞争会造成超时/假失败
+  step(
+    'test:integration',
+    nodeBin,
+    [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/integration', ...INTEGRATION_CONCURRENCY_ARGS],
+    { env: testEnv() },
+  );
 
   // 3) 干净构建（唯一一次）
   step('build', npmBin, ['run', 'build']);
@@ -357,15 +405,61 @@ function runBuild(buildId, opts) {
     process.exit(1);
   }
 
-  console.log(`\nALL_GREEN buildId=${buildId}`);
-  console.log(`  manifest: ${path.relative(ROOT, manifest)}`);
+  // 12) 发布资格判定（任务 C）：缺必需步骤 / 测试注入环境 → 不得输出发布 ALL_GREEN。
+  //     注意步骤 9/10 的 register/verify:release 已在 record 写成后执行，
+  //     这里读回转成 passed，再做最终判定。
+  finalizeStepStatuses(candRoot);
+  const eligibility = readReleaseEligibility(candRoot);
+  const skipped = [...(opts.skipE2e ? ['test:e2e', 'test:e2e:electron'] : []), ...(opts.skipGui ? ['smoke:gui'] : [])];
+
+  console.log(`\nmanifest: ${path.relative(ROOT, manifest)}`);
   if (fs.existsSync(zipPath)) {
-    console.log(`  zip:      ${path.relative(ROOT, zipPath)} (sha256=${sha256File(zipPath).slice(0, 16)}…)`);
+    console.log(`zip:      ${path.relative(ROOT, zipPath)} (sha256=${sha256File(zipPath).slice(0, 16)}…)`);
   }
   const exePath = path.join(outDir, EXE_NAME);
   if (fs.existsSync(exePath)) {
-    console.log(`  exe:      sha256=${sha256File(exePath).slice(0, 16)}…`);
+    console.log(`exe:      sha256=${sha256File(exePath).slice(0, 16)}…`);
   }
+
+  if (eligibility.ok) {
+    console.log(`\nALL_GREEN buildId=${buildId}`);
+  } else {
+    // 开发构建：明确区别于发布 ALL_GREEN，且标注不可发布
+    console.log(`\nDEV_BUILD_COMPLETE buildId=${buildId}（不可发布，releaseEligible=false）`);
+    if (skipped.length) console.log(`  本次跳过（开发构建允许）：${skipped.join('、')}`);
+    for (const p of eligibility.problems) console.log(`  原因：${p}`);
+    if (opts.strict) {
+      console.error('[FAIL] --strict 模式下要求发布资格，但本次构建不可发布');
+      process.exit(1);
+    }
+  }
+}
+
+/** 构建全程结束后，把 register/verify:release 从 pending 落成 passed（已完成则不再改） */
+function finalizeStepStatuses(candRoot) {
+  const p = path.join(candRoot, 'build-record.json');
+  if (!fs.existsSync(p)) return;
+  try {
+    const rec = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const s of rec.steps) {
+      if (s.status === 'pending' && s.exit === 0) s.status = 'passed';
+    }
+    fs.writeFileSync(p, JSON.stringify(rec, null, 2));
+  } catch (e) {
+    console.error(`[WARN] 无法回写构建记录步骤状态：${e.message}`);
+  }
+}
+
+/**
+ * 读取构建记录的发布资格。
+ * **必须**复用共享实现 `checkReleaseEligibility`（与 verify-release 同一把尺子）；
+ * 不得在此另写一套判定，否则会出现「构建放行、核验拒绝」的不一致。
+ * @returns {ReturnType<typeof checkReleaseEligibility>}
+ */
+function readReleaseEligibility(candRoot) {
+  const p = path.join(candRoot, 'build-record.json');
+  const rec = JSON.parse(fs.readFileSync(p, 'utf8'));
+  return checkReleaseEligibility(rec);
 }
 
 function main() {
@@ -385,4 +479,10 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { newBuildId, freezeProblems, testEnv };
+module.exports = {
+  newBuildId,
+  freezeProblems,
+  testEnv,
+  RELEASE_REQUIRED_STEPS,
+  INTEGRATION_CONCURRENCY_ARGS,
+};

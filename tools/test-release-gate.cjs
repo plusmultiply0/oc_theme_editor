@@ -12,6 +12,9 @@
  *   - 逐步失败：typecheck/lint/test:unit/test:integration/build/audit/dist/zip/
  *     verify-package/register/verify:release —— 退出码原样保留、后续未执行；
  *   - 全绿路径：步骤顺序与预期一致、打印 ALL_GREEN；
+ *   - **任务 C**：带 --skip-gui/--skip-e2e 的开发构建只能得到 `DEV_BUILD_COMPLETE`
+ *     且 `releaseEligible=false`，**不得**打印发布 `ALL_GREEN`；`--strict` 下非 0；
+ *   - **任务 C**：测试注入环境（OTS_STEP_STUB）不得取得发布资格；
  *   - verify 模式：缺 buildId → exit 2；manifest 缺失 → 失败关闭不构建；
  *   - 未知模式 → exit 2；
  *   - mock 清除继承的绑定变量（GATE_*），再按场景注入。
@@ -31,10 +34,17 @@ const BUILD = path.join(ROOT, 'tools', 'release-build.cjs');
 const rmDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
 /** 步骤顺序（含 node 侧步骤），用于断言「后续未执行」。
- *  测试统一传 --skip-gui，故不含 smoke:gui。 */
+ *  默认测试传 --skip-gui（开发构建），此时步骤里不含 smoke:gui；
+ *  releaseMode 时不加 skip，步骤含 smoke:gui。 */
 const STEP_ORDER = [
   'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
   'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'verify-package',
+  'zip', 'register', 'verify:release',
+];
+/** 发布模式（不跳任何步骤）下的完整步骤顺序 */
+const STEP_ORDER_RELEASE = [
+  'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
+  'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'smoke:gui', 'verify-package',
   'zip', 'register', 'verify:release',
 ];
 
@@ -57,7 +67,7 @@ function makeFixture(prefix) {
 }
 
 /** 执行编排器（夹具内；清除继承绑定变量后按场景注入 OTS_STEP_STUB）。 */
-function runOrch(root, args, { stepStub, ...env } = {}) {
+function runOrch(root, args, { stepStub, releaseMode, allowStubEnv, ...env } = {}) {
   const baseEnv = { ...process.env };
   // P3：清除继承的绑定变量，避免外层环境干扰
   delete baseEnv.GATE_MANIFEST;
@@ -65,7 +75,10 @@ function runOrch(root, args, { stepStub, ...env } = {}) {
   delete baseEnv.GATE_BUILD_ID;
   if (stepStub) baseEnv.OTS_STEP_STUB = JSON.stringify(stepStub);
   else delete baseEnv.OTS_STEP_STUB;
-  const r = spawnSync(process.execPath, [BUILD, '--root', root, ...args, '--skip-gui'], {
+  if (allowStubEnv === false) delete baseEnv.OTS_NODE_BIN;
+  const argv = [BUILD, '--root', root, ...args];
+  if (!releaseMode) argv.push('--skip-gui');
+  const r = spawnSync(process.execPath, argv, {
     cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000,
     env: { ...baseEnv, ...env },
   });
@@ -147,7 +160,7 @@ for (const name of FAIL_STEPS) {
 
 // ---------- 5) 全绿路径（全部步骤桩 0）：步骤齐全、ALL_GREEN ----------
 {
-  console.log('\n== 全绿路径 ==');
+  console.log('\n== 全绿路径（开发构建，--skip-gui）==');
   const root = makeFixture('orch-green-');
   const stub = {};
   for (const s of STEP_ORDER) stub[s] = 0;
@@ -155,8 +168,119 @@ for (const name of FAIL_STEPS) {
   const steps = executedSteps(r.stdout);
   expect(r.status === 0, '全绿时退出 0', `实际 ${r.status}`);
   expect(steps.join(',') === STEP_ORDER.join(','), '步骤顺序与预期完全一致', `实际 ${steps.join(',')}`);
-  expect(r.stdout.includes('ALL_GREEN'), '全绿时打印 ALL_GREEN');
+  // 任务 C：带 --skip-gui 属开发构建 → 只能 DEV_BUILD_COMPLETE，不得发布 ALL_GREEN
+  expect(r.stdout.includes('DEV_BUILD_COMPLETE'), '开发构建打印 DEV_BUILD_COMPLETE');
+  expect(!r.stdout.includes('ALL_GREEN'), '开发构建不打印发布 ALL_GREEN');
+  const rec = JSON.parse(fs.readFileSync(path.join(root, 'candidate-b-green', 'build-record.json'), 'utf8'));
+  expect(rec.releaseEligible === false, '开发构建 releaseEligible=false', `实际 ${rec.releaseEligible}`);
+  expect(Array.isArray(rec.missingRequiredSteps) && rec.missingRequiredSteps.includes('smoke:gui'),
+    '缺失步骤显式列出 smoke:gui', JSON.stringify(rec.missingRequiredSteps));
   rmDir(root);
+}
+
+// ---------- 5b) 任务 C：发布模式（不跳步骤）→ 步骤齐全；测试注入下仍不可发布 ----------
+{
+  console.log('\n== 发布模式（不跳任何步骤）==');
+  const root = makeFixture('orch-release-green-');
+  const stub = {};
+  for (const s of STEP_ORDER_RELEASE) stub[s] = 0;
+  const r = runOrch(root, ['build', 'b-relgreen'], { stepStub: stub, releaseMode: true });
+  const steps = executedSteps(r.stdout);
+  expect(r.status === 0, '发布模式全绿退出 0', `实际 ${r.status}`);
+  expect(steps.join(',') === STEP_ORDER_RELEASE.join(','), '发布模式步骤含 smoke:gui 且顺序一致', `实际 ${steps.join(',')}`);
+  const rec = JSON.parse(fs.readFileSync(path.join(root, 'candidate-b-relgreen', 'build-record.json'), 'utf8'));
+  // 任务 C 第 4 条的核心：本测试注入了 OTS_STEP_STUB（测试注入环境），
+  // 因此即便步骤齐全，也**必须**判为不可发布——不得让 mock 成功伪装真实通过。
+  expect(rec.testInjectedEnvironment === true, '测试注入环境被标记', `实际 ${rec.testInjectedEnvironment}`);
+  expect(rec.releaseEligible === false, '测试注入环境下 releaseEligible=false', `实际 ${rec.releaseEligible}`);
+  expect(!r.stdout.includes('ALL_GREEN'), '测试注入环境不打印发布 ALL_GREEN');
+  expect(r.stdout.includes('DEV_BUILD_COMPLETE'), '测试注入环境打印 DEV_BUILD_COMPLETE');
+  expect(/测试注入环境/.test(r.stdout), '输出说明不可发布原因是测试注入');
+  rmDir(root);
+}
+
+// ---------- 5b2) 任务 C：无注入 + 步骤齐全 → 真正的发布 ALL_GREEN ----------
+//   用 releaseMode 且**不注入** OTS_STEP_STUB 无法在无依赖夹具里跑真实步骤，
+//   故这里改为直接构造一份「步骤齐全且无注入」的构建记录，验证资格判定的正例路径：
+//   release-build 的判定函数与 verify-release 的校验函数共用同一常量，此处校验后者。
+{
+  console.log('\n== verify-release：齐全且无注入的构建记录 → 通过发布资格校验 ==');
+  const root = makeFixture('orch-elig-ok-');
+  const br = path.join(root, 'build-record.json');
+  const REQ = require(path.join(ROOT, 'tools', 'release-build.cjs')).RELEASE_REQUIRED_STEPS;
+  fs.writeFileSync(br, JSON.stringify({
+    schema: 'build-record/1', buildId: 'b-ok', version: '0.1.0-alpha.1',
+    sourceCommit: 'a'.repeat(40), lockfileSha256: 'b'.repeat(64),
+    out: { fileCount: 0, files: {} },
+    steps: REQ.map((n) => ({ step: n, status: 'passed', exit: 0, seconds: 1 })),
+    releaseEligible: true, releaseRequiredSteps: REQ, missingRequiredSteps: [],
+  }, null, 2));
+  const checkElig = require(path.join(ROOT, 'tools', 'release-eligibility.cjs')).checkReleaseEligibility;
+  const ok = checkElig(JSON.parse(fs.readFileSync(br, 'utf8')));
+  expect(ok.ok === true, '齐全 + releaseEligible=true 且无注入 → 资格校验通过', ok.problems.join('；'));
+  rmDir(root);
+}
+
+// ---------- 5c) 任务 C：--strict 下不可发布 → 非 0 ----------
+{
+  console.log('\n== --strict：不可发布时非 0 ==');
+  const root = makeFixture('orch-strict-');
+  const stub = {};
+  for (const s of STEP_ORDER) stub[s] = 0;
+  const r = runOrch(root, ['build', 'b-strict', '--strict'], { stepStub: stub });
+  expect(r.status === 1, '--strict 且不可发布时退出 1', `实际 ${r.status}`);
+  expect(/要求发布资格/.test(r.stdout + r.stderr), '给出 --strict 失败原因');
+  rmDir(root);
+}
+
+// ---------- 5d) 任务 C：负例 —— skip-gui / skip-e2e / 步骤非 0 / 测试注入 均不可通过 ----------
+{
+  console.log('\n== 任务 C 负例：发布资格校验必须拒绝各种「跳检查」形态 ==');
+  const REQ = require(path.join(ROOT, 'tools', 'release-build.cjs')).RELEASE_REQUIRED_STEPS;
+  const { checkReleaseEligibility } = require(path.join(ROOT, 'tools', 'release-eligibility.cjs'));
+  const base = (mut) => Object.assign({
+    schema: 'build-record/1', buildId: 'b', version: '0.1.0-alpha.1',
+    sourceCommit: 'a'.repeat(40), lockfileSha256: 'b'.repeat(64),
+    out: { fileCount: 0, files: {} },
+    steps: REQ.map((n) => ({ step: n, status: 'passed', exit: 0, seconds: 1 })),
+    releaseEligible: true, releaseRequiredSteps: REQ, missingRequiredSteps: [],
+  }, mut);
+
+  // 缺 smoke:gui（=skip-gui 的后果）
+  const noGui = base({});
+  noGui.steps = noGui.steps.filter((s) => s.step !== 'smoke:gui');
+  noGui.missingRequiredSteps = ['smoke:gui'];
+  noGui.releaseEligible = false;
+  expect(checkReleaseEligibility(noGui).ok === false, 'skip-gui（缺 smoke:gui）被拒');
+
+  // 缺两类 E2E（=skip-e2e 的后果）
+  const noE2e = base({});
+  noE2e.steps = noE2e.steps.filter((s) => !s.step.startsWith('test:e2e'));
+  noE2e.missingRequiredSteps = ['test:e2e', 'test:e2e:electron'];
+  noE2e.releaseEligible = false;
+  expect(checkReleaseEligibility(noE2e).ok === false, 'skip-e2e（缺两类 E2E）被拒');
+
+  // 步骤显式 skipped
+  const skipped = base({});
+  skipped.steps = skipped.steps.map((s) => (s.step === 'smoke:gui' ? { ...s, status: 'skipped' } : s));
+  expect(checkReleaseEligibility(skipped).ok === false, '步骤被标 skipped 被拒');
+
+  // 步骤非 0
+  const nonZero = base({});
+  nonZero.steps = nonZero.steps.map((s) => (s.step === 'audit' ? { ...s, exit: 7, status: 'failed' } : s));
+  expect(checkReleaseEligibility(nonZero).ok === false, '步骤退出码非 0 被拒');
+
+  // 测试注入
+  expect(checkReleaseEligibility(base({ testInjectedEnvironment: true })).ok === false,
+    '测试注入环境被拒');
+
+  // releaseEligible 缺失
+  const noFlag = base({});
+  delete noFlag.releaseEligible;
+  expect(checkReleaseEligibility(noFlag).ok === false, 'releaseEligible 缺失被拒（不乐观放行）');
+
+  // 正例对照
+  expect(checkReleaseEligibility(base({})).ok === true, '齐全且无注入的正例通过');
 }
 
 // ---------- 6) verify 模式：缺 buildId → exit 2 ----------

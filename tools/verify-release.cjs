@@ -37,6 +37,13 @@ const REQUIRED_MODULES = [
   'out/core/theme/image-probe.js',
 ];
 
+/**
+ * 发布资格校验（任务 C）：**复用共享实现** `tools/release-eligibility.cjs`，
+ * 保证与 `release-build.cjs` 的判定同一把尺子。用于关闭
+ * 「跳过检查仍可发布」缺口——只核对 hash 不看步骤契约是不够的。
+ */
+const { checkReleaseEligibility } = require('./release-eligibility.cjs');
+
 /*
  * 清单键规范（统一，三处必须一致）：项目逻辑路径 `out/...`，正斜杠分隔。
  *   - outManifestOfDir(<root>/out)：磁盘基准是 out 目录本身，键加一次 `out/`；
@@ -460,9 +467,22 @@ function main() {
     }
     if (manifest.buildRecord && manifest.buildRecord.path) {
       const br = path.resolve(ROOT, manifest.buildRecord.path);
-      check(fs.existsSync(br) && sha256File(br) === manifest.buildRecord.sha256,
-        '构建记录存在且 hash 与登记一致',
+      const brOk = fs.existsSync(br) && sha256File(br) === manifest.buildRecord.sha256;
+      check(brOk, '构建记录存在且 hash 与登记一致',
         fs.existsSync(br) ? '构建记录 hash 不符（被改过）' : `构建记录缺失：${manifest.buildRecord.path}`);
+
+      // 4) 发布资格（任务 C）：跳过的/未执行的必需步骤不得通过发布核验。
+      //    这是「跳过检查仍可发布」缺口的关闭点——只核对 hash 不看步骤是不够的。
+      if (fs.existsSync(br)) {
+        try {
+          const rec = JSON.parse(fs.readFileSync(br, 'utf8'));
+          const elig = checkReleaseEligibility(rec);
+          check(elig.ok, `发布资格校验通过（必需步骤 ${elig.required.length} 项齐全、均 passed 且退出 0）`,
+            elig.problems.join('；'));
+        } catch (e) {
+          check(false, '构建记录可解析且含发布资格字段', `解析失败：${e.message}`);
+        }
+      }
     } else {
       check(false, '登记绑定构建记录', '旧登记未绑定本次构建记录');
     }

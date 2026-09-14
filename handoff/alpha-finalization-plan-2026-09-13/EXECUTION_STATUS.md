@@ -62,11 +62,17 @@
 **遗留阻塞（P4 仍为阻塞）**：
 - P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件锁；原因未定，不指认持锁者）。
   需在本机释放占用后重跑，或换一台无该锁的环境复现以区分「环境」与「产品」。
-- P4-F2（新发现，待确认）：编排器把 `test:integration` 排在 `build` **之前**，
-  而部分集成用例**依赖 `out/` 产物**（`electron-runtime.test.ts` 显式断言
-  `out/main/index.js` 存在并抛「请先 npm run build 再跑本用例」）。
-  在**无 `out/` 的干净环境**（新克隆 / CI）下，`test:integration` 会因此失败。
-  待单独确认与修复（不由本轮顺手改）。
+- ~~P4-F2（新发现，待确认）~~ → **已修复（提交 `690eea6`）**：编排器把
+  `test:integration` 排在 `build` **之前**，而部分集成用例**依赖 `out/` 产物**
+  （`electron-runtime.test.ts` 显式断言 `out/main/index.js` 存在并抛
+  「请先 npm run build 再跑本用例」；`pack.ts::resolvePackWorkerPath` 由源码运行时
+  回落到 `out/core/patch/pack-worker.js`）。在**无 `out/` 的干净环境**（新克隆 / CI）
+  下 `test:integration` 必然失败，属**真实顺序缺陷**。
+  修复＝在 `test:unit` 与 `test:integration` 之间加入 `ensureIntegrationPrereq()`：
+  `out/main/index.js` 存在即跳过（幂等），缺失则先跑 `build:main`，失败即停；
+  **刻意不写入 build-record 必需步骤**（前置准备 ≠ 发布闸门，后续完整 `build` 语义不变）。
+  验证：闸门测试新增场景 5b3 全绿；`tsc --noEmit` 0；unit 13 文件 / 200 项全过。
+  （顺带修掉测试基建段解析的多行正则缺陷，详见该提交说明。）
 - 本次另遇**本机环境护栏**：构建环境的 `node-safe-delete-shim` 对单次进程内
   批量删除设有阈值（`SAFE_DELETE_BULK_CONFIRM_REQUIRED`），`build:main` 的
   `rmSync('out')` 在累计超阈值时被拦。**属环境机制，不是仓库缺陷**；
@@ -308,7 +314,11 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
   （不加 `--skip-gui`/`--skip-e2e`、不注入 `OTS_STEP_STUB`/`OTS_NODE_BIN`）重跑
   `node tools/release-build.cjs build 20260914-alpha1-p4full`，跑到 `test:e2e` 失败
   （3 failed/13 passed，根因＝目标文件被占用）。**未得到 `ALL_GREEN`、未产出候选**。
-  下一步：释放文件占用后重跑；并单独确认/修复 P4-F2（integration 依赖 `out/` 却排在 build 前）。
+- F2 缺陷修复 —— **已完成**（`690eea6`）：`test:integration` 依赖 `out/` 却排在
+  `build` 之前，干净环境必失败。已在集成测试前加 `ensureIntegrationPrereq()`
+  （幂等补 `build:main`，不计入发布必需步骤），并新增闸门场景 5b3 锁定该顺序。
+- F 剩余动作：**释放本机文件占用（P4-F1）后以发布模式重跑整链**，争取 `ALL_GREEN`
+  并产出候选；在拿到 `ALL_GREEN` 之前，P4 仍为**阻塞**、无候选产物、总体 **NO-GO**。
 
 
 ## 新增接口及RUNBOOK交付

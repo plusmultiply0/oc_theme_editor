@@ -178,6 +178,29 @@ for (const name of FAIL_STEPS) {
   rmDir(root);
 }
 
+// ---------- 5b2) 任务 D：smoke:gui 失败必须传播（不得被当成「界面可用」放行）----------
+{
+  console.log('\n== 任务 D：smoke:gui 失败传播 ==');
+  const root = makeFixture('orch-smoke-');
+  const stub = {};
+  for (const s of STEP_ORDER_RELEASE) stub[s] = 0;
+  stub['smoke:gui'] = 61; // 冒烟判定界面不可用 → 非 0
+  const r = runOrch(root, ['build', 'b-smokefail'], { stepStub: stub, releaseMode: true });
+  const steps = executedSteps(r.stdout);
+  expect(r.status === 61, 'smoke:gui=61 时整体退出码为 61', `实际 ${r.status}`);
+  expect(steps.includes('smoke:gui'), 'smoke:gui 步骤确实执行');
+  expect(steps.indexOf('verify-package') === -1, 'smoke:gui 失败后不再执行 verify-package');
+  expect(!r.stdout.includes('ALL_GREEN'), 'smoke:gui 失败时不打印 ALL_GREEN');
+  // STOPPED 走 stderr（console.error）
+  expect(/STOPPED at smoke:gui/.test(r.stdout + r.stderr), 'smoke:gui 失败时打印 STOPPED');
+  // 在 smoke 处即终止，未走到步骤 9（register）→ 不应留下发布记录
+  expect(
+    !fs.existsSync(path.join(root, 'candidate-b-smokefail', 'build-record.json')),
+    'smoke:gui 失败时不写出可发布构建记录',
+  );
+  rmDir(root);
+}
+
 // ---------- 5b) 任务 C：发布模式（不跳步骤）→ 步骤齐全；测试注入下仍不可发布 ----------
 {
   console.log('\n== 发布模式（不跳任何步骤）==');

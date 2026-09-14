@@ -362,8 +362,9 @@ function runBuild(buildId, opts) {
 
   // 6) 打包 GUI 冒烟（Playwright 启动候选 exe，与真实双击同一机制）。
   //    脚本内已 delete ELECTRON_RUN_AS_NODE；不修改系统全局变量、不关 sandbox。
+  //    任务 D：用 node 直接跑 CJS（**不再用 npx tsx** —— tsx 非声明依赖，会联网下载）。
   if (!opts.skipGui) {
-    step('smoke:gui', npxBin, ['tsx', path.join(__dirname, 'smoke-packaged.ts'), outDir]);
+    step('smoke:gui', nodeBin, [path.join(__dirname, 'smoke-packaged.cjs'), outDir]);
   }
 
   // 7) 包结构/依赖可用性（verify-package 的包可用性检查，早于登记）

@@ -10,9 +10,10 @@
  *     预先存在的旧证据文件必须原样保留；运行前后比较目录文件集合，
  *     断言**恰好新增一个**本次 runId 日志且内容含本次步骤与退出码；
  *   - S6：同一日志目录连续两次运行（模拟并发），证据互不覆盖；
- *   - S3：verify:package 改走 node tools/verify-release.cjs，必须显式绑定
- *     GATE_CANDIDATE_DIR + GATE_BUILD_ID：缺任一在构建前 exit 2、一步不跑、
- *     不打印 ALL_GREEN；全绿场景断言 node 调用带完整绑定参数。
+ *   - S3/P2：verify:package 改走 node tools/verify-release.cjs，必须显式绑定
+ *     GATE_MANIFEST + GATE_CANDIDATE_DIR + GATE_BUILD_ID：缺任一在构建前 exit 2、
+ *     一步不跑、不打印 ALL_GREEN；全绿场景断言 node 调用带完整绑定参数
+ *     （P2 起 manifest 必须显式给出，不再回落根目录历史 candidate-manifest.json）。
  *
  * 用法：node tools/test-release-gate.cjs
  * 退出码：0 全部通过；1 有失败。
@@ -47,10 +48,15 @@ const rmDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries
  *   其余步骤注入到 npm 桩）；
  * - logDir 省略时在 runDir 下新建独立日志目录（场景隔离）；
  *   显式传入可模拟「共享目录多次运行」；
- * - candidate / buildId 默认注入测试绑定值；传空字符串表示不设置该环境变量
- *   （S3：模拟缺失绑定的失败关闭场景）。
+ * - candidate / buildId / manifest 默认注入测试绑定值；传空字符串表示不设置该
+ *   环境变量（S3/P2：模拟缺失绑定的失败关闭场景）。
  */
-function runGate({ failStep = '', failCode = 0, logDir, candidate = 'candidate-X/win-unpacked.new', buildId = 'b-test-1' } = {}) {
+function runGate({
+  failStep = '', failCode = 0, logDir,
+  candidate = 'candidate-X/win-unpacked.new',
+  buildId = 'b-test-1',
+  manifest = 'candidate-X/candidate-manifest.json',
+} = {}) {
   const runDir = fs.mkdtempSync(path.join(__dirname, 'gate-test-'));
   const callsFile = path.join(runDir, 'calls.txt').replace(/\\/g, '/');
   const gateLogDir = (logDir || path.join(runDir, 'gate-logs')).replace(/\\/g, '/');
@@ -87,6 +93,7 @@ function runGate({ failStep = '', failCode = 0, logDir, candidate = 'candidate-X
   const env = { ...process.env, GATE_LOG_DIR: gateLogDir };
   if (candidate) env.GATE_CANDIDATE_DIR = candidate;
   if (buildId) env.GATE_BUILD_ID = buildId;
+  if (manifest) env.GATE_MANIFEST = manifest;
 
   const out = spawnSync(findBash(), ['--noprofile', '--norc', '-s'], {
     input: prelude + patched, encoding: 'utf8', timeout: 60000, windowsHide: true, env,
@@ -161,28 +168,44 @@ scenario('全绿路径（显式绑定）', {}, (r) => {
     '全绿时 10 步全部执行', `实际 ${r.executedSteps.join(',')}`);
   expect(r.stdout.includes('ALL_GREEN'), '全绿时打印 ALL_GREEN');
   expect(r.nodeCalls.some((c) => c.includes(VERIFY_RELEASE)
+      && c.includes('--manifest candidate-X/candidate-manifest.json')
       && c.includes('--candidate-dir candidate-X/win-unpacked.new')
       && c.includes('--build-id b-test-1')),
-    'verify-release 调用显式绑定候选目录与 buildId', `实际 node 调用：${r.nodeCalls.join(' | ')}`);
+    'verify-release 调用显式绑定 manifest、候选目录与 buildId', `实际 node 调用：${r.nodeCalls.join(' | ')}`);
   expect(r.sentinelIntact, '旧证据未被访问/修改');
   expect(r.gateLogAdded === 1 && r.gateLogContent.includes('ALL_GREEN'),
     '恰好新增一个本次日志且含 ALL_GREEN');
 });
 
-// 3) S3：缺 GATE_BUILD_ID —— 构建前失败关闭（exit 2），一步不跑
+// 3) S3/P2：缺 GATE_BUILD_ID —— 构建前失败关闭（exit 2），一步不跑
 scenario('缺失 GATE_BUILD_ID（S3 失败关闭）', { buildId: '' }, (r) => {
   expect(r.status === 2, '缺绑定时退出 2', `实际 ${r.status}`);
   expect(r.executedSteps.length === 0, '缺绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
-  expect(!r.stdout.includes('ALL_GREEN'), '缺绑定时不会打印 ALL_GREEN');  expect(r.stdout.includes('缺少 GATE_CANDIDATE_DIR/GATE_BUILD_ID'), '缺绑定时给出明确停止原因');  expect(r.sentinelIntact, '旧证据未被访问/修改');
+  expect(!r.stdout.includes('ALL_GREEN'), '缺绑定时不会打印 ALL_GREEN');
+  expect(r.stdout.includes('缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID'),
+    '缺绑定时给出明确停止原因');
+  expect(r.sentinelIntact, '旧证据未被访问/修改');
   expect(r.gateLogAdded === 1 && r.gateLogContent.includes('STOPPED at verify:package'),
     '缺绑定同样落一份含 STOPPED 的独立日志');
 });
 
-// 4) S3：缺 GATE_CANDIDATE_DIR —— 同样失败关闭
+// 4) S3/P2：缺 GATE_CANDIDATE_DIR —— 同样失败关闭
 scenario('缺失 GATE_CANDIDATE_DIR（S3 失败关闭）', { candidate: '' }, (r) => {
   expect(r.status === 2, '缺候选目录绑定时退出 2', `实际 ${r.status}`);
   expect(r.executedSteps.length === 0, '缺候选目录绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
   expect(!r.stdout.includes('ALL_GREEN'), '缺候选目录绑定时不会打印 ALL_GREEN');
+});
+
+// 4b) P2：缺 GATE_MANIFEST —— 构建前失败关闭（P2 起 manifest 必须显式给出，
+//     不再回落根目录历史 candidate-manifest.json）
+scenario('缺失 GATE_MANIFEST（P2 失败关闭）', { manifest: '' }, (r) => {
+  expect(r.status === 2, '缺 manifest 绑定时退出 2', `实际 ${r.status}`);
+  expect(r.executedSteps.length === 0, '缺 manifest 绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
+  expect(!r.stdout.includes('ALL_GREEN'), '缺 manifest 绑定时不会打印 ALL_GREEN');
+  expect(r.stdout.includes('缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID'),
+    '缺 manifest 绑定时给出明确停止原因');
+  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('STOPPED at verify:package'),
+    '缺 manifest 同样落一份含 STOPPED 的独立日志');
 });
 
 // 5) 同一日志目录连续两次运行：证据互不覆盖（并发安全的最小确定性模拟）

@@ -29,12 +29,13 @@ LOG="${GATE_LOG_DIR}/a4-gate-${GATE_ID}.txt"
 mkdir -p "$GATE_LOG_DIR" || exit 1
 : > "$LOG"
 
-# S3：绑定预检放在构建前——缺绑定的门禁连 dist 都不许跑，避免40分钟构建后才发现无效
-if [ -z "${GATE_CANDIDATE_DIR:-}" ] || [ -z "${GATE_BUILD_ID:-}" ]; then
-  echo "STOPPED at verify:package：缺少 GATE_CANDIDATE_DIR/GATE_BUILD_ID 显式绑定（发布门禁不回落默认候选）" | tee -a "$LOG"
+# S3/P2：绑定预检放在构建前——缺绑定的门禁连 dist 都不许跑，避免长构建后才发现无效。
+# manifest 必须显式给出（P2：不再回落根目录历史 candidate-manifest.json）。
+if [ -z "${GATE_CANDIDATE_DIR:-}" ] || [ -z "${GATE_BUILD_ID:-}" ] || [ -z "${GATE_MANIFEST:-}" ]; then
+  echo "STOPPED at verify:package：缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID 显式绑定（发布门禁不回落默认候选）" | tee -a "$LOG"
   exit 2
 fi
-echo "BINDING candidate=$GATE_CANDIDATE_DIR buildId=$GATE_BUILD_ID" | tee -a "$LOG"
+echo "BINDING manifest=$GATE_MANIFEST candidate=$GATE_CANDIDATE_DIR buildId=$GATE_BUILD_ID" | tee -a "$LOG"
 
 run() {
   local name="$1"; shift
@@ -71,6 +72,6 @@ unset ELECTRON_MIRROR ELECTRON_BUILDER_BINARIES_MIRROR
 # 核对必须绑定本次构建登记（S3）：verify-release 校验 buildId/候选目录/来源提交
 # 与 candidate-manifest.json（schema/2）一致、out/** 逐文件一致、zip 与候选同源，
 # 任何不一致都失败关闭。旧候选身份核验（verify-package.cjs）不在这里使用。
-run verify:package node tools/verify-release.cjs --candidate-dir "$GATE_CANDIDATE_DIR" --build-id "$GATE_BUILD_ID"
+run verify:package node tools/verify-release.cjs --manifest "$GATE_MANIFEST" --candidate-dir "$GATE_CANDIDATE_DIR" --build-id "$GATE_BUILD_ID"
 
 echo "ALL_GREEN" | tee -a "$LOG"

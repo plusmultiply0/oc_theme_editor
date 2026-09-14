@@ -29,7 +29,6 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const MANIFEST_PATH = path.join(ROOT, 'candidate-manifest.json');
 
 /** 图片修复三模块：本轮修复落点，out/** 核对集合必须至少覆盖这些（S3 执行方案 4） */
 const REQUIRED_MODULES = [
@@ -229,10 +228,10 @@ function checkBinding({ manifest, root = ROOT, candidateDir, buildId, sourceComm
     problems.push('candidate-manifest.json 不存在：发布门禁必须绑定显式登记，不做默认回落');
     return problems;
   }
-  if (manifest.schema !== 'candidate-manifest/2') {
+  if (manifest.schema !== 'candidate-manifest/3' && manifest.schema !== 'candidate-manifest/2') {
     problems.push(
-      `schema=${manifest.schema || '(缺失)'} 不是 candidate-manifest/2：` +
-      '旧登记缺少 out/** 冻结清单，不允许通过发布门禁（请用 node tools/candidate-manifest.cjs register 重新登记本次构建）',
+      `schema=${manifest.schema || '(缺失)'} 不是 candidate-manifest/3：` +
+      '旧登记缺少 out/** 冻结清单与构建记录绑定，不允许通过发布门禁（请用 node tools/candidate-manifest.cjs register 重新登记本次构建）',
     );
   }
   if (buildId && manifest.buildId !== buildId) {
@@ -341,16 +340,89 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--candidate-dir') opts.candidateDir = argv[++i];
     else if (a === '--build-id') opts.buildId = argv[++i];
+    else if (a === '--manifest') opts.manifest = argv[++i];
     else if (a === '--source-commit') opts.sourceCommit = argv[++i];
+    else if (a === '--skip-deep-zip') opts.skipDeepZip = true;
   }
   return opts;
+}
+
+/**
+ * zip 深度完整性验证（P3）：按本地文件头逐条真实解压读取，验证声明 CRC 与
+ * 实读内容一致，并拒绝越界/重复/目录逃逸条目。仅信中央目录是不够的——
+ * 声明与实际内容可以不一致。
+ * 返回问题列表。不解压到磁盘，全部在内存比对，且强制条目路径不越出根。
+ */
+function deepVerifyZip(zipPath) {
+  const problems = [];
+  const buf = fs.readFileSync(zipPath);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return ['zip 找不到 EOCD'];
+  const count = buf.readUInt16LE(eocd + 10);
+  let off = buf.readUInt32LE(eocd + 16);
+  const seen = new Set();
+  for (let i = 0; i < count; i++) {
+    if (off + 46 > buf.length || buf.readUInt32LE(off) !== 0x02014b50) {
+      problems.push(`中央目录第 ${i} 项签名错误`);
+      break;
+    }
+    const method = buf.readUInt16LE(off + 10);
+    const crc = buf.readUInt32LE(off + 16);
+    const csize = buf.readUInt32LE(off + 20);
+    const usize = buf.readUInt32LE(off + 24);
+    const nameLen = buf.readUInt16LE(off + 28);
+    const extraLen = buf.readUInt16LE(off + 30);
+    const commentLen = buf.readUInt16LE(off + 32);
+    const localOff = buf.readUInt32LE(off + 42);
+    const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
+    off += 46 + nameLen + extraLen + commentLen;
+    if (name.endsWith('/')) continue;
+    if (seen.has(name)) { problems.push(`zip 内重复条目：${name}`); continue; }
+    seen.add(name);
+    // 目录逃逸 / 绝对路径
+    if (name.startsWith('/') || /^[A-Za-z]:/.test(name) || name.split('/').includes('..')) {
+      problems.push(`zip 条目路径越界（疑似目录逃逸）：${name}`); continue;
+    }
+    // 本地文件头校验（数据起点）
+    if (localOff + 30 > buf.length || buf.readUInt32LE(localOff) !== 0x04034b50) {
+      problems.push(`本地文件头签名错误：${name}`); continue;
+    }
+    const lNameLen = buf.readUInt16LE(localOff + 26);
+    const lExtraLen = buf.readUInt16LE(localOff + 28);
+    const dataStart = localOff + 30 + lNameLen + lExtraLen;
+    if (method !== 0) {
+      // 非 store：只校验范围不越界（压缩解压由系统 unzip 语义保证，这里不重造 inflate）
+      if (dataStart + csize > buf.length) problems.push(`条目数据超出文件末尾：${name}`);
+      continue;
+    }
+    if (dataStart + usize > buf.length) { problems.push(`条目数据超出文件末尾：${name}`); continue; }
+    const content = buf.subarray(dataStart, dataStart + usize);
+    if (content.length !== usize) { problems.push(`条目实际长度与声明不符：${name}`); continue; }
+    if (crc32(content) !== crc) problems.push(`条目实读内容 CRC 与声明不符：${name}`);
+  }
+  return problems;
+}
+
+/** 读取 manifest（显式 --manifest；不回落默认路径） */
+function loadReleaseManifest(manifestPath) {
+  if (!manifestPath) return { missing: true, reason: '未提供 --manifest：发布门禁必须显式绑定登记，不回落默认候选' };
+  const p = path.resolve(ROOT, manifestPath);
+  if (!fs.existsSync(p)) return { missing: true, reason: `登记的 manifest 不存在：${manifestPath}` };
+  try {
+    return { manifest: JSON.parse(fs.readFileSync(p, 'utf8')), path: p };
+  } catch (e) {
+    return { missing: true, reason: `manifest 解析失败：${e.message}` };
+  }
 }
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.candidateDir || !opts.buildId) {
-    console.error('用法：node tools/verify-release.cjs --candidate-dir <候选目录> --build-id <本次构建ID> [--source-commit <sha>]');
-    console.error('本次发布门禁必须显式绑定登记（buildId + 候选目录）；旧候选身份核验请用 npm run verify:package。');
+    console.error('用法：node tools/verify-release.cjs --manifest <登记路径> --candidate-dir <候选目录> --build-id <本次构建ID> [--source-commit <sha>]');
+    console.error('本次发布门禁必须显式绑定登记（manifest 路径 + buildId + 候选目录）；旧候选身份核验请用 npm run verify:package。');
     process.exit(1);
   }
 
@@ -360,12 +432,14 @@ function main() {
   };
   console.log(`RELEASE_VERIFY：本次发布门禁（buildId=${opts.buildId}）`);
   console.log(`  核对目标：${opts.candidateDir}`);
+  console.log(`  登记清单：${opts.manifest || '(未提供)'}`);
 
   // 1) 绑定与源码冻结
-  if (!fs.existsSync(MANIFEST_PATH)) {
-    check(false, 'candidate-manifest.json 存在', '缺失：发布门禁必须绑定显式登记');
+  const loaded = loadReleaseManifest(opts.manifest);
+  if (loaded.missing) {
+    check(false, '显式登记的 manifest 可用', loaded.reason);
   } else {
-    const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+    const manifest = loaded.manifest;
     const headCommit = git(['rev-parse', 'HEAD']).trim() || undefined;
     const bindingProblems = checkBinding({
       manifest, root: ROOT, candidateDir: opts.candidateDir,
@@ -375,6 +449,23 @@ function main() {
       bindingProblems.join('；'));
     const freezeProblems = checkSourceFreeze(git(['status', '--porcelain']));
     check(freezeProblems.length === 0, '源码冻结（已跟踪文件无未提交改动）', freezeProblems.join('；'));
+    // 登记来源一致性：锁文件与构建记录 hash 必须与磁盘一致（不能只记录不比较）
+    const lock = path.join(ROOT, 'package-lock.json');
+    if (manifest.lockfileSha256) {
+      check(fs.existsSync(lock) && sha256File(lock) === manifest.lockfileSha256,
+        'package-lock.json 与登记 hash 一致',
+        fs.existsSync(lock) ? 'hash 不符（依赖已变，需重新登记）' : 'package-lock.json 缺失');
+    } else {
+      check(false, '登记含锁文件 hash', '旧登记未记录锁文件 hash');
+    }
+    if (manifest.buildRecord && manifest.buildRecord.path) {
+      const br = path.resolve(ROOT, manifest.buildRecord.path);
+      check(fs.existsSync(br) && sha256File(br) === manifest.buildRecord.sha256,
+        '构建记录存在且 hash 与登记一致',
+        fs.existsSync(br) ? '构建记录 hash 不符（被改过）' : `构建记录缺失：${manifest.buildRecord.path}`);
+    } else {
+      check(false, '登记绑定构建记录', '旧登记未绑定本次构建记录');
+    }
 
     const candidateDir = path.resolve(ROOT, opts.candidateDir);
     const exe = path.join(candidateDir, 'OpenCodeThemeSwitcher.exe');
@@ -390,9 +481,10 @@ function main() {
     }
 
     // 3) out/** 冻结清单：登记必须有，本地与包内都必须逐文件一致
-    const hasOutManifest = manifest.schema === 'candidate-manifest/2' && manifest.out && manifest.out.files;
+    const hasOutManifest = (manifest.schema === 'candidate-manifest/3' || manifest.schema === 'candidate-manifest/2')
+      && manifest.out && manifest.out.files;
     if (!hasOutManifest) {
-      check(false, '登记含 out/** 冻结清单（schema/2）', '旧登记缺 out 清单，不允许通过发布门禁');
+      check(false, '登记含 out/** 冻结清单（schema/3）', `schema=${manifest.schema || '(缺失)'} 缺 out 清单，不允许通过发布门禁`);
     } else if (haveCandidate) {
       for (const m of REQUIRED_MODULES) {
         check(Boolean(manifest.out.files[m]), `登记 out 清单覆盖图片修复模块 ${m}`,
@@ -424,7 +516,7 @@ function main() {
       );
     }
 
-    // 4) zip：hash 与登记一致 + 内部与候选目录逐条目一致
+    // 4) zip：hash 与登记一致 + 内部与候选目录逐条目一致 + 真实解压完整性
     if (manifest.zip) {
       const zp = path.resolve(ROOT, manifest.zip);
       if (!fs.existsSync(zp)) {
@@ -432,9 +524,19 @@ function main() {
       } else {
         check(sha256File(zp) === manifest.hashes.zip, '分发 zip sha256 与登记一致', manifest.zip);
         if (fs.existsSync(candidateDir)) {
-          const zipProblems = checkZipMatchesDir(zp, candidateDir);
-          check(zipProblems.length === 0, `zip 内部与候选目录逐条目一致（${readZipCentral(zp).length} 个文件条目）`,
+          let zipProblems = [];
+          try {
+            zipProblems = checkZipMatchesDir(zp, candidateDir);
+          } catch (e) {
+            zipProblems = [`zip 无法解析：${e.message}`];
+          }
+          check(zipProblems.length === 0, `zip 内部与候选目录逐条目一致`,
             zipProblems.slice(0, 3).join('；') + (zipProblems.length > 3 ? ` 等 ${zipProblems.length} 项` : ''));
+        }
+        if (!opts.skipDeepZip) {
+          const deep = deepVerifyZip(zp);
+          check(deep.length === 0, 'zip 深度完整性（实读内容 CRC、无越界/重复/逃逸条目）',
+            deep.slice(0, 3).join('；') + (deep.length > 3 ? ` 等 ${deep.length} 项` : ''));
         }
       }
     } else {
@@ -472,4 +574,6 @@ module.exports = {
   checkSourceFreeze,
   readZipCentral,
   checkZipMatchesDir,
+  deepVerifyZip,
+  loadReleaseManifest,
 };

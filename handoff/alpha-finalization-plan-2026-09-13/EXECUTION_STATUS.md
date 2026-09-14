@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|
 | P0 基线与保护 | **完成**（无代码改动，故无独立提交） | 基线 `eed1f45` | `git log`/`git status` → 0；`node tools/candidate-manifest.cjs check` → 0 | 下方「P0 明细」；`archive/out-871703d-before-refresh.tar.gz` | agent / 2026-09-13 22:2x |
 | P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
-| P2 新登记与冻结分离 | 待执行 | — | — | — | — |
+| P2 新登记与冻结分离 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（含缺 manifest 失败关闭场景）；全量 `r5-run-suite run` → 0（26 文件 / 346 项）；`candidate-manifest.test.ts` 14 项 | 下方「P2 明细」 | agent / 2026-09-14 08:3x |
 | P3 完整发布链与双重校验 | 待执行 | — | — | — | — |
 | P4 新候选构建与GUI冒烟 | 待执行 | — | — | — | — |
 | P5 真实安装闭环 | 等待当次授权，未执行 | — | — | — | — |
@@ -33,6 +33,46 @@
 - 测试改为**真实调用**：`outManifestOfDir(fixture/out)` 与同内容合成 ASAR 比较，不再只对手写 manifest 对象。
 - 真实数据验收：本地 `out/`（50 文件）与旧候选 asar 比较 → **磁盘 50 键 / 归档 50 键，missing 0 / extra 0 / changed 0**（修复前为 50 缺 / 50 多、三个图片模块全判缺失）。
 - `tsc --noEmit` → 0；`eslint .` → 0；`verify-release.test.ts` 23 项通过（含正例 3 项、B1 回归 2 项、越界/重复/空清单/中文空格路径负例）。
+
+## P2 明细（2026-09-14）
+
+**修复 B2（登记与源码冻结冲突）**：候选身份登记不再写回仓库根的被跟踪文件，
+改为写到 `candidate-<buildId>/candidate-manifest.json`（落在 `.gitignore` 的
+`candidate-*/` 忽略范围内），从而「登记」不弄脏工作树、也不改变 HEAD。
+
+- `candidate-manifest.cjs` 升级到 schema `candidate-manifest/3`：
+  - `register` 必须显式 `--manifest <路径>`，缺则明确失败（不再回落根目录历史 manifest）；
+  - 默认**拒绝覆盖**已有登记，仅在 `--force` 时允许；
+  - 严格源码冻结判定 `classifyWorktree(porcelain)`：把工作树状态分成
+    `trackedDirty`（必须拒绝）/ `untrackedCode`（新增未跟踪源码或脚本，必须拒绝，
+    不能统一忽略 `??`）/ `ignored`（豁免前缀 `candidate-`、`release`、`out/`、
+    `dist/`、`node_modules/`、`backups/`、`handoff/`、`.workbuddy/`、`test-results/`、
+    `playwright-report/` + 豁免文件 `build-record.json`）；Git 查询失败直接报错
+    （绝不把空字符串当成「干净」）。
+  - `register` 必须 `--build-record <路径>`，校验 `sourceCommit == HEAD`、
+    `version == package.json`、`lockfileSha256` 与 `out` 清单四项一致；
+    manifest 内记录 `buildRecord.path` 与 `sha256`。
+  - 新增 `--root <仓库根>`，使命令级集成测试能在独立小型 Git 夹具里真实执行。
+- `verify-release.cjs`：`--manifest` 必填；接受 `/3` 与 `/2`（过渡兼容，拒绝 `/1`）；
+  新增锁文件 hash、构建记录 hash 一致性检查；新增 zip 深度完整性校验
+  `deepVerifyZip`（读本地文件头、校验 CRC、拒绝越界/绝对路径/重复条目）。
+- `release-gate.sh`：绑定预检加入 `GATE_MANIFEST`（缺任一即 `exit 2`、一步不跑），
+  最后一步 `verify:package` 带全 `--manifest/--candidate-dir/--build-id` 三元绑定。
+- 测试：
+  - 新增 `tests/integration/candidate-manifest.test.ts`（14 项，命令级真实调用）：
+    正例「小夹具真实注册 → Git 仍干净、HEAD 未变」+ 覆盖脏源码、未跟踪源码、
+    豁免路径、Git 不可用、缺 `--manifest`、缺构建记录、过期 sourceCommit、
+    锁文件不符、out 不一致、空/旧记录、缺候选目录、默认拒覆盖、`--force` 覆盖。
+  - `tests/unit/verify-release.test.ts` 增补 `/3` 接受、`deepVerifyZip` 三例。
+  - `tools/test-release-gate.cjs` 增补缺 `GATE_MANIFEST` 的失败关闭场景，
+    全绿断言改为校验 `--manifest` 三元绑定。
+- 验收命令与结果：`tsc --noEmit` → 0；`eslint .` → 0（已消除新增测试的
+  `require()` 违规，改用 `createRequire`/顶层 `spawnSync`）；`test-release-gate.cjs`
+  → 0；全量套件 → **26 文件 / 346 项通过**。
+- 注记：全量套件首次运行曾出现一次 vitest worker `Timeout calling "onTaskUpdate"`
+  非确定性报错（`candidate-manifest.test.ts` 62s 的 Git 子进程高压导致），
+  测试本身 346 项全过；立即复跑一次干净通过。按计划要求登记为**已知不确定性**，
+  不作为通过证据，也不掩盖。
 
 ## 新候选身份（未生成）
 

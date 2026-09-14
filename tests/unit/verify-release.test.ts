@@ -53,6 +53,7 @@ interface VerifyReleaseApi {
   checkSourceFreeze: (porcelain: string) => string[];
   readZipCentral: (zipPath: string) => ZipEntry[];
   checkZipMatchesDir: (zipPath: string, dir: string) => string[];
+  deepVerifyZip: (zipPath: string) => string[];
 }
 
 // Bundler moduleResolution 下显式 .cjs 相对导入不走 .d.ts 映射（TS7016），
@@ -395,7 +396,12 @@ describe('checkBinding（负例2：dist 产物与登记不同被拒，禁止回�
   it('schema /1 旧登记 → 拒绝（缺 out/** 冻结清单不得通过发布门禁）', () => {
     const problems = vr.checkBinding({ manifest: { ...base, schema: 'candidate-manifest/1' }, buildId: base.buildId });
     expect(problems.length).toBe(1);
-    expect(problems[0]).toContain('candidate-manifest/2');
+    expect(problems[0]).toContain('candidate-manifest/3');
+  });
+
+  it('schema /3 与 /2 均被接受（/2 为过渡兼容）', () => {
+    expect(vr.checkBinding({ manifest: { ...base, schema: 'candidate-manifest/3' }, buildId: base.buildId })).toEqual([]);
+    expect(vr.checkBinding({ manifest: { ...base, schema: 'candidate-manifest/2' }, buildId: base.buildId })).toEqual([]);
   });
 
   it('manifest 缺失 → 失败关闭', () => {
@@ -469,6 +475,33 @@ describe('zip 一致性（负例3：zip 混旧 asar 被拒）', () => {
     expect(problems.length).toBe(1);
     expect(problems[0]).toContain('resources/app.asar');
     expect(problems[0]).toContain('不一致');
+  });
+
+  it('deepVerifyZip：完好的 zip 通过（实读内容 CRC 与声明一致）', () => {
+    const { writeZip } = setupCandidate('vr-deep-ok-');
+    const zipPath = writeZip('dist.zip', dirFiles);
+    expect(vr.deepVerifyZip(zipPath)).toEqual([]);
+  });
+
+  it('deepVerifyZip：数据被篡改（内容与声明 CRC 不符）→ 拒绝，不只看中央目录', () => {
+    const root = mkTmp('vr-deep-tamper-');
+    const zipPath = path.join(root, 'dist.zip');
+    fs.writeFileSync(zipPath, makeStoredZip({ 'a.txt': Buffer.from('HELLO') }));
+    // 原始内容 'HELLO' → 篡改为 'WORLD'（同长度），中央目录 CRC 仍是旧的
+    const buf = fs.readFileSync(zipPath);
+    const idx = buf.indexOf(Buffer.from('HELLO'));
+    expect(idx).toBeGreaterThan(0);
+    buf.write('WORLD', idx, 'utf8');
+    fs.writeFileSync(zipPath, buf);
+    const problems = vr.deepVerifyZip(zipPath);
+    expect(problems.some((p) => p.includes('CRC') && p.includes('a.txt'))).toBe(true);
+  });
+
+  it('deepVerifyZip：目录逃逸条目（../）→ 拒绝', () => {
+    const root = mkTmp('vr-deep-escape-');
+    const zipPath = path.join(root, 'dist.zip');
+    fs.writeFileSync(zipPath, makeStoredZip({ '../evil.txt': Buffer.from('x') }));
+    expect(vr.deepVerifyZip(zipPath).some((p) => p.includes('越界'))).toBe(true);
   });
 
   it('zip 缺条目 / 多条目 → 分别拒绝', () => {

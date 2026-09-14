@@ -38,11 +38,52 @@ const REQUIRED_MODULES = [
 ];
 
 /**
- * 发布资格校验（任务 C）：**复用共享实现** `tools/release-eligibility.cjs`，
+ * 发布资格校验（任务 C/R2）：**复用共享实现** `tools/release-eligibility.cjs`，
  * 保证与 `release-build.cjs` 的判定同一把尺子。用于关闭
  * 「跳过检查仍可发布」缺口——只核对 hash 不看步骤契约是不够的。
+ * core 层用 checkRecordFacts（结构+已记录步骤事实）；发布级判定用
+ * checkReleaseEligibility（12 项齐全）。R2：记录不能自行缩减必检集合。
  */
-const { checkReleaseEligibility } = require('./release-eligibility.cjs');
+const { checkRecordFacts, checkReleaseEligibility } = require('./release-eligibility.cjs');
+
+const RECEIPT_SCHEMA = 'release-receipt/1';
+
+/**
+ * release-receipt/1 完成回执绑定校验（R1，纯函数）。
+ * 回执必须存在、schema 正确，且与 manifest/构建记录/buildId/sourceCommit 的
+ * 当前事实完全绑定——任何一项对不上都视为「回执来自另一次构建」或产物被篡改。
+ * @param {object} params
+ * @param {object|null} params.receipt 已解析的回执（不存在/不可解析传 null）
+ * @param {string} params.manifestHash 当前 manifest 文件 sha256
+ * @param {string} params.buildRecordHash 当前构建记录文件 sha256
+ * @param {string} params.buildId 期望 buildId
+ * @param {string} params.sourceCommit 期望来源提交
+ * @returns {string[]} 问题列表（空 = 通过）
+ */
+function checkReleaseReceipt({ receipt, manifestHash, buildRecordHash, buildId, sourceCommit } = {}) {
+  if (!receipt || typeof receipt !== 'object') {
+    return ['完成回执 release-receipt.json 缺失或不可解析：register 与 core 核验未完成，不得给发布绿色结果'];
+  }
+  const problems = [];
+  if (receipt.schema !== RECEIPT_SCHEMA) {
+    problems.push(`回执 schema=${receipt.schema || '(缺失)'} 不是 ${RECEIPT_SCHEMA}`);
+  }
+  if (receipt.buildId !== buildId) {
+    problems.push(`回执 buildId=${receipt.buildId || '(缺失)'} ≠ 期望 ${buildId}`);
+  }
+  if (receipt.sourceCommit !== sourceCommit) {
+    problems.push(
+      `回执 sourceCommit=${String(receipt.sourceCommit || '(缺失)').slice(0, 12)} ≠ 期望 ${String(sourceCommit || '').slice(0, 12)}`,
+    );
+  }
+  if (receipt.manifestHash !== manifestHash) {
+    problems.push('回执 manifestHash 与当前登记文件不符（登记被改过，或回执来自另一次构建）');
+  }
+  if (receipt.buildRecordHash !== buildRecordHash) {
+    problems.push('回执 buildRecordHash 与当前构建记录不符（记录被改过，或回执来自另一次构建）');
+  }
+  return problems;
+}
 
 /*
  * 清单键规范（统一，三处必须一致）：项目逻辑路径 `out/...`，正斜杠分隔。
@@ -427,8 +468,11 @@ function loadReleaseManifest(manifestPath) {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
+  // --root 必须最先应用：后续所有相对路径（manifest/候选/out/锁文件/git 查询）都以它解析
+  if (opts.root) ROOT = path.resolve(opts.root);
   if (!opts.candidateDir || !opts.buildId) {
     console.error('用法：node tools/verify-release.cjs --manifest <登记路径> --candidate-dir <候选目录> --build-id <本次构建ID> [--source-commit <sha>]');
+    console.error('      [--require-release-eligibility] [--root <仓库根>]');
     console.error('本次发布门禁必须显式绑定登记（manifest 路径 + buildId + 候选目录）；旧候选身份核验请用 npm run verify:package。');
     process.exit(1);
   }
@@ -440,6 +484,9 @@ function main() {
   console.log(`RELEASE_VERIFY：本次发布门禁（buildId=${opts.buildId}）`);
   console.log(`  核对目标：${opts.candidateDir}`);
   console.log(`  登记清单：${opts.manifest || '(未提供)'}`);
+  if (opts.requireReleaseEligibility) {
+    console.log('  发布级判定：要求 12 项必检步骤齐全 + 完成回执绑定（--require-release-eligibility）');
+  }
 
   // 1) 绑定与源码冻结
   const loaded = loadReleaseManifest(opts.manifest);
@@ -471,14 +518,40 @@ function main() {
       check(brOk, '构建记录存在且 hash 与登记一致',
         fs.existsSync(br) ? '构建记录 hash 不符（被改过）' : `构建记录缺失：${manifest.buildRecord.path}`);
 
-      // 4) 发布资格（任务 C）：跳过的/未执行的必需步骤不得通过发布核验。
-      //    这是「跳过检查仍可发布」缺口的关闭点——只核对 hash 不看步骤是不够的。
+      // 4) 构建记录事实（R1 core 层）：schema/策略版本/注入标志/已记录步骤事实。
+      //    **不要求 12 项齐全**（开发构建允许缺省跳过项）；完整资格由
+      //    --require-release-eligibility 另行要求（发布级判定）。
       if (fs.existsSync(br)) {
         try {
           const rec = JSON.parse(fs.readFileSync(br, 'utf8'));
-          const elig = checkReleaseEligibility(rec);
-          check(elig.ok, `发布资格校验通过（必需步骤 ${elig.required.length} 项齐全、均 passed 且退出 0）`,
-            elig.problems.join('；'));
+          const facts = checkRecordFacts(rec);
+          check(facts.ok, '构建记录事实校验通过（build-record/2 结构、策略版本、已记录步骤均真实通过）',
+            facts.problems.join('；'));
+          if (opts.requireReleaseEligibility) {
+            // 4b) 发布级资格（R1/R2）：12 项登记前步骤齐全且真实通过、无注入；
+            //     必检集合按可信策略锁定，记录不能自行缩减。
+            const elig = checkReleaseEligibility(rec);
+            check(elig.ok, `发布资格校验通过（必需步骤 ${elig.required.length} 项齐全、均 passed 且退出 0）`,
+              elig.problems.join('；'));
+            // 4c) 完成回执绑定（R1）：register + core 核验的完成证据必须在场，
+            //     且与当前 manifest/记录/buildId/来源提交完全绑定。
+            const receiptPath = path.join(path.dirname(loaded.path), 'release-receipt.json');
+            let receipt = null;
+            try {
+              receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+            } catch {
+              receipt = null;
+            }
+            const receiptProblems = checkReleaseReceipt({
+              receipt,
+              manifestHash: sha256File(loaded.path),
+              buildRecordHash: sha256File(br),
+              buildId: opts.buildId,
+              sourceCommit: manifest.sourceCommit,
+            });
+            check(receiptProblems.length === 0, '完成回执存在且与 manifest/记录/buildId/来源提交完全绑定（release-receipt/1）',
+              receiptProblems.join('；'));
+          }
         } catch (e) {
           check(false, '构建记录可解析且含发布资格字段', `解析失败：${e.message}`);
         }
@@ -596,4 +669,6 @@ module.exports = {
   checkZipMatchesDir,
   deepVerifyZip,
   loadReleaseManifest,
+  RECEIPT_SCHEMA,
+  checkReleaseReceipt,
 };

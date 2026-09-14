@@ -10,11 +10,17 @@
  *   - 冻结预检：源码改脏 / 新增未跟踪源码 → 构建前拒绝（一步不跑）；
  *   - 候选目录已存在 → 拒绝覆盖；
  *   - 逐步失败：typecheck/lint/test:unit/test:integration/build/audit/dist/zip/
- *     verify-package/register/verify:release —— 退出码原样保留、后续未执行；
- *   - 全绿路径：步骤顺序与预期一致、打印 ALL_GREEN；
+ *     verify-package/register/verify:release —— 退出码原样保留、后续未执行、
+ *     **不写完成回执**（R1：失败即阻断回执）；
+ *   - 全绿路径：步骤顺序与预期一致、写出完成回执；
  *   - **任务 C**：带 --skip-gui/--skip-e2e 的开发构建只能得到 `DEV_BUILD_COMPLETE`
  *     且 `releaseEligible=false`，**不得**打印发布 `ALL_GREEN`；`--strict` 下非 0；
  *   - **任务 C**：测试注入环境（OTS_STEP_STUB）不得取得发布资格；
+ *   - **R1/R2**：资格校验拒绝自缩减策略集合 / 重复步骤 / 未知 policyVersion /
+ *     自报不一致（5d）；
+ *   - **R1 生命周期（5e）**：极小合成候选真实走 record writer → register →
+ *     core verify → receipt writer → 最终 verify（发布级），两次 verify 幂等
+ *     且产物 hash 不变；篡改记录/回执/换 buildId 登记均失败；
  *   - verify 模式：缺 buildId → exit 2；manifest 缺失 → 失败关闭不构建；
  *   - 未知模式 → exit 2；
  *   - mock 清除继承的绑定变量（GATE_*），再按场景注入。
@@ -64,6 +70,25 @@ function makeFixture(prefix) {
   g(['add', '.']);
   g(['commit', '-q', '-m', 'init']);
   return root;
+}
+
+/** 在夹具根下真实执行一个 CLI（verify-release / candidate-manifest 等） */
+function runCli(args, cwd) {
+  const r = spawnSync(process.execPath, args, {
+    cwd, encoding: 'utf8', windowsHide: true, timeout: 120000,
+  });
+  return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+}
+
+/** PowerShell Compress-Archive 真打包（与编排器 makeZip 同机制） */
+function makeZipOf(dir, zipPath) {
+  const ps = [
+    '$ErrorActionPreference = "Stop"',
+    `Compress-Archive -Path (Join-Path '${dir.replace(/'/g, "''")}' '*') -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`,
+  ].join('; ');
+  return spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+    windowsHide: true, timeout: 120000,
+  });
 }
 
 /** 执行编排器（夹具内；清除继承绑定变量后按场景注入 OTS_STEP_STUB）。 */
@@ -206,6 +231,11 @@ for (const name of FAIL_STEPS) {
   expect(rec.releaseEligible === false, '开发构建 releaseEligible=false', `实际 ${rec.releaseEligible}`);
   expect(Array.isArray(rec.missingRequiredSteps) && rec.missingRequiredSteps.includes('smoke:gui'),
     '缺失步骤显式列出 smoke:gui', JSON.stringify(rec.missingRequiredSteps));
+  expect(rec.schema === 'build-record/2' && rec.policyVersion === 1, '记录为 build-record/2 + policyVersion 1');
+  // R1：回执只绑定真实 manifest——桩登记未真实发生（manifest 不存在）时不写回执；
+  // 真实生命周期正例（回执存在 + 绑定）在场景 5e 覆盖。
+  expect(!fs.existsSync(path.join(root, 'candidate-b-green', 'release-receipt.json')),
+    '桩登记未真实发生 → 不写回执（回执必须绑定真实 manifest）');
   rmDir(root);
 }
 
@@ -286,7 +316,7 @@ for (const name of FAIL_STEPS) {
   const br = path.join(root, 'build-record.json');
   const REQ = require(path.join(ROOT, 'tools', 'release-build.cjs')).RELEASE_REQUIRED_STEPS;
   fs.writeFileSync(br, JSON.stringify({
-    schema: 'build-record/1', buildId: 'b-ok', version: '0.1.0-alpha.1',
+    schema: 'build-record/2', policyVersion: 1, buildId: 'b-ok', version: '0.1.0-alpha.1',
     sourceCommit: 'a'.repeat(40), lockfileSha256: 'b'.repeat(64),
     out: { fileCount: 0, files: {} },
     steps: REQ.map((n) => ({ step: n, status: 'passed', exit: 0, seconds: 1 })),
@@ -310,13 +340,13 @@ for (const name of FAIL_STEPS) {
   rmDir(root);
 }
 
-// ---------- 5d) 任务 C：负例 —— skip-gui / skip-e2e / 步骤非 0 / 测试注入 均不可通过 ----------
+// ---------- 5d) 任务 C/R2：负例 —— skip-gui / skip-e2e / 步骤非 0 / 测试注入 / 缩减策略 均不可通过 ----------
 {
-  console.log('\n== 任务 C 负例：发布资格校验必须拒绝各种「跳检查」形态 ==');
+  console.log('\n== 任务 C/R2 负例：发布资格校验必须拒绝各种「跳检查/自缩减」形态 ==');
   const REQ = require(path.join(ROOT, 'tools', 'release-build.cjs')).RELEASE_REQUIRED_STEPS;
   const { checkReleaseEligibility } = require(path.join(ROOT, 'tools', 'release-eligibility.cjs'));
   const base = (mut) => Object.assign({
-    schema: 'build-record/1', buildId: 'b', version: '0.1.0-alpha.1',
+    schema: 'build-record/2', policyVersion: 1, buildId: 'b', version: '0.1.0-alpha.1',
     sourceCommit: 'a'.repeat(40), lockfileSha256: 'b'.repeat(64),
     out: { fileCount: 0, files: {} },
     steps: REQ.map((n) => ({ step: n, status: 'passed', exit: 0, seconds: 1 })),
@@ -351,13 +381,157 @@ for (const name of FAIL_STEPS) {
   expect(checkReleaseEligibility(base({ testInjectedEnvironment: true })).ok === false,
     '测试注入环境被拒');
 
-  // releaseEligible 缺失
-  const noFlag = base({});
-  delete noFlag.releaseEligible;
-  expect(checkReleaseEligibility(noFlag).ok === false, 'releaseEligible 缺失被拒（不乐观放行）');
+  // R2：记录自缩减必检集合（releaseRequiredSteps=['build']）→ 拒绝
+  const shrunk = base({ releaseRequiredSteps: ['build'] });
+  shrunk.steps = [{ step: 'build', status: 'passed', exit: 0 }];
+  shrunk.missingRequiredSteps = [];
+  expect(checkReleaseEligibility(shrunk).ok === false, 'R2：自缩减必检集合被拒');
+
+  // R2：重复步骤 → 拒绝
+  const dup = base({});
+  dup.steps = [...dup.steps, { step: 'lint', status: 'passed', exit: 0 }];
+  expect(checkReleaseEligibility(dup).ok === false, 'R2：重复步骤被拒');
+
+  // R2：未知策略版本 → 拒绝
+  expect(checkReleaseEligibility(base({ policyVersion: 99 })).ok === false, 'R2：未知 policyVersion 被拒');
+
+  // R2：releaseEligible 自报与重算不一致（缺步骤仍自报 true）→ 拒绝
+  const lie = base({});
+  lie.steps = lie.steps.filter((s) => s.step !== 'audit');
+  expect(checkReleaseEligibility(lie).ok === false, 'R2：缺步骤但自报 releaseEligible=true 被拒');
 
   // 正例对照
   expect(checkReleaseEligibility(base({})).ok === true, '齐全且无注入的正例通过');
+}
+
+// ---------- 5e) R1 生命周期：极小合成候选真实走完整链 ----------
+//   record writer → register（真实 CLI）→ core verify（真实 CLI）→ receipt writer
+//   → 最终 verify（真实 CLI，发布级）。**不允许**把 register/verify stub 为 0：
+//   夹具自带 out/（含图片修复三模块）、真 asar（@electron/asar 打包 out/**）、
+//   真 zip（Compress-Archive），保证 verify-release 的 asar/zip 逐文件比对真实生效。
+{
+  console.log('\n== R1 生命周期：record writer → register → core verify → receipt → 最终 verify ==');
+  // 本场景直接调用真实 record/receipt writer，进程内不得带注入变量
+  delete process.env.OTS_STEP_STUB;
+  delete process.env.OTS_NODE_BIN;
+  const rb = require(BUILD);
+  const root = makeFixture('orch-life-');
+
+  // 夹具 out/：verify-release 的 REQUIRED_MODULES 检查需要图片修复三模块
+  const outFiles = {
+    'out/main/index.js': 'console.log(1)',
+    'out/main/services/image-store.js': 'store',
+    'out/core/theme/generate.js': 'generate',
+    'out/core/theme/image-probe.js': 'probe',
+    'out/preload/index.js': 'preload',
+  };
+  for (const [rel, content] of Object.entries(outFiles)) {
+    const p = path.join(root, ...rel.split('/'));
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, content);
+  }
+
+  const buildId = 'b-life-1';
+  const candRoot = path.join(root, `candidate-${buildId}`);
+  const outDir = path.join(candRoot, 'win-unpacked');
+  fs.mkdirSync(path.join(outDir, 'resources'), { recursive: true });
+  fs.writeFileSync(path.join(outDir, 'OpenCodeThemeSwitcher.exe'), 'stub-exe');
+  // 真 asar：与编排器 dist 桩分支同一实现（out → staging/out，条目即 out/**）
+  rb.packOutAsar(path.join(root, 'out'), path.join(candRoot, 'asar-staging'), path.join(outDir, 'resources', 'app.asar'));
+  // 真 zip：候选目录内容打包
+  const zipPath = path.join(root, `candidate-${buildId}.zip`);
+  expect(makeZipOf(outDir, zipPath).status === 0 && fs.existsSync(zipPath), '真 zip 生成（Compress-Archive）');
+
+  const gsha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', windowsHide: true }).stdout.trim();
+  const coreArgs = [VERIFY_RELEASE, '--root', root, '--manifest', path.join(candRoot, 'candidate-manifest.json'),
+    '--candidate-dir', outDir, '--build-id', buildId];
+  const fullArgs = [...coreArgs, '--require-release-eligibility'];
+
+  // 1) 真实 record writer：build-record/2，无注入，12 项齐全
+  const recordPath = rb.writeBuildRecord(root, candRoot, buildId,
+    rb.RELEASE_REQUIRED_STEPS.map((name) => ({ name, code: 0, secs: 1 })));
+  const recJson = fs.readFileSync(recordPath, 'utf8');
+  const rec = JSON.parse(recJson);
+  expect(rec.schema === 'build-record/2' && rec.policyVersion === 1, '记录为 build-record/2 + policyVersion 1');
+  expect(!rec.steps.some((s) => ['register', 'verify:release'].includes(s.step)), '记录不含登记后步骤（R1 去自引用）');
+  expect(rec.sourceCommit === gsha, '记录来源提交 = 夹具 HEAD');
+  expect(rec.releaseEligible === true && rec.missingRequiredSteps.length === 0, '12 项齐全无注入 → 资格重算为 true');
+
+  // 2) 真实 register：绑定记录 hash + out 清单 + zip
+  const manifest = path.join(candRoot, 'candidate-manifest.json');
+  const reg = runCli([CAND, 'register', '--root', root, '--manifest', manifest,
+    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId], root);
+  expect(reg.status === 0, '真实 register 退出 0', reg.stderr);
+
+  // 3) 真实 core verify（无旗标）：只校验事实/产物/来源，不要求回执
+  const vrCore = runCli(coreArgs, root);
+  expect(vrCore.status === 0, 'core 核验（无旗标）通过', vrCore.stdout + vrCore.stderr);
+  expect(/RELEASE_GREEN/.test(vrCore.stdout), 'core 核验打印 RELEASE_GREEN');
+
+  // 4) 真实 receipt writer：登记 + core 核验均退出 0 后写回执
+  const receiptPath = rb.writeReleaseReceipt(candRoot, buildId, gsha, manifest, recordPath);
+  expect(JSON.parse(fs.readFileSync(receiptPath, 'utf8')).schema === 'release-receipt/1', '回执 schema release-receipt/1');
+  expect(JSON.parse(fs.readFileSync(manifest, 'utf8')).buildRecord.sha256 === sha256Buf(recJson),
+    '写回执不改记录（登记后 build-record/2 不可变）');
+
+  // 5) 最终 verify（发布级）：完整资格 + 回执绑定
+  const vrFull = runCli(fullArgs, root);
+  expect(vrFull.status === 0, '最终 verify（发布级）通过', vrFull.stdout + vrFull.stderr);
+
+  // 6) 幂等：连续两次只读 verify 通过，产物 hash 完全不变
+  const before = [recordPath, manifest, zipPath, path.join(outDir, 'resources', 'app.asar')].map(sha256File);
+  const vrFull2 = runCli(fullArgs, root);
+  expect(vrFull2.status === 0, '第二次只读 verify 仍通过', vrFull2.stdout + vrFull2.stderr);
+  const after = [recordPath, manifest, zipPath, path.join(outDir, 'resources', 'app.asar')].map(sha256File);
+  expect(before.join() === after.join(), '两次 verify 后 record/manifest/zip/asar hash 完全不变');
+
+  // 7) 负例 a：篡改构建记录 → 核验失败；还原后恢复
+  fs.writeFileSync(recordPath, recJson.replace('"b-life-1"', '"b-tampered"'));
+  const vrTamper = runCli(coreArgs, root);
+  expect(vrTamper.status === 1, '篡改记录 → core 核验失败', vrTamper.stdout);
+  fs.writeFileSync(recordPath, recJson);
+  expect(runCli(coreArgs, root).status === 0, '还原记录后 core 核验恢复通过');
+
+  // 8) 负例 b：篡改回执 → 发布级 verify 失败（core 不查回执，仍通过）
+  const rcJson = fs.readFileSync(receiptPath, 'utf8');
+  fs.writeFileSync(receiptPath, rcJson.replace('"b-life-1"', '"b-other"'));
+  const vrRcFull = runCli(fullArgs, root);
+  expect(vrRcFull.status === 1, '篡改回执 → 发布级 verify 失败', vrRcFull.stdout);
+  expect(/回执 buildId/.test(vrRcFull.stdout), '点名回执绑定不符');
+  expect(runCli(coreArgs, root).status === 0, 'core 核验不查回执 → 仍通过（core ≠ 发布级）');
+  fs.writeFileSync(receiptPath, rcJson);
+
+  // 9) 负例 c：换成另一 buildId 的登记 → 绑定失败（禁止回落/混用）
+  const manifest2 = path.join(candRoot, 'candidate-manifest-alt.json');
+  const reg2 = runCli([CAND, 'register', '--root', root, '--manifest', manifest2,
+    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', 'b-life-2'], root);
+  expect(reg2.status === 0, '第二份登记（另一 buildId）成功', reg2.stderr);
+  const vrSwap = runCli([...coreArgs.slice(0, coreArgs.indexOf('--manifest') + 2),
+    '--candidate-dir', outDir, '--build-id', buildId, '--require-release-eligibility']
+    .map((a, i) => (i === coreArgs.indexOf('--manifest') + 1 ? manifest2 : a)), root);
+  expect(vrSwap.status === 1, '用另一 buildId 的 manifest 核验 → 失败', vrSwap.stdout);
+
+  // 10) 负例 d：缺 smoke:gui 的开发记录 → 可登记（core 不要求齐全），发布级拒绝
+  const buildId3 = 'b-life-3';
+  const cand3 = path.join(root, `candidate-${buildId3}`);
+  const out3 = path.join(cand3, 'win-unpacked');
+  fs.mkdirSync(path.join(out3, 'resources'), { recursive: true });
+  fs.writeFileSync(path.join(out3, 'OpenCodeThemeSwitcher.exe'), 'stub-exe');
+  rb.packOutAsar(path.join(root, 'out'), path.join(cand3, 'asar-staging'), path.join(out3, 'resources', 'app.asar'));
+  const zip3 = path.join(root, `candidate-${buildId3}.zip`);
+  expect(makeZipOf(out3, zip3).status === 0, '开发候选 zip 生成');
+  const record3 = rb.writeBuildRecord(root, cand3, buildId3,
+    rb.RELEASE_REQUIRED_STEPS.filter((n) => n !== 'smoke:gui').map((name) => ({ name, code: 0, secs: 1 })));
+  const manifest3 = path.join(cand3, 'candidate-manifest.json');
+  const reg3 = runCli([CAND, 'register', '--root', root, '--manifest', manifest3,
+    '--candidate-dir', out3, '--build-record', record3, '--zip', zip3, '--build-id', buildId3], root);
+  expect(reg3.status === 0, '缺 smoke:gui 的开发构建仍可登记（core 层不要求齐全）', reg3.stderr);
+  const vr3 = runCli([VERIFY_RELEASE, '--root', root, '--manifest', manifest3,
+    '--candidate-dir', out3, '--build-id', buildId3, '--require-release-eligibility'], root);
+  expect(vr3.status === 1, '发布级 verify 拒绝缺步候选', vr3.stdout);
+  expect(/缺失必需步骤/.test(vr3.stdout), '点名缺失步骤');
+
+  rmDir(root);
 }
 
 // ---------- 6) verify 模式：缺 buildId → exit 2 ----------

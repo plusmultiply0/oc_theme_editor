@@ -132,8 +132,14 @@ node tools/release-build.cjs verify <buildId>
 node tools/verify-package.cjs candidate-<buildId>/win-unpacked \
      --manifest candidate-<buildId>/candidate-manifest.json
 node tools/verify-release.cjs --manifest candidate-<buildId>/candidate-manifest.json \
-     --candidate-dir candidate-<buildId>/win-unpacked --build-id <buildId>
+     --candidate-dir candidate-<buildId>/win-unpacked --build-id <buildId> \
+     --require-release-eligibility
 ```
+
+第二个命令带 `--require-release-eligibility`（R1）：除来源/内容/zip 绑定与
+build-record/2 事实外，还要求 12 项必检步骤齐全真实通过、**持有完成回执
+release-receipt/1 且其 buildId/sourceCommit/manifestHash/buildRecordHash 与
+当前产物完全绑定**。缺回执、绑定错误、注入环境、跳过必检一律不得给绿色结果。
 
 两个职责必须都通过：`verify-package` = 结构/依赖可用性（入口、unpacked 实体、
 依赖完整性、隐私扫描、包内 sharp 真实出图）；`verify-release` = 来源/内容/zip 绑定
@@ -258,7 +264,11 @@ node tools/smoke-packaged.cjs candidate-<buildId>/win-unpacked
 - **发布链未跑通**：`test:integration` 存在 RPC 基础设施错误（`onTaskUpdate` 超时），
   当前**未达 `ALL_GREEN`**；本手册命令为**已实现但未整链验证**。
 - **GUI 冒烟判据不足**：空白页/读取失败仍可能返回 `SMOKE_OK`；入口依赖未声明的 `npx tsx`。
-- **跳过检查仍可发布**：`--skip-e2e`/`--skip-gui` 不进入 build-record，仍打印 `ALL_GREEN`。
+- ~~**跳过检查仍可发布**~~：已由任务 C + R1/R2 关闭——skip 构建只能得
+  `DEV_BUILD_COMPLETE`；发布级 verify 额外要求完整资格与完成回执绑定。
+- ~~**发布记录自引用**~~（R1，2026-09-14 已修）：旧 build-record/1 把尚未发生的
+  register/verify:release 写成 pending，正常链永远拿不到发布资格；现由
+  build-record/2（登记前事实）+ release-receipt/1（完成回执）分离承担。
 - `EPERM` 访问被拒：**原因未定**（日志无持锁者证据），不指认安全进程，不关闭防护。
 - A6 干净机器验证：用户决定跳过，**未验证**，不得记为通过。
 - 候选未签名；fuse 为 Electron 默认值（未加固）。

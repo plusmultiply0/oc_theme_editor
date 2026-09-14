@@ -14,7 +14,9 @@
  *      都必须阻止登记；仅豁免明确的生成/证据路径。
  *   4. **构建记录绑定**：要求同时提供本次构建记录（`--build-record`），
  *      登记其 hash，并核对它声明的 sourceCommit / lockfile / 版本与本次输入
- *      一致——不接受「旧 out 还在就代表刚构建过」。
+ *      一致——不接受「旧 out 还在就代表刚构建过」。R1/R2：记录必须是
+ *      build-record/2 且结构/事实合格（checkRecordFacts），旧 /1 自引用
+ *      记录不得入册；登记后记录不可变（不再有 finalize 回写）。
  *
  * 用法：
  *   node tools/candidate-manifest.cjs register --manifest <路径> --candidate-dir <候选目录>
@@ -34,6 +36,10 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+
+// R1/R2：登记只接受 build-record/2 且结构/事实合格——与核验端（verify-release）
+// 共用 tools/release-eligibility.cjs 同一把尺子，旧 /1 自引用记录不得入册。
+const { RECORD_SCHEMA, checkRecordFacts } = require('./release-eligibility.cjs');
 
 /** 本脚本所在仓库（默认根）；实际根可由 --root 覆盖 */
 const SCRIPT_ROOT = path.resolve(__dirname, '..');
@@ -230,8 +236,24 @@ function cmdRegister(argv) {
     console.error(`[FAIL] 构建记录无法解析：${e.message}`);
     process.exit(1);
   }
-  if (!record || typeof record !== 'object' || !record.sourceCommit || !record.out || !record.out.files) {
-    console.error('[FAIL] 构建记录缺少必需字段（sourceCommit / out.files）：记录为空或来自旧格式，拒绝登记。');
+  // ---- 2.1) 构建记录 schema/事实（R1/R2）：与核验端同一把尺子 ----
+  // 旧 /1 记录把尚未发生的 register/verify:release 写成 pending（自引用），
+  // 不得入册；未知 policyVersion、畸形 steps、注入标志、重复步骤同样拒绝。
+  if (!record || typeof record !== 'object' || record.schema !== RECORD_SCHEMA) {
+    console.error(
+      `[FAIL] 构建记录 schema=${(record && record.schema) || '(缺失)'} 不是 ${RECORD_SCHEMA}：` +
+      '旧 /1 记录自引用登记后步骤，拒绝登记（请由当前发布链重新生成 build-record/2）。',
+    );
+    process.exit(1);
+  }
+  const facts = checkRecordFacts(record);
+  if (!facts.ok) {
+    console.error('[FAIL] 构建记录结构/事实校验失败（checkRecordFacts），拒绝登记：');
+    for (const p of facts.problems) console.error(`       - ${p}`);
+    process.exit(1);
+  }
+  if (!record.sourceCommit || !record.out || !record.out.files) {
+    console.error('[FAIL] 构建记录缺少必需字段（sourceCommit / out.files）：拒绝登记。');
     process.exit(1);
   }
   if (record.sourceCommit !== sourceCommit) {

@@ -13,8 +13,16 @@
  *   → 干净构建（唯一一次）→ GUI/运行期测试
  *   → 打包到唯一目录（唯一一次）→ 包结构/依赖核验（verify-package）
  *   → 生成 zip（从候选目录内容）
+ *   → 写 build-record/2（**登记前事实**，登记后不可变，不含 register/verify:release）
  *   → 登记（candidate-manifest register，绑定构建记录 + out 清单）
- *   → 发布身份核验（verify-release）
+ *   → 发布身份核验（verify-release，core 层：事实/产物/来源绑定，不要求资格）
+ *   → 写 release-receipt/1（完成回执：register + core 核验均真实退出 0 才写）
+ *   → 资格终判（按可信策略重算 + 回执在场）→ ALL_GREEN / DEV_BUILD_COMPLETE
+ *
+ *   R1 修订（2026-09-14）：旧 /1 记录把尚未发生的 register/verify:release
+ *   写成 pending（自引用），正常链永远拿不到发布资格；且 finalize 回写会改变
+ *   已被 manifest 绑定的记录 hash。现改为「事实（build-record/2，不可变）+
+ *   回执（release-receipt/1，登记核验完成后另写）」分离，删除 finalize 回写路径。
  *
  * 两种模式（互斥）：
  *   build  <buildId>   完整链：会 build/dist/打包/写登记，产出新候选。
@@ -159,26 +167,42 @@ function freezeProblems() {
  * 这里重新导出以便测试与外部引用。校验逻辑同样复用该共享模块，
  * 保证「构建端判定」与「核验端校验」用同一把尺子。
  */
-const { RELEASE_REQUIRED_STEPS, checkReleaseEligibility } = require('./release-eligibility.cjs');
+const {
+  RELEASE_POLICY_VERSION,
+  RELEASE_REQUIRED_STEPS,
+  POST_REGISTER_STEPS,
+  RECORD_SCHEMA,
+  checkReleaseEligibility,
+} = require('./release-eligibility.cjs');
 
-/** 生成并写入构建记录（build-record/1），返回路径。
- *  任务 C：逐步记录 `passed/failed/skipped` + 退出码，不以缺字段隐含跳过；
- *  并给出 `releaseEligible` 与缺失步骤清单，供 register/verify-release 校验。 */
-function writeBuildRecord(candidateDir, buildId, steps) {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const lock = fs.readFileSync(path.join(ROOT, 'package-lock.json'));
+/** 生成并写入构建记录（build-record/2，登记后**不可变**），返回路径。
+ *  R1：只记录登记前真实完成的步骤事实（typecheck…zip，共 12 项发布事实），
+ *  **不含 register / verify:release**——登记时它们尚未发生，写进去必然
+ *  「记录要求自己尚未发生的完成回执」（旧 /1 记录的死锁根源）；
+ *  它们的完成由独立 release-receipt/1 证明（见 writeReleaseReceipt）。
+ *  R2：releaseEligible / missingRequiredSteps 由可信策略重算后写入，
+ *  校验端做一致性核对（不信任自报，只认一致）。
+ *  @param {string} root 构建根（默认调用方传 ROOT；测试可传夹具根） */
+function writeBuildRecord(root, candidateDir, buildId, steps) {
+  // 防御：登记后步骤不得混入记录（其完成回执属于 release-receipt/1）
+  const intruders = steps.filter((s) => POST_REGISTER_STEPS.includes(s.name)).map((s) => s.name);
+  if (intruders.length) {
+    throw new Error(`build-record/2 只记录登记前步骤，混入了登记后步骤：${intruders.join('、')}`);
+  }
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const lock = fs.readFileSync(path.join(root, 'package-lock.json'));
   // out 清单来自 verify-release 的共享实现，保证与核验端同一规范。
-  const outDir = path.join(ROOT, 'out');
+  const outDir = path.join(root, 'out');
   const hasOut = fs.existsSync(outDir) && fs.readdirSync(outDir).length > 0;
   if (!hasOut && stepStub('build') === null) {
-    throw new Error(`构建记录要求 out/ 有内容，但 ${path.relative(ROOT, outDir)} 为空或不存在（先 npm run build）`);
+    throw new Error(`构建记录要求 out/ 有内容，但 ${path.relative(root, outDir)} 为空或不存在（先 npm run build）`);
   }
   const outFiles = hasOut ? require(VERIFY_RELEASE).outManifestOfDir(outDir).files : {};
 
   const stepRecords = steps.map((s) => ({
     step: s.name,
-    // 状态显式三态：不得以缺字段隐含 skipped
-    status: s.name === 'register' || s.name === 'verify:release' ? 'pending' : s.code === 0 ? 'passed' : 'failed',
+    // 状态显式：passed/failed（没有 pending——记录不预填任何「未来成功」）
+    status: s.code === 0 ? 'passed' : 'failed',
     exit: s.code,
     seconds: s.secs,
   }));
@@ -191,10 +215,11 @@ function writeBuildRecord(candidateDir, buildId, steps) {
   const releaseEligible = missingRequired.length === 0 && !testInjected;
 
   const record = {
-    schema: 'build-record/1',
+    schema: RECORD_SCHEMA,
+    policyVersion: RELEASE_POLICY_VERSION,
     buildId,
     version: pkg.version,
-    sourceCommit: gitsha(),
+    sourceCommit: gitsha(root),
     lockfileSha256: crypto.createHash('sha256').update(lock).digest('hex'),
     out: { fileCount: Object.keys(outFiles).length, files: outFiles },
     steps: stepRecords,
@@ -207,6 +232,40 @@ function writeBuildRecord(candidateDir, buildId, steps) {
   fs.mkdirSync(path.dirname(recordPath), { recursive: true });
   fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
   return recordPath;
+}
+
+/**
+ * 写独立完成回执 release-receipt/1（R1）。**仅当** register 与 core 核验都
+ * 真实退出 0 后由编排器调用——任一失败链路已在此前 STOPPED，回执不会被写出
+ * （失败即阻断回执）。回执只绑定既有产物的身份 hash（manifest / 构建记录），
+ * **不回写 manifest**，避免「回执 hash 进 manifest、manifest hash 进回执」再成环。
+ * 缺回执的候选不得给发布绿色结果（verify-release --require-release-eligibility）。
+ * @param {string} candidateDir 候选根目录（回执写在其下 release-receipt.json）
+ */
+function writeReleaseReceipt(candidateDir, buildId, sourceCommit, manifestPath, recordPath) {
+  const receipt = {
+    schema: 'release-receipt/1',
+    buildId,
+    sourceCommit,
+    manifestHash: sha256File(manifestPath),
+    buildRecordHash: sha256File(recordPath),
+    writtenAt: new Date().toISOString(),
+  };
+  const receiptPath = path.join(candidateDir, 'release-receipt.json');
+  fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n');
+  return receiptPath;
+}
+
+/**
+ * 把 out 目录打成含 `out/**` 条目的**真 asar**（R1 测试桩路径）。
+ * 暂存目录复制 out → <staging>/out，使归档内条目即 `out/...`，与
+ * verify-release 的 out 清单规范一致（桩产物也要能与 out 清单对账）。
+ * 仅测试桩分支使用；真实发布走 electron-builder，不经此函数。
+ */
+function packOutAsar(rootOutDir, stagingDir, asarPath) {
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  fs.cpSync(rootOutDir, path.join(stagingDir, 'out'), { recursive: true });
+  require('@electron/asar').createPackageSync(stagingDir, asarPath);
 }
 
 /** 从候选目录内容生成 zip（排除 manifest / build-record / evidence，避免自引用） */
@@ -322,9 +381,13 @@ function runVerify(buildId) {
   // 1) 包结构/依赖可用性（verify-package，--manifest 显式绑定）
   const vp = runStep('verify-package', nodeBin, [VERIFY_PACKAGE, candidateDir, '--manifest', manifest]);
   if (vp.code !== 0) { console.error('STOPPED at verify-package'); process.exit(vp.code); }
-  // 2) 来源/内容/zip 绑定（verify-release，三元显式绑定）
+  // 2) 来源/内容/zip 绑定 + 发布资格与完成回执（verify-release，三元显式绑定）。
+  //    R1：对外核验必须给出**发布级**结论——缺 receipt、绑定错误、注入环境、
+  //    跳过必检均不得给绿色结果（--require-release-eligibility）。
+  //    显式传 --root，保证核验对象是本次 buildId 的构建根而非工具自身仓库。
   const vr = runStep('verify:release', nodeBin, [
     VERIFY_RELEASE, '--manifest', manifest, '--candidate-dir', candidateDir, '--build-id', buildId,
+    '--root', ROOT, '--require-release-eligibility',
   ]);
   if (vr.code !== 0) { console.error('STOPPED at verify:release'); process.exit(vr.code); }
   console.log('\nRELEASE_VERIFY_GREEN（只读核验，产物未改动）');
@@ -415,10 +478,20 @@ function runBuild(buildId, opts) {
     fs.cpSync(builtDir, outDir, { recursive: true });
     console.log(`  候选目录：${path.relative(ROOT, outDir)}`);
   } else {
-    // 测试桩：造一个最小候选目录，让后续步骤有目标（仅当注入了 dist 桩）
+    // 测试桩：造一个最小候选目录，让后续步骤有目标（仅当注入了 dist 桩）。
+    // R1：ROOT/out 有真实编译产物时，经 @electron/asar 从暂存目录打**真 asar**
+    // （条目即 out/**），使 verify-release 的 asar out/** 比对、register 绑定
+    // 对桩产物也成立；out 为空时退回纯文本桩（只覆盖非生命周期场景）。
     fs.mkdirSync(path.join(outDir, 'resources'), { recursive: true });
     fs.writeFileSync(path.join(outDir, EXE_NAME), 'stub-exe');
-    fs.writeFileSync(path.join(outDir, 'resources', 'app.asar'), 'stub-asar');
+    const asarPath = path.join(outDir, 'resources', 'app.asar');
+    const rootOutDir = path.join(ROOT, 'out');
+    if (fs.existsSync(rootOutDir) && fs.readdirSync(rootOutDir).length > 0) {
+      packOutAsar(rootOutDir, path.join(candRoot, 'asar-staging'), asarPath);
+      console.log('  [stub] out/ 有产物 → 打真 asar（条目 out/**）');
+    } else {
+      fs.writeFileSync(asarPath, 'stub-asar');
+    }
   }
 
   // 6) 打包 GUI 冒烟（Playwright 启动候选 exe，与真实双击同一机制）。
@@ -443,11 +516,12 @@ function runBuild(buildId, opts) {
   steps.push({ name: 'zip', code: zipStub === null ? 0 : zipStub, secs: 0 });
   if (zipStub !== null && zipStub !== 0) { console.error('STOPPED at zip'); process.exit(zipStub); }
 
-  // 9) 登记（绑定构建记录 + out 清单 + 锁文件）
-  const record = writeBuildRecord(candRoot, buildId, steps);
+  // 9) 登记（绑定构建记录 + out 清单 + 锁文件；显式传 --root 保证登记查的是本次构建根）
+  const record = writeBuildRecord(ROOT, candRoot, buildId, steps);
   const manifest = path.join(candRoot, 'candidate-manifest.json');
   step('register', nodeBin, [
     CANDIDATE_MANIFEST, 'register',
+    '--root', ROOT,
     '--manifest', manifest,
     '--candidate-dir', outDir,
     '--build-record', record,
@@ -455,10 +529,26 @@ function runBuild(buildId, opts) {
     '--build-id', buildId,
   ]);
 
-  // 10) 发布身份核验（verify-release 三元显式绑定）
+  // 10) 发布身份核验（core 层，verify-release 三元显式绑定）：
+  //     只校验事实/产物/来源绑定，**不要求发布资格**——资格与回执由步骤 12 终判。
+  //     这里不能传 --require-release-eligibility：完成回执此刻还不存在，
+  //     先要求资格会重建「记录要求自己尚未发生的回执」式自引用（R1）。
   step('verify:release', nodeBin, [
     VERIFY_RELEASE, '--manifest', manifest, '--candidate-dir', outDir, '--build-id', buildId,
+    '--root', ROOT,
   ]);
+
+  // 10.5) 完成回执（R1）：走到这里说明 register 与 core 核验都真实退出 0，
+  //       写独立 release-receipt/1。任一失败时链路已在此前 STOPPED，
+  //       回执不会被写出（失败即阻断回执）。
+  //       回执必须绑定**真实存在的 manifest**——测试桩（OTS_STEP_STUB）注入下
+  //       register 未真实执行、manifest 不存在，此时不写回执（回执缺席会被
+  //       发布级 verify 拒绝，不影响桩场景的开发构建结论）。
+  if (fs.existsSync(manifest)) {
+    writeReleaseReceipt(candRoot, buildId, sourceCommit, manifest, record);
+  } else {
+    console.log('  [stub] 登记未真实发生（manifest 不存在），跳过完成回执');
+  }
 
   // 11) 构建后冻结复核：源码提交必须未变
   const headAfter = gitsha();
@@ -467,11 +557,15 @@ function runBuild(buildId, opts) {
     process.exit(1);
   }
 
-  // 12) 发布资格判定（任务 C）：缺必需步骤 / 测试注入环境 → 不得输出发布 ALL_GREEN。
-  //     注意步骤 9/10 的 register/verify:release 已在 record 写成后执行，
-  //     这里读回转成 passed，再做最终判定。
-  finalizeStepStatuses(candRoot);
+  // 12) 发布资格终判（R1/R2）：资格由共享校验器按可信策略重算（不信任自报），
+  //     且必须持有完成回执（register + core 核验确实完成的证据）。
+  //     旧 finalize 回写路径已删除——登记后 build-record/2 不可变。
   const eligibility = readReleaseEligibility(candRoot);
+  const hasReceipt = fs.existsSync(path.join(candRoot, 'release-receipt.json'));
+  const problems = [...eligibility.problems];
+  if (!hasReceipt) {
+    problems.push('完成回执 release-receipt.json 缺失：register 或核心核验未完成，不得发布');
+  }
   const skipped = [...(opts.skipE2e ? ['test:e2e', 'test:e2e:electron'] : []), ...(opts.skipGui ? ['smoke:gui'] : [])];
 
   console.log(`\nmanifest: ${path.relative(ROOT, manifest)}`);
@@ -483,32 +577,17 @@ function runBuild(buildId, opts) {
     console.log(`exe:      sha256=${sha256File(exePath).slice(0, 16)}…`);
   }
 
-  if (eligibility.ok) {
+  if (eligibility.ok && hasReceipt) {
     console.log(`\nALL_GREEN buildId=${buildId}`);
   } else {
     // 开发构建：明确区别于发布 ALL_GREEN，且标注不可发布
     console.log(`\nDEV_BUILD_COMPLETE buildId=${buildId}（不可发布，releaseEligible=false）`);
     if (skipped.length) console.log(`  本次跳过（开发构建允许）：${skipped.join('、')}`);
-    for (const p of eligibility.problems) console.log(`  原因：${p}`);
+    for (const p of problems) console.log(`  原因：${p}`);
     if (opts.strict) {
       console.error('[FAIL] --strict 模式下要求发布资格，但本次构建不可发布');
       process.exit(1);
     }
-  }
-}
-
-/** 构建全程结束后，把 register/verify:release 从 pending 落成 passed（已完成则不再改） */
-function finalizeStepStatuses(candRoot) {
-  const p = path.join(candRoot, 'build-record.json');
-  if (!fs.existsSync(p)) return;
-  try {
-    const rec = JSON.parse(fs.readFileSync(p, 'utf8'));
-    for (const s of rec.steps) {
-      if (s.status === 'pending' && s.exit === 0) s.status = 'passed';
-    }
-    fs.writeFileSync(p, JSON.stringify(rec, null, 2));
-  } catch (e) {
-    console.error(`[WARN] 无法回写构建记录步骤状态：${e.message}`);
   }
 }
 

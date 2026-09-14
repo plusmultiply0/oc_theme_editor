@@ -165,13 +165,15 @@ async function makeFixture(prefix: string): Promise<{
   };
   const outManifest = vr.outManifestOfDir(outDir);
   const record = {
-    schema: 'build-record/1',
+    // R1：/2 = 登记前不可变事实（不含 register/verify:release）；策略版本必须与可信策略一致
+    schema: 'build-record/2',
+    policyVersion: 1,
     buildId: 'fixture-build-1',
     version: '0.1.0-alpha.1',
     sourceCommit,
     lockfileSha256: sha256(fs.readFileSync(path.join(root, 'package-lock.json'))),
     out: { fileCount: Object.keys(outManifest.files).length, files: outManifest.files },
-    steps: [{ step: 'build', exit: 0 }],
+    steps: [{ step: 'build', status: 'passed', exit: 0, seconds: 1 }],
   };
   const recordPath = path.join(root, 'build-record.json');
   fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
@@ -385,13 +387,62 @@ describe('P2 负例：任一冻结/来源问题都必须失败且不产出成功
     expect(r.stderr).toMatch(/与构建记录不一致/);
   });
 
-  it('空/旧格式构建记录 → 拒绝', async () => {
+  it('空/旧格式构建记录 → 拒绝（R1：旧 /1 自引用记录不得入册）', async () => {
     const f = await makeFixture('p2-empty-record-');
     fs.writeFileSync(f.record, JSON.stringify({}, null, 2));
     const r = await runTool(f.root, REGISTER_ARGS(f));
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/缺少必需字段/);
+    expect(r.stderr).toMatch(/build-record\/2/);
+    expect(fs.existsSync(f.manifest)).toBe(false);
   });
+
+  it('build-record/1 旧记录 → 拒绝并点名自引用原因（R1）', async () => {
+    const f = await makeFixture('p2-old-record-');
+    const rec = JSON.parse(fs.readFileSync(f.record, 'utf8'));
+    rec.schema = 'build-record/1';
+    delete rec.policyVersion;
+    rec.steps = [
+      ...rec.steps,
+      { step: 'register', status: 'pending', exit: 0 },
+      { step: 'verify:release', status: 'pending', exit: 0 },
+    ];
+    fs.writeFileSync(f.record, JSON.stringify(rec, null, 2));
+    const r = await runTool(f.root, REGISTER_ARGS(f));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/build-record\/2/);
+  });
+
+  it('R2 负例：记录重复步骤 → 登记拒绝（Map 后项覆盖前项不再容忍）', async () => {
+    const dup = await makeFixture('p2-dup-step-');
+    const recDup = JSON.parse(fs.readFileSync(dup.record, 'utf8'));
+    recDup.steps = [...recDup.steps, { step: 'build', status: 'passed', exit: 0 }];
+    fs.writeFileSync(dup.record, JSON.stringify(recDup, null, 2));
+    const rDup = await runTool(dup.root, REGISTER_ARGS(dup));
+    expect(rDup.status).toBe(1);
+    expect(rDup.stderr).toMatch(/步骤重复：build/);
+  }, 120_000);
+
+  it('R2 负例：步骤状态非法 → 登记拒绝（不得以缺字段隐含 passed）', async () => {
+    const badStatus = await makeFixture('p2-bad-status-');
+    const recBad = JSON.parse(fs.readFileSync(badStatus.record, 'utf8'));
+    recBad.steps = recBad.steps.map((s: { step: string }) =>
+      s.step === 'build' ? { ...s, status: 'ok' } : s,
+    );
+    fs.writeFileSync(badStatus.record, JSON.stringify(recBad, null, 2));
+    const rBad = await runTool(badStatus.root, REGISTER_ARGS(badStatus));
+    expect(rBad.status).toBe(1);
+    expect(rBad.stderr).toMatch(/状态非法/);
+  }, 120_000);
+
+  it('R2 负例：测试注入环境 → 登记拒绝（mock 成功不得当作真实通过）', async () => {
+    const injected = await makeFixture('p2-injected-');
+    const recInj = JSON.parse(fs.readFileSync(injected.record, 'utf8'));
+    recInj.testInjectedEnvironment = true;
+    fs.writeFileSync(injected.record, JSON.stringify(recInj, null, 2));
+    const rInj = await runTool(injected.root, REGISTER_ARGS(injected));
+    expect(rInj.status).toBe(1);
+    expect(rInj.stderr).toMatch(/测试注入环境/);
+  }, 120_000);
 
   it('候选目录不存在完整候选 → 拒绝', async () => {
     const f = await makeFixture('p2-badcand-');

@@ -9,7 +9,7 @@
 | P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
 | P2 新登记与冻结分离 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（含缺 manifest 失败关闭场景）；全量 `r5-run-suite run` → 0（26 文件 / 346 项）；`candidate-manifest.test.ts` 14 项 | 下方「P2 明细」 | agent / 2026-09-14 08:3x |
 | P3 完整发布链与双重校验 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（71 项）；`vitest run tests/unit` → 0（11 文件 / 174 项）；`tests/integration/candidate-manifest.test.ts` → 14 项通过；`discover+main-services+electron-runtime` → 0（29 项） | 下方「P3 明细」；`RUNBOOK.md` | agent / 2026-09-14 10:5x |
-| P4 新候选构建与GUI冒烟 | 待执行 | — | — | — | — |
+| P4 新候选构建与GUI冒烟 | **阻塞**（未产出候选；已出诊断，按用户决定本轮不改代码） | 源码冻结 `5689cf7` | `node tools/release-build.cjs build 20260914-alpha1-p3full` → **1**（typecheck 0 / lint 0 / test:unit 0 / **test:integration 1** → `STOPPED at test:integration`）；串行复测 → **0 断言失败**，仅 `onTaskUpdate` Unhandled Error | 下方「P4 明细」；**`P4-BLOCKERS-DIAGNOSIS.md`**；`node_modules/.cache/ots-test-logs/suite-2026-09-14T03-04-20-111Z-9072.log` | agent / 2026-09-14 11:3x |
 | P5 真实安装闭环 | 等待当次授权，未执行 | — | — | — | — |
 | P6 材料与GO/NO-GO | 待执行 | — | — | — | — |
 
@@ -120,21 +120,97 @@ verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建�
 `node node_modules/vitest/vitest.mjs run <dir>` 并显式注入 TEMP/TMP 后正常。
 属命令环境问题，非仓库缺陷。
 
-## 新候选身份（未生成）
+## 新候选身份（P4 生成中）
 
-- sourceCommit：待填
-- buildId：待填
-- manifest绝对路径：待填
-- 候选目录/zip：待填
+- 构建工具链：Node `v22.22.2`；electron `^36.4.0`；electron-builder `^26.0.12`。
+- 锁文件 `package-lock.json` sha256：`b1e390a8adb83aec8fd81fa7deed94cb3cf6d9b7ceb00654e8c772b48de74768`。
+- sourceCommit：`5689cf7`（P3 提交，源码冻结）
+- buildId：`20260914-alpha1-p3full`
+- manifest绝对路径：`candidate-20260914-alpha1-p3full/candidate-manifest.json`（生成中）
+- 候选目录/zip：`candidate-20260914-alpha1-p3full/win-unpacked` / `candidate-20260914-alpha1-p3full.zip`
 - exe/app.asar/zip SHA256：待填
 - 锁文件/构建记录hash：待填
 - 测试数量/失败数：待填
-- 包内sharp及GUI启动：未验证
+- 包内sharp及GUI启动：待验证
 - 用户真实安装操作授权：未取得
 - 真实应用/重启/恢复：未验证
 - A6：用户决定跳过，未验证；不得填通过
 - 发布渠道与外部操作授权：未取得
-- 结论：NO-GO，等待阶段验收
+- 结论：NO-GO，等待 P4/P5 结果
+
+## P4 明细（2026-09-14）
+
+**第 1 次构建尝试：在 `test:integration` 停止，未产出候选（符合预期失败即停）。**
+
+- 命令：`node tools/release-build.cjs build 20260914-alpha1-p3full`；start `5689cf7`，
+  工作树冻结（仅 `handoff/...` 未跟踪，属豁免）；总耗时 8m42s。
+- 逐步退出码：`typecheck = 0`(16.0s) → `lint = 0`(94.7s) → `test:unit = 0`(27.7s，174 项全过)
+  → **`test:integration = 1`**(379.1s) → `STOPPED at test:integration`；**无 `ALL_GREEN`**，
+  未执行 build/e2e/audit/dist/smoke/verify-package/zip/register/verify:release，无半成品候选。
+- 集成失败形态：8 文件 / 16 项失败，**绝大多数是资源性超时**——
+  `Test timed out in 30000ms`、`Hook timed out in 30000ms`、
+  `[vitest-worker]: Timeout calling "onTaskUpdate"`；单文件耗时异常膨胀
+  （`candidate-manifest.test.ts` 366s、`transaction.test.ts` 279s、`main-services.test.ts` 173s，
+  正常全套约 1–2 分钟）。
+- 唯一断言式失败：`transaction.test.ts > 正常闭环（T34–T42） > 重复应用同一主题为 no-op，不产生写入`
+  → `AssertionError: expected false to be true`。**需与并行挤压区分**，待串行复测定性。
+- 唯一非超时 I/O 错误：`image-content-fixed.test.ts` →
+  `EPERM: operation not permitted, open '...\ots-test-tmp\ots-a2-src-edbT5d\wallpaper.jfif'`
+  → 临时目录文件被占用/被安全软件或索引进程锁定（环境性，非逻辑缺陷）。
+- **判据（为何倾向环境性而非代码回归）**：
+  1. 同一次运行的 `test:unit` 里 P2 引入的 `deepVerifyZip` / `verify-release` **174 项全绿**；
+  2. 集成里失败的 `candidate-manifest.test.ts` 正是 P2 已独立验证通过的套件（14 项），
+     此处 3 项为纯超时，无断言差异；
+  3. P3 提交仅改 `tools/release-build.cjs` / `release-gate.sh` / `verify-package.cjs` /
+     `package.json` / 测试，**未触碰 `src/` 下任何图片或事务代码**。
+- **处置**：不改源码、不放宽阈值、不把超时当通过。先以
+  `--pool=forks --poolOptions.forks.singleFork --no-file-parallelism` 串行复测
+  已失败套件，以区分「并行资源挤压」与「真实回归」；结果记入下表后再决定是否重跑整条链。
+
+**定性结论（串行复测后）：并行竞争导致的假失败，不是代码回归。**
+
+| 复测对象 | 模式 | 结果 | 说明 |
+|---|---|---|---|
+| `transaction.test.ts`（含首次失败的 4 项） | 单独串行 | **EXIT=0，29/29 全过**，无 Unhandled Error | 关键证据：并行下 `expected false to be true` 的那一项，串行下通过 |
+| `candidate-manifest.test.ts` | 单独串行 | **14/14 全过**（189s） | 但该次运行 vitest 报 1 个 `onTaskUpdate` Unhandled Error → 退出码 1 |
+| 全量 `tests/integration` | 串行 | 见下一次记录 | 待完成 |
+
+- **`onTaskUpdate` 超时的性质**：它是 vitest worker 与主进程间的 RPC 心跳超时，
+  **独立于断言结果**，在长耗时（单项 12–19s、单文件 130–366s）的高负载下触发；
+  它会让退出码变 1，但**没有任何被测逻辑断言失败**。
+- **为什么不是回归**：① 串行下同样用例全过；② P3 提交未触碰 `src/` 图片/事务代码；
+  ③ 同一次运行的 `test:unit` 174 项全绿（含 P2 新增的 `deepVerifyZip`）。
+- **对发布链的影响**：若集成测试保持默认并行，在高负载机器上会**持续假失败**，
+  整条链永远到不了 `ALL_GREEN`。需在编排器里让集成测试走可控的串行/并发上限，
+  并在文档中说明该选择的理由（不得靠删除或跳过用例来「变绿」）。
+
+| 全量 `tests/integration` | 串行（单 fork，经 `r5-run-suite.cjs`） | **0 项断言失败**；退出码 1（仅 Unhandled Error） | `Tests 84 passed (84)`，逐项全 ✓；`Errors 1 error: onTaskUpdate`；376.15s |
+
+- **决定性结论**：串行下**没有任何一项断言失败**——并行时报的 16 项全部消失。
+  → 并行失败 100% 是**资源竞争假失败**，不是代码回归。
+- **唯一遗留问题**：`onTaskUpdate` 心跳超时（`candidate-manifest.test.ts` 单文件 214s，
+  其 14 项各 10.3–26.5s，每项反复 spawn `git.exe`）。它独立于断言，
+  但把退出码拉成 1 → **发布链永远到不了 `ALL_GREEN`**。
+- 汇总行 `Test Files 7 passed (15)` / `Tests 84 passed (84)` 不一致，
+  是 vitest 在 RPC 中断后**丢报**的表现，进一步印证属 worker 通信问题。
+
+**另发现一处真实潜在 bug（登记工具，非本次回归）**：
+`tools/candidate-manifest.cjs:283` 的 `git log -1 --format=%s <sourceCommit>`
+使用 `cwd: ROOT` 而非已解析的 `--root` 目标 → 夹具场景下 `sourceCommitSubject`
+取到的是**宿主仓库的提交主题**。属元数据错误（不影响冻结/来源绑定主权，
+主权在 `sourceCommit`/锁文件/`out` 三项核对），但 `--root` 契约不完整。
+
+**P4 三条阻塞点（均非源码逻辑缺陷）**：
+1. `onTaskUpdate` 心跳超时（发布链阻塞主因）；2. `image-content-fixed` 的 `EPERM`
+临时文件锁；3. 上述 `sourceCommitSubject` 的 `--root` 契约缺陷。
+
+**处置（用户 2026-09-14 决定）：本轮只出诊断，不改代码。**
+- 未修编排器串行策略、未调 vitest RPC 超时、未修 `candidate-manifest.cjs:283`
+  （用户明确「记入清单，本轮不修」）。
+- 未删/未跳过任何用例、未放宽任何阈值。
+- **零源码改动**，工作树仍冻结在 `5689cf7`（仅 `handoff/` 路径未跟踪/改动，属豁免）。
+- 完整诊断见同目录 **`P4-BLOCKERS-DIAGNOSIS.md`**（含三轮复测对比表、证据文件路径、
+  三条可选处置方案）。
 
 ## 新增接口及RUNBOOK交付
 

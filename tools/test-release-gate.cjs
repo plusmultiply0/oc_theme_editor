@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 /**
- * tools/release-gate.sh 脚本层故障传播测试（R1 验收 + S6 日志隔离 + S3 绑定验收）。
+ * P3 统一发布编排入口（tools/release-build.cjs）的链路行为测试。
  *
- * 把真实 npm/node 替换为函数桩，不执行任何真实构建/测试/打包命令：
- *   - 依次令每一步失败，断言后续步骤未执行、退出码保留、不打印 ALL_GREEN；
- *   - 重点覆盖 dist=17（历史缺陷：dist 失败仍全绿）且 verify 桩本可
- *     返回 0 的情形——dist 失败时 verify 步骤根本不应被执行；
- *   - S6：日志目录隔离——每个场景用独立临时目录（GATE_LOG_DIR 注入），
- *     预先存在的旧证据文件必须原样保留；运行前后比较目录文件集合，
- *     断言**恰好新增一个**本次 runId 日志且内容含本次步骤与退出码；
- *   - S6：同一日志目录连续两次运行（模拟并发），证据互不覆盖；
- *   - S3/P2：verify:package 改走 node tools/verify-release.cjs，必须显式绑定
- *     GATE_MANIFEST + GATE_CANDIDATE_DIR + GATE_BUILD_ID：缺任一在构建前 exit 2、
- *     一步不跑、不打印 ALL_GREEN；全绿场景断言 node 调用带完整绑定参数
- *     （P2 起 manifest 必须显式给出，不再回落根目录历史 candidate-manifest.json）。
+ * 设计：编排器支持**仅测试**的 OTS_STEP_STUB 接口（JSON 步骤→退出码），命中时
+ * 该步不执行真实子进程、直接返回给定码。这样可在无 npm/打包依赖的独立夹具里
+ * 覆盖「每步失败、退出码保留、后续不执行、无 ALL_GREEN」，而无需真实构建。
+ *
+ * 覆盖：
+ *   - 冻结预检：源码改脏 / 新增未跟踪源码 → 构建前拒绝（一步不跑）；
+ *   - 候选目录已存在 → 拒绝覆盖；
+ *   - 逐步失败：typecheck/lint/test:unit/test:integration/build/audit/dist/zip/
+ *     verify-package/register/verify:release —— 退出码原样保留、后续未执行；
+ *   - 全绿路径：步骤顺序与预期一致、打印 ALL_GREEN；
+ *   - verify 模式：缺 buildId → exit 2；manifest 缺失 → 失败关闭不构建；
+ *   - 未知模式 → exit 2；
+ *   - mock 清除继承的绑定变量（GATE_*），再按场景注入。
  *
  * 用法：node tools/test-release-gate.cjs
  * 退出码：0 全部通过；1 有失败。
@@ -21,114 +22,59 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const GATE = path.join(ROOT, 'tools', 'release-gate.sh');
+const BUILD = path.join(ROOT, 'tools', 'release-build.cjs');
 
-const ALL_STEPS = [
-  'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
-  'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'verify:package',
-];
-const VERIFY_RELEASE = 'tools/verify-release.cjs';
-
-function findBash() {
-  const candidates = ['D:/SOFTWARE/Git/bin/bash.exe', 'C:/Program Files/Git/bin/bash.exe'];
-  for (const c of candidates) if (fs.existsSync(c)) return c;
-  return 'bash';
-}
-
-// Windows 下本机安全进程可能短暂握住 bash 刚写过的文件（R5 教训），
-// recursive 删除带重试参数：EBUSY/EPERM 自动重试，不留残留目录
 const rmDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
-/**
- * 在隔离环境中以函数桩执行门禁脚本。
- * - failStep 指定哪一步返回 failCode（verify:package 的失败注入到 node 桩，
- *   其余步骤注入到 npm 桩）；
- * - logDir 省略时在 runDir 下新建独立日志目录（场景隔离）；
- *   显式传入可模拟「共享目录多次运行」；
- * - candidate / buildId / manifest 默认注入测试绑定值；传空字符串表示不设置该
- *   环境变量（S3/P2：模拟缺失绑定的失败关闭场景）。
- */
-function runGate({
-  failStep = '', failCode = 0, logDir,
-  candidate = 'candidate-X/win-unpacked.new',
-  buildId = 'b-test-1',
-  manifest = 'candidate-X/candidate-manifest.json',
-} = {}) {
-  const runDir = fs.mkdtempSync(path.join(__dirname, 'gate-test-'));
-  const callsFile = path.join(runDir, 'calls.txt').replace(/\\/g, '/');
-  const gateLogDir = (logDir || path.join(runDir, 'gate-logs')).replace(/\\/g, '/');
-  fs.mkdirSync(gateLogDir, { recursive: true });
+/** 步骤顺序（含 node 侧步骤），用于断言「后续未执行」。
+ *  测试统一传 --skip-gui，故不含 smoke:gui。 */
+const STEP_ORDER = [
+  'typecheck', 'lint', 'test:unit', 'test:integration', 'build',
+  'test:e2e', 'test:e2e:electron', 'audit', 'dist', 'verify-package',
+  'zip', 'register', 'verify:release',
+];
 
-  // 预先存在的「共享旧证据」：运行后必须原样保留（S6：不再写共享 /tmp/a4-gate.txt）
-  const oldEvidence = path.join(gateLogDir, 'old-evidence.txt');
-  fs.writeFileSync(oldEvidence, 'OLD-EVIDENCE');
+/** 建立独立 Git 夹具仓库（已提交一次，工作树干净）。 */
+function makeFixture(prefix) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src', 'index.ts'), 'export const v = 1;\n');
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'fx', version: '0.1.0-alpha.1' }, null, 2));
+  fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3 }, null, 2));
+  fs.writeFileSync(path.join(root, '.gitignore'), 'out/\ndist/\ncandidate-*/\nnode_modules/\n');
+  const g = (args) => spawnSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true });
+  g(['init', '-q', '-b', 'main']);
+  g(['config', 'user.email', 't@example.invalid']);
+  g(['config', 'user.name', 't']);
+  g(['config', 'commit.gpgsign', 'false']);
+  g(['add', '.']);
+  g(['commit', '-q', '-m', 'init']);
+  return root;
+}
 
-  const before = fs.readdirSync(gateLogDir).sort().join(',');
-
-  const original = fs.readFileSync(GATE, 'utf8');
-  const patched = original.replace(/^cd ".*" ?\|\| exit 1$/m, ': # stay in isolated cwd');
-  if (patched === original) throw new Error('gate patch failed: cd line not found');
-
-  // npm 桩：记录调用并按需失败（除 verify:package 外的 9 步）。
-  // node 桩：记录调用；verify:package 现在是 node tools/verify-release.cjs（S3），
-  // 失败注入按 $1 = tools/verify-release.cjs 判断。
-  // trap EXIT 保住退出码。
-  const npmGuard = failStep && failStep !== 'verify:package'
-    ? `if [ "$1" = "run" ] && [ "$2" = "${failStep}" ]; then return ${failCode}; fi`
-    : ':';
-  const nodeGuard = failStep === 'verify:package'
-    ? `if [ "$1" = "${VERIFY_RELEASE}" ]; then return ${failCode}; fi`
-    : ':';
-  const prelude = [
-    `npm() { echo "npm $*" >> '${callsFile}'; ${npmGuard}; return 0; }`,
-    `node() { echo "node $*" >> '${callsFile}'; ${nodeGuard}; return 0; }`,
-    "trap 'rc=$?",
-    'exit $rc\' EXIT',
-    '',
-  ].join('\n');
-
-  const env = { ...process.env, GATE_LOG_DIR: gateLogDir };
-  if (candidate) env.GATE_CANDIDATE_DIR = candidate;
-  if (buildId) env.GATE_BUILD_ID = buildId;
-  if (manifest) env.GATE_MANIFEST = manifest;
-
-  const out = spawnSync(findBash(), ['--noprofile', '--norc', '-s'], {
-    input: prelude + patched, encoding: 'utf8', timeout: 60000, windowsHide: true, env,
+/** 执行编排器（夹具内；清除继承绑定变量后按场景注入 OTS_STEP_STUB）。 */
+function runOrch(root, args, { stepStub, ...env } = {}) {
+  const baseEnv = { ...process.env };
+  // P3：清除继承的绑定变量，避免外层环境干扰
+  delete baseEnv.GATE_MANIFEST;
+  delete baseEnv.GATE_CANDIDATE_DIR;
+  delete baseEnv.GATE_BUILD_ID;
+  if (stepStub) baseEnv.OTS_STEP_STUB = JSON.stringify(stepStub);
+  else delete baseEnv.OTS_STEP_STUB;
+  const r = spawnSync(process.execPath, [BUILD, '--root', root, ...args, '--skip-gui'], {
+    cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000,
+    env: { ...baseEnv, ...env },
   });
-  const calls = fs.existsSync(callsFile)
-    ? fs.readFileSync(callsFile, 'utf8').split('\n').filter(Boolean)
-    : [];
+  return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+}
 
-  // —— S6 断言数据（在清理 runDir 之前收集）——
-  const sentinelIntact = fs.readFileSync(oldEvidence, 'utf8') === 'OLD-EVIDENCE';
-  const after = fs.readdirSync(gateLogDir).sort();
-  const added = after.filter((f) => !before.split(',').includes(f));
-  const gateLogAdded = added.filter((f) => /^a4-gate-\d{8}-\d{6}-\d+\.txt$/.test(f));
-  const gateLogContent = gateLogAdded.length === 1
-    ? fs.readFileSync(path.join(gateLogDir, gateLogAdded[0]), 'utf8')
-    : '';
-
-  rmDir(runDir);
-  // 归一化为步骤名：npm 桩去掉 "npm run " 前缀；发布核验步骤走 node 桩
-  // （node tools/verify-release.cjs --candidate-dir <dir> --build-id <id>），
-  // 它是门禁中唯一的 node 调用，语义上就是 verify:package 这一步。原始调用保留在 nodeCalls。
-  const executedSteps = calls.map((c) =>
-    c.startsWith(`node ${VERIFY_RELEASE}`) ? 'verify:package' : c.replace(/^npm run /, ''),
-  );
-  return {
-    status: out.status,
-    stdout: out.stdout || '',
-    stderr: out.stderr || '',
-    executedSteps,
-    nodeCalls: calls.filter((c) => c.startsWith('node ')),
-    sentinelIntact,
-    addedCount: added.length,
-    gateLogAdded: gateLogAdded.length,
-    gateLogContent,
-  };
+/** 从输出里解析实际执行的步骤序列（`=== name ===` 段）。 */
+function executedSteps(stdout) {
+  return [...stdout.matchAll(/^=== (.+) ===$/gm)].map((m) => m[1]);
 }
 
 const failures = [];
@@ -137,95 +83,116 @@ function expect(cond, label, detail) {
   else { console.error(`  FAIL  ${label}${detail ? ' :: ' + detail : ''}`); failures.push(label); }
 }
 
-function scenario(name, opts, asserts) {
-  console.log(`\n== ${name} ==`);
-  const r = runGate(opts);
-  asserts(r);
-}
-
-// 1) 依次令每一步失败：退出码保留、后续步骤未执行、无 ALL_GREEN、日志隔离完好
-for (let i = 0; i < ALL_STEPS.length; i++) {
-  const step = ALL_STEPS[i];
-  const code = 20 + i;
-  scenario(`失败传播：${step} 返回 ${code}`, { failStep: step, failCode: code }, (r) => {
-    expect(r.status === code, `${step}=${code} 时整体退出码为 ${code}`, `实际 ${r.status}`);
-    expect(r.executedSteps.join(',') === ALL_STEPS.slice(0, i + 1).join(','),
-      `${step} 失败后无后续步骤`, `实际执行 ${r.executedSteps.join(',')}`);
-    expect(!r.stdout.includes('ALL_GREEN'), `${step} 失败时不打印 ALL_GREEN`);
-    expect(r.stdout.includes('STOPPED at ' + step), `${step} 失败时打印 STOPPED`);
-    expect(r.sentinelIntact, '场景目录中预先存在的旧证据未被访问/修改');
-    expect(r.gateLogAdded === 1 && r.addedCount === 1,
-      '恰好新增一个本次 runId 的独立日志', `新增 ${r.addedCount} 个文件`);
-    expect(r.gateLogContent.includes(`EXIT ${step} = ${code}`) && r.gateLogContent.includes('STOPPED'),
-      '本次日志内容含该步骤退出码与 STOPPED');
-  });
-}
-
-// 2) 全绿路径：显式绑定注入，10 步全部执行，verify-release 调用带完整绑定参数
-scenario('全绿路径（显式绑定）', {}, (r) => {
-  expect(r.status === 0, '全绿时退出 0', `实际 ${r.status}`);
-  expect(r.executedSteps.join(',') === ALL_STEPS.join(','),
-    '全绿时 10 步全部执行', `实际 ${r.executedSteps.join(',')}`);
-  expect(r.stdout.includes('ALL_GREEN'), '全绿时打印 ALL_GREEN');
-  expect(r.nodeCalls.some((c) => c.includes(VERIFY_RELEASE)
-      && c.includes('--manifest candidate-X/candidate-manifest.json')
-      && c.includes('--candidate-dir candidate-X/win-unpacked.new')
-      && c.includes('--build-id b-test-1')),
-    'verify-release 调用显式绑定 manifest、候选目录与 buildId', `实际 node 调用：${r.nodeCalls.join(' | ')}`);
-  expect(r.sentinelIntact, '旧证据未被访问/修改');
-  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('ALL_GREEN'),
-    '恰好新增一个本次日志且含 ALL_GREEN');
-});
-
-// 3) S3/P2：缺 GATE_BUILD_ID —— 构建前失败关闭（exit 2），一步不跑
-scenario('缺失 GATE_BUILD_ID（S3 失败关闭）', { buildId: '' }, (r) => {
-  expect(r.status === 2, '缺绑定时退出 2', `实际 ${r.status}`);
-  expect(r.executedSteps.length === 0, '缺绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
-  expect(!r.stdout.includes('ALL_GREEN'), '缺绑定时不会打印 ALL_GREEN');
-  expect(r.stdout.includes('缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID'),
-    '缺绑定时给出明确停止原因');
-  expect(r.sentinelIntact, '旧证据未被访问/修改');
-  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('STOPPED at verify:package'),
-    '缺绑定同样落一份含 STOPPED 的独立日志');
-});
-
-// 4) S3/P2：缺 GATE_CANDIDATE_DIR —— 同样失败关闭
-scenario('缺失 GATE_CANDIDATE_DIR（S3 失败关闭）', { candidate: '' }, (r) => {
-  expect(r.status === 2, '缺候选目录绑定时退出 2', `实际 ${r.status}`);
-  expect(r.executedSteps.length === 0, '缺候选目录绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
-  expect(!r.stdout.includes('ALL_GREEN'), '缺候选目录绑定时不会打印 ALL_GREEN');
-});
-
-// 4b) P2：缺 GATE_MANIFEST —— 构建前失败关闭（P2 起 manifest 必须显式给出，
-//     不再回落根目录历史 candidate-manifest.json）
-scenario('缺失 GATE_MANIFEST（P2 失败关闭）', { manifest: '' }, (r) => {
-  expect(r.status === 2, '缺 manifest 绑定时退出 2', `实际 ${r.status}`);
-  expect(r.executedSteps.length === 0, '缺 manifest 绑定时一步都不执行', `实际执行 ${r.executedSteps.join(',')}`);
-  expect(!r.stdout.includes('ALL_GREEN'), '缺 manifest 绑定时不会打印 ALL_GREEN');
-  expect(r.stdout.includes('缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID'),
-    '缺 manifest 绑定时给出明确停止原因');
-  expect(r.gateLogAdded === 1 && r.gateLogContent.includes('STOPPED at verify:package'),
-    '缺 manifest 同样落一份含 STOPPED 的独立日志');
-});
-
-// 5) 同一日志目录连续两次运行：证据互不覆盖（并发安全的最小确定性模拟）
+// ---------- 1) 冻结预检：源码改脏 ----------
 {
-  console.log('\n== 共享日志目录两次运行互不覆盖 ==');
-  const shared = fs.mkdtempSync(path.join(__dirname, 'gate-shared-'));
-  const logDir = path.join(shared, 'gate-logs').replace(/\\/g, '/');
-  const a = runGate({ failStep: 'dist', failCode: 17, logDir });
-  const b = runGate({ logDir });
-  const files = fs.readdirSync(logDir).filter((f) => /^a4-gate-/.test(f));
-  const contents = files.map((f) => fs.readFileSync(path.join(logDir, f), 'utf8'));
-  rmDir(shared);
-  expect(a.status === 17 && b.status === 0, '两次运行退出码各自正确（17 与 0）');
-  expect(files.length === 2, '共享目录恰好留下两个独立日志', `实际 ${files.length} 个`);
-  expect(contents.some((c) => c.includes('STOPPED at dist')) && contents.some((c) => c.includes('ALL_GREEN')),
-    '两份日志内容各自完整（STOPPED 与 ALL_GREEN 各一份）');
+  console.log('\n== 冻结预检：源码改脏 → 构建前拒绝 ==');
+  const root = makeFixture('orch-dirty-');
+  fs.appendFileSync(path.join(root, 'src', 'index.ts'), '// dirty\n');
+  const r = runOrch(root, ['build', 'b-dirty']);
+  expect(r.status === 1, '源码改脏时退出 1', `实际 ${r.status}`);
+  expect(executedSteps(r.stdout).length === 0, '源码改脏时一步都不执行', `实际 ${executedSteps(r.stdout).join(',')}`);
+  expect(!r.stdout.includes('ALL_GREEN'), '源码改脏时不打印 ALL_GREEN');
+  expect(/源码未冻结/.test(r.stdout + r.stderr), '给出「源码未冻结」原因');
+  rmDir(root);
+}
+
+// ---------- 2) 冻结预检：新增未跟踪源码 ----------
+{
+  console.log('\n== 冻结预检：新增未跟踪源码 → 拒绝 ==');
+  const root = makeFixture('orch-untracked-');
+  fs.writeFileSync(path.join(root, 'src', 'extra.ts'), 'export const x = 1;\n');
+  const r = runOrch(root, ['build', 'b-untracked']);
+  expect(r.status === 1, '新增未跟踪源码时退出 1', `实际 ${r.status}`);
+  expect(executedSteps(r.stdout).length === 0, '一步都不执行');
+  expect(/未跟踪源码/.test(r.stdout + r.stderr), '明确指认未跟踪源码');
+  rmDir(root);
+}
+
+// ---------- 3) 候选目录已存在 → 拒绝覆盖 ----------
+{
+  console.log('\n== 候选目录已存在 → 拒绝覆盖 ==');
+  const root = makeFixture('orch-exists-');
+  fs.mkdirSync(path.join(root, 'candidate-b-exists'), { recursive: true });
+  const r = runOrch(root, ['build', 'b-exists']);
+  expect(r.status === 1, '候选目录已存在时退出 1', `实际 ${r.status}`);
+  expect(/已存在，禁止覆盖/.test(r.stdout + r.stderr), '给出「禁止覆盖」原因');
+  expect(executedSteps(r.stdout).length === 0, '禁止覆盖时一步都不执行');
+  rmDir(root);
+}
+
+// ---------- 4) 逐步失败：退出码保留、后续未执行、无 ALL_GREEN ----------
+const FAIL_STEPS = ['typecheck', 'lint', 'test:unit', 'test:integration', 'build',
+  'audit', 'dist', 'zip', 'verify-package', 'register', 'verify:release'];
+for (const name of FAIL_STEPS) {
+  const code = 41 + FAIL_STEPS.indexOf(name);
+  console.log(`\n== 失败传播：${name} 返回 ${code} ==`);
+  const root = makeFixture(`orch-fail-${name.replace(/[:.]/g, '_')}-`);
+  // 前置步骤全部桩 0（避免真实 npm/tsc/vitest 在夹具里跑），只让目标步骤失败
+  const stub = {};
+  for (const s of STEP_ORDER) stub[s] = 0;
+  stub[name] = code;
+  const r = runOrch(root, ['build', 'b-fail'], { stepStub: stub });
+  const steps = executedSteps(r.stdout);
+  const combined = r.stdout + r.stderr;
+  expect(r.status === code, `${name}=${code} 时整体退出码为 ${code}`, `实际 ${r.status}`);
+  expect(steps.includes(name), `${name} 步骤确实执行`, `实际 ${steps.join(',')}`);
+  const idx = steps.indexOf(name);
+  const after = steps.slice(idx + 1);
+  expect(after.length === 0, `${name} 失败后无后续步骤`, `后来还跑了 ${after.join(',')}`);
+  expect(!combined.includes('ALL_GREEN'), `${name} 失败时不打印 ALL_GREEN`);
+  expect(new RegExp(`STOPPED at ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(combined),
+    `${name} 失败时打印 STOPPED`, `尾部：${combined.split('\n').slice(-3).join(' | ')}`);
+  rmDir(root);
+}
+
+// ---------- 5) 全绿路径（全部步骤桩 0）：步骤齐全、ALL_GREEN ----------
+{
+  console.log('\n== 全绿路径 ==');
+  const root = makeFixture('orch-green-');
+  const stub = {};
+  for (const s of STEP_ORDER) stub[s] = 0;
+  const r = runOrch(root, ['build', 'b-green'], { stepStub: stub });
+  const steps = executedSteps(r.stdout);
+  expect(r.status === 0, '全绿时退出 0', `实际 ${r.status}`);
+  expect(steps.join(',') === STEP_ORDER.join(','), '步骤顺序与预期完全一致', `实际 ${steps.join(',')}`);
+  expect(r.stdout.includes('ALL_GREEN'), '全绿时打印 ALL_GREEN');
+  rmDir(root);
+}
+
+// ---------- 6) verify 模式：缺 buildId → exit 2 ----------
+{
+  console.log('\n== verify 模式缺 buildId → exit 2 ==');
+  const root = makeFixture('orch-verify-nobid-');
+  const r = runOrch(root, ['verify']);
+  expect(r.status === 2, 'verify 缺 buildId 时退出 2', `实际 ${r.status}`);
+  expect(/用法/.test(r.stdout + r.stderr), '给出用法提示');
+  expect(executedSteps(r.stdout).length === 0, '一步都不执行');
+  rmDir(root);
+}
+
+// ---------- 7) verify 模式：manifest 缺失 → 失败关闭（不构建） ----------
+{
+  console.log('\n== verify 模式 manifest 缺失 → 失败关闭（不构建） ==');
+  const root = makeFixture('orch-verify-nomanifest-');
+  const r = runOrch(root, ['verify', 'b-missing']);
+  expect(r.status === 1, 'manifest 缺失时退出 1', `实际 ${r.status}`);
+  expect(!r.stdout.includes('ALL_GREEN') && !r.stdout.includes('RELEASE_VERIFY_GREEN'), '不打印全绿');
+  expect(executedSteps(r.stdout).length === 0, '缺 manifest 时一步都不执行（不构建）');
+  expect(/找不到登记/.test(r.stdout + r.stderr), '明确报告找不到登记');
+  rmDir(root);
+}
+
+// ---------- 8) 未知模式 → exit 2 ----------
+{
+  console.log('\n== 未知模式 → exit 2 ==');
+  const root = makeFixture('orch-badmode-');
+  const r = runOrch(root, ['frobnicate']);
+  expect(r.status === 2, '未知模式退出 2', `实际 ${r.status}`);
+  rmDir(root);
 }
 
 if (failures.length) {
   console.error(`\n${failures.length} 项断言失败`);
   process.exit(1);
 }
-console.log('\nR1/S6/S3 门禁故障传播、日志隔离与绑定测试：全部通过');
+console.log('\nP3 发布编排链路行为测试：全部通过');

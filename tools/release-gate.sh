@@ -1,27 +1,38 @@
 #!/usr/bin/env bash
 #
-# 发布门禁链：按顺序跑完整套门禁，任一步非 0 即停，并逐条打印退出码与耗时。
+# 发布门禁薄入口（P3）：委托 tools/release-build.cjs 执行统一发布链。
 #
-# 为什么需要它：`npm run verify` 只覆盖「类型 + lint + 单测 + 集成 + 构建 + e2e」，
-# 不含 `test:e2e:electron`、`audit`、`dist`、`verify:package`。
-# 发布验收必须跑全，不能只跑 verify 就宣称全部门禁通过。
+# 为什么保留这层：历史上门禁是本文件里一条 shell 链，构建/打包会跑两次、
+# 且 dist 输出与核验目标可能不是同一个目录。P3 把顺序与唯一性收敛到
+# tools/release-build.cjs（build / verify 两种模式），本脚本只做两件事：
+#   1. 保留既有的「缺绑定即失败关闭」预检语义（GATE_MANIFEST 等）；
+#   2. 把参数透传给编排器，保持 `bash tools/release-gate.sh` 入口不变。
 #
-# 用法：bash tools/release-gate.sh
-#   - 日志写屏并写入本次独立的 <GATE_LOG_DIR>/a4-gate-<构建ID>.txt（不固定覆盖
-#     上次证据）。GATE_LOG_DIR 可注入（测试用每场景独立临时目录做隔离），
-#     默认 /tmp（S6：默认目录固定为 /tmp，归属明确；不再写入固定的 a4-gate.txt）
-#   - dist 会自动带 electron 镜像（直连 GitHub 常 ETIMEDOUT）
-#   - dist 与其他步骤走同一条 run 路径：非 0 立即停止，保留该退出码，
-#     不执行 verify:package，不打印 ALL_GREEN
-#   - S3：发布门禁最后一步改为 tools/verify-release.cjs，必须显式绑定本次构建
-#     登记——GATE_CANDIDATE_DIR（候选目录）与 GATE_BUILD_ID（唯一构建 ID）两者
-#     缺一即在构建前失败关闭（exit 2），不再回落 candidate-manifest.json 默认候选；
-#     显式目标与登记不一致时 verify-release 失败关闭，不允许自动重登记掩盖。
-#     旧候选身份核验（不构成发布验收）用 npm run verify:package。
-#   - 退出码：0 全绿；否则等于第一个失败步骤的退出码（绑定缺失为 2）
+# 用法：
+#   bash tools/release-gate.sh                 # 全链 build（buildId 自动生成）
+#   bash tools/release-gate.sh build <buildId> # 指定 buildId
+#   bash tools/release-gate.sh verify <buildId># 只读核验既有候选
+#
+# 环境变量（历史兼容）：
+#   GATE_MANIFEST / GATE_CANDIDATE_DIR / GATE_BUILD_ID —— verify 模式下若给出，
+#   用于校验与编排器推导的目标一致；build 模式下不使用（由编排器生成）。
+#   GATE_LOG_DIR —— 日志目录（默认 /tmp），本脚本把整链输出 tee 到独立日志。
+#
+# 退出码：0 全绿；否则等于第一个失败步骤的退出码（绑定缺失为 2）。
 set -u
 export PATH="/usr/bin:/bin:$PATH"
 cd "$(dirname "$0")/.." || exit 1
+
+MODE="${1:-build}"
+BUILD_ID="${2:-${GATE_BUILD_ID:-}}"
+
+if [ "$MODE" = "verify" ]; then
+  # verify 模式：显式绑定校验——缺 manifest/candidate/buildId 即失败关闭
+  if [ -z "${GATE_MANIFEST:-}" ] || [ -z "${GATE_CANDIDATE_DIR:-}" ] || [ -z "$BUILD_ID" ]; then
+    echo "STOPPED at verify:package：verify 模式缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID 显式绑定（不回落默认候选）"
+    exit 2
+  fi
+fi
 
 GATE_ID="$(date +%Y%m%d-%H%M%S)-$$"
 GATE_LOG_DIR="${GATE_LOG_DIR:-/tmp}"
@@ -29,49 +40,22 @@ LOG="${GATE_LOG_DIR}/a4-gate-${GATE_ID}.txt"
 mkdir -p "$GATE_LOG_DIR" || exit 1
 : > "$LOG"
 
-# S3/P2：绑定预检放在构建前——缺绑定的门禁连 dist 都不许跑，避免长构建后才发现无效。
-# manifest 必须显式给出（P2：不再回落根目录历史 candidate-manifest.json）。
-if [ -z "${GATE_CANDIDATE_DIR:-}" ] || [ -z "${GATE_BUILD_ID:-}" ] || [ -z "${GATE_MANIFEST:-}" ]; then
-  echo "STOPPED at verify:package：缺少 GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID 显式绑定（发布门禁不回落默认候选）" | tee -a "$LOG"
-  exit 2
+if [ -n "$BUILD_ID" ]; then
+  echo "BINDING mode=$MODE buildId=$BUILD_ID" | tee -a "$LOG"
+else
+  echo "BINDING mode=$MODE buildId=(auto)" | tee -a "$LOG"
 fi
-echo "BINDING manifest=$GATE_MANIFEST candidate=$GATE_CANDIDATE_DIR buildId=$GATE_BUILD_ID" | tee -a "$LOG"
 
-run() {
-  local name="$1"; shift
-  echo "=== $name ===" | tee -a "$LOG"
-  local start
-  start=$(date +%s)
-  "$@" >> "$LOG" 2>&1
-  local code=$?
-  local secs=$(( $(date +%s) - start ))
-  echo "EXIT $name = $code (${secs}s)" | tee -a "$LOG"
-  if [ "$code" -ne 0 ]; then
-    echo "STOPPED at $name" | tee -a "$LOG"
-    exit "$code"
-  fi
-}
+# 整链输出同时写屏与写日志；退出码原样保留
+if [ -n "$BUILD_ID" ]; then
+  node tools/release-build.cjs "$MODE" "$BUILD_ID" 2>&1 | tee -a "$LOG"
+else
+  node tools/release-build.cjs "$MODE" 2>&1 | tee -a "$LOG"
+fi
+CODE="${PIPESTATUS[0]}"
 
-run typecheck     npm run typecheck
-run lint          npm run lint
-run test:unit     npm run test:unit
-run test:integration npm run test:integration
-run build         npm run build
-run test:e2e      npm run test:e2e
-run test:e2e:electron npm run test:e2e:electron
-run audit         npm run audit
-
-# dist 与其他步骤同一条 run 路径（修复：此前 dist 直接执行、仅 echo 退出码，
-# 失败后仍会继续 verify 并可能对旧产物打印 ALL_GREEN）。
-# 用 export 而非 env 前缀，保证 dist 步骤仍是可被桩替换的普通命令。
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-run dist npm run dist
-unset ELECTRON_MIRROR ELECTRON_BUILDER_BINARIES_MIRROR
-
-# 核对必须绑定本次构建登记（S3）：verify-release 校验 buildId/候选目录/来源提交
-# 与 candidate-manifest.json（schema/2）一致、out/** 逐文件一致、zip 与候选同源，
-# 任何不一致都失败关闭。旧候选身份核验（verify-package.cjs）不在这里使用。
-run verify:package node tools/verify-release.cjs --manifest "$GATE_MANIFEST" --candidate-dir "$GATE_CANDIDATE_DIR" --build-id "$GATE_BUILD_ID"
-
+if [ "$CODE" -ne 0 ]; then
+  echo "STOPPED at release-$MODE" | tee -a "$LOG"
+  exit "$CODE"
+fi
 echo "ALL_GREEN" | tee -a "$LOG"

@@ -8,7 +8,7 @@
 | P0 基线与保护 | **完成**（无代码改动，故无独立提交） | 基线 `eed1f45` | `git log`/`git status` → 0；`node tools/candidate-manifest.cjs check` → 0 | 下方「P0 明细」；`archive/out-871703d-before-refresh.tar.gz` | agent / 2026-09-13 22:2x |
 | P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
 | P2 新登记与冻结分离 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（含缺 manifest 失败关闭场景）；全量 `r5-run-suite run` → 0（26 文件 / 346 项）；`candidate-manifest.test.ts` 14 项 | 下方「P2 明细」 | agent / 2026-09-14 08:3x |
-| P3 完整发布链与双重校验 | 待执行 | — | — | — | — |
+| P3 完整发布链与双重校验 | **完成** | 基线 `eed1f45` | `npx tsc --noEmit` → 0；`npx eslint .` → 0；`node tools/test-release-gate.cjs` → 0（71 项）；`vitest run tests/unit` → 0（11 文件 / 174 项）；`tests/integration/candidate-manifest.test.ts` → 14 项通过；`discover+main-services+electron-runtime` → 0（29 项） | 下方「P3 明细」；`RUNBOOK.md` | agent / 2026-09-14 10:5x |
 | P4 新候选构建与GUI冒烟 | 待执行 | — | — | — | — |
 | P5 真实安装闭环 | 等待当次授权，未执行 | — | — | — | — |
 | P6 材料与GO/NO-GO | 待执行 | — | — | — | — |
@@ -74,6 +74,52 @@
   测试本身 346 项全过；立即复跑一次干净通过。按计划要求登记为**已知不确定性**，
   不作为通过证据，也不掩盖。
 
+## P3 明细（2026-09-14）
+
+**新增统一发布编排入口 `tools/release-build.cjs`**（唯一构建/打包一次的链）：
+
+- **两种模式**：`build <buildId>`（完整链：冻结预检 → typecheck → lint →
+  test:unit → test:integration → build → test:e2e → test:e2e:electron → audit →
+  dist → verify-package → zip → register → verify:release → 构建后冻结复核）；
+  `verify <buildId>`（只读核验，不 build/dist/写产物，供真实闭环后再次核验）。
+  `buildId` 省略时自动生成 `<时间>-<源码短SHA>-<随机后缀>`，禁止只用日期。
+- **只构建一次**：`dist` 步骤直接调用 `electron-builder`（**不用 `npm run dist`**，
+  后者内部会再跑一次 `npm run build`），并用 `--config.directories.output` 把输出
+  固定到本次唯一目录 `candidate-<buildId>/builder-out`，再收拢到
+  `candidate-<buildId>/win-unpacked`；杜绝「只给 verify 传新目录、dist 仍写旧目录」。
+- **manifest 在打包与 zip 之后生成**：zip 只从候选目录内容生成（排除 manifest/
+  构建记录，避免自引用）；登记绑定 `build-record.json`（含各步退出码、sourceCommit、
+  version、锁文件 hash、out 清单）。候选目录已存在即拒绝覆盖。
+- **双职责保留**：`verify-package`（结构/依赖可用性：入口、unpacked 实体、依赖完整性、
+  隐私扫描、包内 sharp 真实出图）与 `verify-release`（来源/内容/zip 绑定：buildId、
+  候选目录、sourceCommit、锁文件与构建记录 hash、out 清单逐文件、zip 逐条目+深度完整性）
+  分别执行、名称分别显示；`--no-identity` 不得作为发布通过捷径。
+- **测试临时目录策略接入实际步骤**：test:unit / test:integration 不再直接调
+  `npm run test:integration`，而是走 `tools/r5-run-suite.cjs`（注入项目内安全 TEMP/TMP），
+  可用 `OTS_TEST_TMP` 覆盖，不硬编码个人路径。
+- **GUI 冒烟环境**：`tools/smoke-packaged.ts` 已 `delete env.ELECTRON_RUN_AS_NODE`
+  （不修改系统全局变量、不关闭 sandbox）；包内依赖探针用 Electron Node 模式。
+- `tools/release-gate.sh` 收敛为**薄入口**：只做绑定预检（verify 模式缺
+  GATE_MANIFEST/GATE_CANDIDATE_DIR/GATE_BUILD_ID 即 `exit 2`）与日志落盘，实质委托
+  `release-build.cjs`；退出码为第一个失败步骤的退出码。
+- `tools/verify-package.cjs` 新增 `--manifest <路径>` 显式绑定（发布链用），保留默认
+  根登记的历史兼容；实机验证：旧候选 + `--manifest candidate-manifest.json` → 40 项核对 0 失败。
+- `package.json` 新增脚本：`release:build` / `release:verify` / `release:gate`。
+
+**测试**：`tools/test-release-gate.cjs` 重写为编排链路行为测试（71 项断言，0 失败）：
+以**仅测试**的 `OTS_STEP_STUB`（JSON 步骤→退出码）在独立 Git 夹具里驱动编排器，
+覆盖冻结预检（脏源码/未跟踪源码）、拒绝覆盖、**逐步失败**（typecheck/lint/test:unit/
+test:integration/build/audit/dist/zip/verify-package/register/verify:release —— 退出码
+保留、后续不执行、无 ALL_GREEN、有 STOPPED）、全绿路径（步骤顺序与预期完全一致）、
+verify 模式缺 buildId → exit 2、manifest 缺失 → 失败关闭不构建、未知模式 → exit 2；
+并清除继承的 `GATE_*` 绑定变量后再按场景注入。
+`verify-release.test.ts` 27 项通过（含 P1/P2/P3 新增用例）。
+
+**已知环境注记**：本机自动化 shell 的 `PATH` 偶发缺 `/usr/bin`（`dirname`/`ls` 不可用）
+且 `r5-run-suite.cjs` 在该 shell 下被 SIGTERM；改用直接调用
+`node node_modules/vitest/vitest.mjs run <dir>` 并显式注入 TEMP/TMP 后正常。
+属命令环境问题，非仓库缺陷。
+
 ## 新候选身份（未生成）
 
 - sourceCommit：待填
@@ -92,9 +138,22 @@
 
 ## 新增接口及RUNBOOK交付
 
-- [ ] 记录实际新增脚本及参数（方案里的--manifest等目前未实现）。
-- [ ] 补RUNBOOK.md完整命令，成功与失败路径均可照做。
-- [ ] 按实际结果更新兼容范围、许可、隐私及恢复说明。
+- [x] 记录实际新增脚本及参数：
+  - `tools/release-build.cjs`：`build [buildId] [--root] [--skip-e2e] [--skip-gui]`、
+    `verify <buildId> [--root]`。
+  - `tools/verify-release.cjs`：`--manifest`（必填）/`--candidate-dir`/`--build-id`/
+    `--source-commit`/`--skip-deep-zip`。
+  - `tools/verify-package.cjs`：`[候选目录] [--manifest <路径>] [--no-identity]`。
+  - `tools/candidate-manifest.cjs`：`register --manifest <路径> --candidate-dir <目录>
+    --build-record <json> [--zip <zip>] [--build-id <id>] [--force] [--root <仓库根>]`；
+    `check/show --manifest <路径>`。
+  - `tools/release-gate.sh`：`build|verify [buildId]`（薄入口）。
+  - 测试专用：`OTS_STEP_STUB`（编排器步骤桩，仅测试）、`OTS_NODE_BIN`（测试注入 node 桩）、
+    `OTS_TEST_TMP`（测试临时根覆盖）。
+- [x] 补 `RUNBOOK.md` 完整命令（代码测试 / 构建登记 / 只读核验 / 依赖检查 / GUI 环境 /
+  授权关口 / 失败日志 / 已知限制），成功与失败路径均可照做；Windows shell 明确用已安装
+  Git Bash（`D:\SOFTWARE\Git\bin\bash.exe`），不依赖 PATH 里的 WSL bash。
+- [ ] 按实际结果更新兼容范围、许可、隐私及恢复说明（P6 处理）。
 
 ## 异常与处理
 

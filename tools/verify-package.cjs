@@ -3,12 +3,13 @@
  * 便携包内容核对（docs/release-checklist.md 第 1、2 节）。
  *
  * 只读，不写入、不解压、不改动任何文件。用法：
- *   node tools/verify-package.cjs [候选目录] [--no-identity]
+ *   node tools/verify-package.cjs [候选目录] [--manifest <登记路径>] [--no-identity]
  *
- * 目标解析（R2）：
- *   - 默认从项目根 candidate-manifest.json 读取 candidateDir（唯一登记候选）；
+ * 目标解析（R2/P2）：
+ *   - 默认从项目根 candidate-manifest.json 读取 candidateDir（历史登记）；
+ *     发布链（release-build）用 --manifest 显式绑定本次候选登记，不回落默认。
  *     manifest 缺失或目标目录不存在都直接失败，绝不回退旧的 win-unpacked。
- *   - 显式给出候选目录时也默认做身份核对（exe/asar/zip hash 与登记一致），
+ *   - 显式给出候选目录时默认做身份核对（exe/asar/zip hash 与登记一致），
  *     `--no-identity` 仅用于取证核对未登记目录，此时跳过身份与内容比对。
  *
  * 退出码：0 全部通过；1 有失败项（逐条列出）。
@@ -24,12 +25,16 @@ const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 // ---------- 目标解析：默认绑定 manifest 候选，不自动回退 ----------
 const argv = process.argv.slice(2);
 const noIdentity = argv.includes('--no-identity');
-const dirArgs = argv.filter((a) => !a.startsWith('--'));
-const MANIFEST_PATH = path.join(ROOT, 'candidate-manifest.json');
+let manifestArg = null;
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--manifest') manifestArg = argv[i + 1];
+}
+const dirArgs = argv.filter((a, i) => !a.startsWith('--') && argv[i - 1] !== '--manifest');
+const MANIFEST_PATH = manifestArg ? path.resolve(ROOT, manifestArg) : path.join(ROOT, 'candidate-manifest.json');
 let manifest = null;
 if (!dirArgs.length) {
   if (!fs.existsSync(MANIFEST_PATH)) {
-    console.error('未找到 candidate-manifest.json：请先 node tools/candidate-manifest.cjs register <候选目录> 登记唯一候选（或显式传入候选目录，仅限取证）');
+    console.error(`未找到 ${path.relative(ROOT, MANIFEST_PATH)}：请先登记候选（--manifest 显式指定，或 none 取证模式传入候选目录）`);
     process.exit(1);
   }
   manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
@@ -294,7 +299,7 @@ if (!noIdentity) {
     manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
   }
   if (!manifest) {
-    check(false, '候选身份核对', '未提供 candidate-manifest.json；显式目录核对仅限取证，需加 --no-identity');
+    check(false, '候选身份核对', `未提供登记（${path.relative(ROOT, MANIFEST_PATH)}）；显式目录核对仅限取证，需加 --no-identity`);
   } else {
     check(manifest.version === pkg.version, 'manifest version 与 package.json 一致',
       manifest.version === pkg.version ? manifest.version : `${manifest.version} vs ${pkg.version}`);

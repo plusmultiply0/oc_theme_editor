@@ -719,8 +719,8 @@ for (const name of FAIL_STEPS) {
     return JSON.stringify({
       numTotalTestSuites: testResults.length,
       numPassedTestSuites: testResults.length,
-      numFailedTestSuites: 0,
-      numPendingTestSuites: 0,
+      numFailedTestSuites: o.numFailedTestSuites != null ? o.numFailedTestSuites : 0,
+      numPendingTestSuites: o.numPendingTestSuites != null ? o.numPendingTestSuites : 0,
       numTotalTests: o.numTotalTests != null ? o.numTotalTests : n,
       numPassedTests: n - nf,
       numFailedTests: o.numFailedTests != null ? o.numFailedTests : nf,
@@ -886,6 +886,61 @@ for (const name of FAIL_STEPS) {
   {
     const r = runSuite({ repo: fxRepo, vitestArgs: ['run', 'tests/unit'], timeoutMs: 60000, spawn: makeSpawn() });
     expect(r.exitCode === 0, '9.17 非严格模式正例 → 退出 0（旧行为兼容）', JSON.stringify(r.completeness && r.completeness.problems));
+  }
+
+  // ---------- S3：机器报告 schema 校验（缺失断言数组不得当成零项成功） ----------
+  // 9.18 r3 原始样本：文件状态 passed 但**没有 assertionResults** → 必须失败关闭
+  {
+    const files = EXPECT.map((f) => ({ name: f, status: 'passed', message: '' }));
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files) }) });
+    const p = strictProblems(r);
+    expect(r.exitCode === 1, '9.18 缺少 assertionResults（畸形报告）→ 拒绝', p);
+    expect(/缺少 assertionResults 数组/.test(p), '9.18 明确指出缺少断言数组（未兜底成空数组）', p);
+  }
+  // 9.19 assertionResults 为 null（非数组）→ 同样失败关闭
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[0].assertionResults = null;
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files) }) });
+    expect(r.exitCode === 1, '9.19 assertionResults=null → 拒绝', strictProblems(r));
+  }
+  // 9.20 全零报告：集合全等、文件 passed、success=true，但总测试数为 0 → 拒绝
+  {
+    const files = EXPECT.map((f) => ({ name: f, status: 'passed', message: '', assertionResults: [] }));
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files, { success: true }) }) });
+    const p = strictProblems(r);
+    expect(r.exitCode === 1, '9.20 全零测试报告 → 拒绝', p);
+    expect(/总测试数为 0/.test(p), '9.20 指出总测试数为 0', p);
+  }
+  // 9.21 suite 级 pending：vitest 的 success 不覆盖此项 → 必须独立校验
+  {
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ json: mkJson(EXPECT.map((f) => passFile(f)), { numPendingTestSuites: 1 }) }),
+    });
+    const p = strictProblems(r);
+    expect(r.exitCode === 1, '9.21 numPendingTestSuites>0 → 拒绝', p);
+    expect(/未完成（pending）的测试 suite/.test(p), '9.21 指出存在 pending suite', p);
+  }
+  // 9.22 suite 级失败但逐条失败数为 0（success 仍为 true）→ 拒绝
+  {
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ json: mkJson(EXPECT.map((f) => passFile(f)), { numFailedTestSuites: 1, success: true }) }),
+    });
+    const p = strictProblems(r);
+    expect(r.exitCode === 1, '9.22 numFailedTestSuites>0 但逐条失败 0 → 拒绝', p);
+    expect(/未通过的测试 suite/.test(p), '9.22 指出存在未通过 suite', p);
+  }
+  // 9.23 计数类型异常（字符串）→ 拒绝，不得静默通过
+  {
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ json: mkJson(EXPECT.map((f) => passFile(f)), { numTotalTests: '5' }) }),
+    });
+    const p = strictProblems(r);
+    expect(r.exitCode === 1, '9.23 numTotalTests 非整数 → 拒绝', p);
+    expect(/numTotalTests 不是非负整数/.test(p), '9.23 指出计数类型非法', p);
   }
 
   rmDir(fxRepo);

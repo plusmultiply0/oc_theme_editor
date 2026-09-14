@@ -232,6 +232,7 @@ function checkStrictCompleteness({ repo, expected, result, expectNoSkip = true, 
     expectedFiles: Array.isArray(expected) ? expected.length : null,
     filesRun: 0, filesFailed: 0, missingFiles: 0, extraFiles: 0,
     testsTotal: 0, testsPassed: 0, testsFailed: 0, testsSkipped: 0, testsTodo: 0, testsPending: 0,
+    schemaErrors: 0,
   };
   if (!result || typeof result !== 'object') {
     return { ok: false, problems: ['机器可读结果缺失'], counts };
@@ -269,7 +270,21 @@ function checkStrictCompleteness({ repo, expected, result, expectNoSkip = true, 
       counts.filesFailed++;
       problems.push(`文件存在收集错误：${rel}：${String(f.message).split(/\r?\n/)[0].slice(0, 200)}`);
     }
-    const ar = Array.isArray(f.assertionResults) ? f.assertionResults : [];
+    // S3：assertionResults 是本地 vitest JSON reporter 契约的**必需字段**。
+    // 缺失 / null / 非数组都属畸形报告，**绝不能**兜底成空数组——那会让
+    // 「文件状态 passed + 0 项断言」被当成「跑完且全过」（零项成功）。
+    if (!Array.isArray(f.assertionResults)) {
+      counts.schemaErrors++;
+      problems.push(
+        `文件结果缺少 assertionResults 数组（畸形机器报告，失败关闭）：${rel}` +
+          `（实际 ${f.assertionResults === undefined ? 'undefined' : typeof f.assertionResults}）`,
+      );
+      continue;
+    }
+    if (f.assertionResults.length === 0) {
+      problems.push(`文件内没有任何测试项（零项文件不得视为完成）：${rel}`);
+    }
+    const ar = f.assertionResults;
     for (const t of ar) {
       counts.testsTotal++;
       const id = `${rel}::${(t && (t.fullName || t.title)) || '(无名)'}`;
@@ -310,6 +325,34 @@ function checkStrictCompleteness({ repo, expected, result, expectNoSkip = true, 
     problems.push(`失败数不一致：numFailedTests=${result.numFailedTests} 与逐条聚合 ${counts.testsFailed} 不等`);
   }
   if (result.success !== true) problems.push('机器结果 success=false');
+
+  // ---- S3：数值类型 + 全零拒绝 + suite 级计数 ----
+  // vitest 的 success 只由「有文件 && 失败 suite 数 0 && 失败测试数 0」算出，
+  // **不覆盖** suite 级 pending，因此不能单靠 success 推断所有 suite 已完成。
+  // （suite 数含嵌套 describe，不等于测试文件数，故只校验为 0，不与文件数比对。）
+  const isCount = (v) => Number.isInteger(v) && v >= 0;
+  if (!isCount(result.numTotalTests)) {
+    problems.push(`numTotalTests 不是非负整数：${JSON.stringify(result.numTotalTests)}`);
+  }
+  if (!isCount(result.numFailedTests)) {
+    problems.push(`numFailedTests 不是非负整数：${JSON.stringify(result.numFailedTests)}`);
+  }
+  if (counts.testsTotal === 0) {
+    problems.push('本次运行总测试数为 0：全零报告不得视为通过（个别文件若确有合法空套件，须显式豁免并给出理由）');
+  }
+  if (!isCount(result.numFailedTestSuites)) {
+    problems.push(`numFailedTestSuites 缺失或不是非负整数：${JSON.stringify(result.numFailedTestSuites)}`);
+  } else if (result.numFailedTestSuites !== 0) {
+    problems.push(`存在未通过的测试 suite：numFailedTestSuites=${result.numFailedTestSuites}`);
+  }
+  if (!isCount(result.numPendingTestSuites)) {
+    problems.push(`numPendingTestSuites 缺失或不是非负整数：${JSON.stringify(result.numPendingTestSuites)}`);
+  } else if (result.numPendingTestSuites !== 0) {
+    problems.push(
+      `存在未完成（pending）的测试 suite：numPendingTestSuites=${result.numPendingTestSuites}` +
+        '（该计数含 run/queued/todo 模式的 suite，vitest 的 success 不覆盖此项）',
+    );
+  }
 
   // **完成集合相等**：不比数量、不比分母，比规范化后的文件集合
   const expectedSet = new Set(Array.isArray(expected) ? expected : []);

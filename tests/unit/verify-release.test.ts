@@ -41,6 +41,8 @@ interface BindingInput {
 interface ZipEntry { name: string; crc32: number; size: number }
 interface VerifyReleaseApi {
   REQUIRED_MODULES: string[];
+  OUT_PREFIX: string;
+  validateOutKey: (rel: string) => string | null;
   crc32: (buf: Buffer) => number;
   outManifestOfDir: (dir: string) => OutManifest;
   outManifestOfAsar: (asarPath: string) => OutManifest;
@@ -195,16 +197,96 @@ describe('REQUIRED_MODULES（S3：核对集合必须覆盖图片修复模块）'
   });
 });
 
-describe('out/** 清单与 diff', () => {
-  it('磁盘目录清单：嵌套文件 bytes/sha256 正确', () => {
-    const dir = mkTmp('vr-out-');
-    writeFile('out/main/index.js', Buffer.from('main'), dir);
-    writeFile('out/core/theme/generate.js', Buffer.from('generate'), dir);
-    const m = vr.outManifestOfDir(dir);
-    expect(Object.keys(m.files).sort()).toEqual(['out/core/theme/generate.js', 'out/main/index.js']);
+describe('out/** 清单键规范（B1：磁盘与归档必须同为 out/... 前缀）', () => {
+  it('真实调用 outManifestOfDir(fixture/out)：键带一次 out/，三个图片模块命中', () => {
+    const root = mkTmp('vr-out-');
+    writeFile('out/main/index.js', Buffer.from('main'), root);
+    writeFile('out/main/services/image-store.js', Buffer.from('store'), root);
+    writeFile('out/core/theme/generate.js', Buffer.from('generate'), root);
+    writeFile('out/core/theme/image-probe.js', Buffer.from('probe'), root);
+    // 真实调用：参数就是 out 目录本身，不是 fixture 根
+    const m = vr.outManifestOfDir(path.join(root, 'out'));
+    expect(Object.keys(m.files).sort()).toEqual([
+      'out/core/theme/generate.js', 'out/core/theme/image-probe.js',
+      'out/main/index.js', 'out/main/services/image-store.js',
+    ]);
     expect(m.files['out/main/index.js']).toEqual({ bytes: 4, sha256: sha256(Buffer.from('main')) });
+    for (const mod of vr.REQUIRED_MODULES) expect(Object.keys(m.files)).toContain(mod);
+    // 绝不能出现 out/out/ 或裸 main/
+    for (const k of Object.keys(m.files)) {
+      expect(k.startsWith('out/out/')).toBe(false);
+      expect(vr.validateOutKey(k)).toBeNull();
+    }
   });
 
+  it('B1 回归：磁盘清单与同内容 ASAR 逐文件一致（不再整批缺/多）', () => {
+    const root = mkTmp('vr-out-vs-asar-');
+    const content: Record<string, Buffer> = {
+      'out/main/index.js': Buffer.from('main'),
+      'out/main/services/image-store.js': Buffer.from('store fixed'),
+      'out/core/theme/generate.js': Buffer.from('generate'),
+      'out/core/theme/image-probe.js': Buffer.from('probe'),
+      'out/renderer/index.html': Buffer.from('<html></html>'),
+    };
+    for (const [rel, buf] of Object.entries(content)) writeFile(rel, buf, root);
+    const asarPath = path.join(root, 'app.asar');
+    fs.writeFileSync(asarPath, makeAsar(content));
+    const disk = vr.outManifestOfDir(path.join(root, 'out'));
+    const archived = vr.outManifestOfAsar(asarPath);
+    expect(vr.diffOutManifest(disk, archived)).toEqual({ missing: [], extra: [], changed: [] });
+    expect(Object.keys(disk.files)).toHaveLength(Object.keys(content).length);
+  });
+
+  it('B1 回归：仅改 ImageStore 时只报该文件变化，不出现整批缺/多', () => {
+    const root = mkTmp('vr-out-one-change-');
+    const content: Record<string, Buffer> = {
+      'out/main/index.js': Buffer.from('main'),
+      'out/main/services/image-store.js': Buffer.from('store fixed'),
+      'out/core/theme/generate.js': Buffer.from('generate'),
+      'out/core/theme/image-probe.js': Buffer.from('probe'),
+    };
+    for (const [rel, buf] of Object.entries(content)) writeFile(rel, buf, root);
+    fs.writeFileSync(path.join(root, 'app.asar'), makeAsar({
+      ...content, 'out/main/services/image-store.js': Buffer.from('store OLD'),
+    }));
+    const diff = vr.diffOutManifest(
+      vr.outManifestOfDir(path.join(root, 'out')),
+      vr.outManifestOfAsar(path.join(root, 'app.asar')),
+    );
+    expect(diff).toEqual({ missing: [], extra: [], changed: ['out/main/services/image-store.js'] });
+  });
+
+  it('空清单直接抛错（不允许「传错目录」静默产出空清单）', () => {
+    const root = mkTmp('vr-out-empty-');
+    fs.mkdirSync(path.join(root, 'out'), { recursive: true });
+    expect(() => vr.outManifestOfDir(path.join(root, 'out'))).toThrow(/清单为空/);
+  });
+
+  it('validateOutKey：拒绝反斜杠/绝对路径/重复前缀/越界段', () => {
+    expect(vr.validateOutKey('out/main/index.js')).toBeNull();
+    expect(vr.validateOutKey('main/index.js')).toMatch(/不以 out\//);
+    expect(vr.validateOutKey('out/out/main/index.js')).toMatch(/重复 out\//);
+    expect(vr.validateOutKey('out\\main\\index.js')).toMatch(/反斜杠/);
+    expect(vr.validateOutKey('D:/out/main/index.js')).toMatch(/绝对路径/);
+    expect(vr.validateOutKey('out/../src/index.ts')).toMatch(/空段/);
+    expect(vr.validateOutKey('out/')).toMatch(/为空/);
+    expect(vr.validateOutKey('')).toMatch(/为空/);
+  });
+
+  it('中文与空格路径按规范保留且可比较', () => {
+    const root = mkTmp('vr-out-cjk-');
+    const rel = 'out/renderer/assets/主题 面板-1.js';
+    writeFile(rel, Buffer.from('cjk'), root);
+    const m = vr.outManifestOfDir(path.join(root, 'out'));
+    expect(Object.keys(m.files)).toEqual([rel]);
+    expect(vr.validateOutKey(rel)).toBeNull();
+    fs.writeFileSync(path.join(root, 'app.asar'), makeAsar({ [rel]: Buffer.from('cjk') }));
+    expect(vr.diffOutManifest(m, vr.outManifestOfAsar(path.join(root, 'app.asar'))))
+      .toEqual({ missing: [], extra: [], changed: [] });
+  });
+});
+
+describe('out/** 清单 diff', () => {
   it('diff：identical 为空；missing/extra/changed 各自命中', () => {
     const a: OutManifest = { files: { 'out/x.js': { bytes: 1, sha256: 'aa' } } };
     const same: OutManifest = { files: { 'out/x.js': { bytes: 1, sha256: 'aa' } } };
@@ -224,17 +306,18 @@ describe('out/** 清单与 diff', () => {
       'out/core/theme/generate.js': Buffer.from('generate'),
       'out/core/theme/image-probe.js': Buffer.from('probe'),
     };
-    // 登记（以 fixed 内容冻结）
-    const registered: OutManifest = { files: {} };
-    for (const [rel, buf] of Object.entries(outFiles)) {
-      registered.files[rel] = { bytes: buf.length, sha256: sha256(buf) };
-    }
+    // 登记清单来自真实磁盘（以 fixed 内容落盘后调用），不是手写对象
+    const root = mkTmp('vr-asar-disk-');
+    for (const [rel, buf] of Object.entries(outFiles)) writeFile(rel, buf, root);
+    const registered = vr.outManifestOfDir(path.join(root, 'out'));
     // 候选 asar：image-store 是旧内容（其余一致）
     const asarBuf = makeAsar({ ...outFiles, 'out/main/services/image-store.js': stale });
     const asarPath = path.join(dir, 'app.asar');
     fs.writeFileSync(asarPath, asarBuf);
     const diff = vr.diffOutManifest(registered, vr.outManifestOfAsar(asarPath));
     expect(diff.changed).toEqual(['out/main/services/image-store.js']);
+    expect(diff.missing).toEqual([]);
+    expect(diff.extra).toEqual([]);
     // 候选缺模块 → missing
     const lacking = makeAsar({
       'out/main/index.js': Buffer.from('main'),
@@ -243,8 +326,11 @@ describe('out/** 清单与 diff', () => {
     const lackingPath = path.join(dir, 'lacking.asar');
     fs.writeFileSync(lackingPath, lacking);
     const diff2 = vr.diffOutManifest(registered, vr.outManifestOfAsar(lackingPath));
-    // missing 按登记清单插入顺序：image-store 在前
-    expect(diff2.missing).toEqual(['out/main/services/image-store.js', 'out/core/theme/image-probe.js']);
+    // 顺序取决于目录遍历，只断言集合
+    expect([...diff2.missing].sort()).toEqual([
+      'out/core/theme/image-probe.js', 'out/main/services/image-store.js',
+    ]);
+    expect(diff2.changed).toEqual([]);
     // 候选多出登记外文件 → extra
     const extra = makeAsar({ ...outFiles, 'out/main/services/leftover.js': Buffer.from('x') });
     const extraPath = path.join(dir, 'extra.asar');

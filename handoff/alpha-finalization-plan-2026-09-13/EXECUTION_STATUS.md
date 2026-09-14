@@ -6,7 +6,7 @@
 | 阶段 | 状态 | 来源提交/buildId | 命令与退出码 | 证据位置 | 负责人/时间 |
 |---|---|---|---|---|---|
 | P0 基线与保护 | **完成**（无代码改动，故无独立提交） | 基线 `eed1f45` | `git log`/`git status` → 0；`node tools/candidate-manifest.cjs check` → 0 | 下方「P0 明细」；`archive/out-871703d-before-refresh.tar.gz` | agent / 2026-09-13 22:2x |
-| P1 清单规范及真实调用测试 | 待执行 | — | — | — | — |
+| P1 清单规范及真实调用测试 | **完成** | 基线 `eed1f45` | `tsc --noEmit` → 0；`eslint .` → 0；`node tools/r5-run-suite.cjs run tests/unit/verify-release.test.ts` → 0（23 项） | 下方「P1 明细」 | agent / 2026-09-14 07:5x |
 | P2 新登记与冻结分离 | 待执行 | — | — | — | — |
 | P3 完整发布链与双重校验 | 待执行 | — | — | — | — |
 | P4 新候选构建与GUI冒烟 | 待执行 | — | — | — | — |
@@ -22,6 +22,17 @@
 - **候选/历史目录**：`candidate-*/`、`candidate-*.zip`、`release*/` 均在 `.gitignore` 内；本轮不删除、不重命名、不占位覆盖。`win-unpacked`、`win-unpacked-fresh`、`win-unpacked.new` 全部保留。
 - **已知阻断**（本轮待修）：B1 清单路径命名不一致（磁盘清单 `main/…` vs 归档/必需模块 `out/main/…`，真实调用下 50 缺 / 50 多）；B2 登记与源码冻结冲突（根 manifest 被 Git 跟踪 → 登记即判脏，提交又换 HEAD）。另须保留 `verify-package` 的包可用性检查，不得让 `verify-release` 把它顶掉。
 - **环境注记**：本会话 shell 的 `PATH` 缺 `/usr/bin`（`dirname`/`head` 不可用），执行命令前显式 `export PATH="/usr/bin:/bin:$PATH"`；属命令环境问题，非仓库缺陷。
+
+## P1 明细（2026-09-14）
+
+**修复 B1（清单路径命名不一致）**：`outManifestOfDir(outDir)` 的参数固定为 **out 目录本身**，
+返回键统一加一次 `out/` 前缀，与 `outManifestOfAsar` 键、`REQUIRED_MODULES` 采用同一规范。
+
+- 新增 `validateOutKey()`：拒绝反斜杠分隔符、绝对路径/盘符、不以 `out/` 开头、`out/out/` 重复前缀、空段与 `./..` 越界段。
+- `outManifestOfDir` 现在对空清单、非法键、重复键**直接抛错**，不再静默产出不一致清单；`candidate-manifest.cjs` 捕获并给出明确失败信息。
+- 测试改为**真实调用**：`outManifestOfDir(fixture/out)` 与同内容合成 ASAR 比较，不再只对手写 manifest 对象。
+- 真实数据验收：本地 `out/`（50 文件）与旧候选 asar 比较 → **磁盘 50 键 / 归档 50 键，missing 0 / extra 0 / changed 0**（修复前为 50 缺 / 50 多、三个图片模块全判缺失）。
+- `tsc --noEmit` → 0；`eslint .` → 0；`verify-release.test.ts` 23 项通过（含正例 3 项、B1 回归 2 项、越界/重复/空清单/中文空格路径负例）。
 
 ## 新候选身份（未生成）
 

@@ -104,15 +104,19 @@ function cmdRegister(argv) {
     process.exit(1);
   }
 
-  // S3：out/** 冻结清单——登记必须发生在本次构建之后，out 缺失/为空直接拒绝
+  // 冻结清单：登记必须发生在本次构建之后。outManifestOfDir 传 **out 目录本身**，
+  // 返回键统一为 `out/...`（与 ASAR 清单、REQUIRED_MODULES 同规范）；空清单会抛错。
   const outDir = path.join(ROOT, 'out');
   const { outManifestOfDir } = require('./verify-release.cjs');
-  const outManifest = outManifestOfDir(outDir);
-  const outFileCount = Object.keys(outManifest.files).length;
-  if (outFileCount === 0) {
-    console.error('[FAIL] 未找到构建输出 out/**：登记必须发生在本次构建（npm run build）之后');
+  let outManifest;
+  try {
+    outManifest = outManifestOfDir(outDir);
+  } catch (e) {
+    console.error(`[FAIL] 无法生成构建输出清单：${e.message}`);
+    console.error('       登记必须发生在本次构建（npm run build）之后，且传入的是 out 目录本身。');
     process.exit(1);
   }
+  const outFileCount = Object.keys(outManifest.files).length;
 
   // S3：锁文件 hash
   const lockfilePath = path.join(ROOT, 'package-lock.json');

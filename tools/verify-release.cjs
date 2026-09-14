@@ -38,6 +38,15 @@ const REQUIRED_MODULES = [
   'out/core/theme/image-probe.js',
 ];
 
+/*
+ * 清单键规范（统一，三处必须一致）：项目逻辑路径 `out/...`，正斜杠分隔。
+ *   - outManifestOfDir(<root>/out)：磁盘基准是 out 目录本身，键加一次 `out/`；
+ *   - outManifestOfAsar(app.asar)：归档内条目本就写作 `out/...`，直接采用；
+ *   - REQUIRED_MODULES：同上。
+ * 历史上两者基准不同（磁盘产出 `main/...`，另一侧要 `out/main/...`），
+ * 真实调用下会把整批文件报成 50 缺 / 50 多、三个图片模块全判缺失（B1）。
+ */
+
 // ---------- 基础 ----------
 const sha256Buf = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 const sha256File = (f) => sha256Buf(fs.readFileSync(f));
@@ -128,23 +137,61 @@ function listFilesRecursive(dir, base = dir) {
   return out;
 }
 
-/** 磁盘目录的 out/** 清单：rel -> { bytes, sha256 } */
+const OUT_PREFIX = 'out/';
+
+/**
+ * 校验相对路径属于 out/** 规范（清单键统一为 `out/...` 正斜杠路径）：
+ *   - 必须以 `out/` 开头，且 `out/` 之后非空；
+ *   - 不得出现 `out/out/`（调用者重复加前缀的信号）；
+ *   - 不得含反斜杠（分隔符必须统一为 `/`）、`.`/`..` 段、空段、绝对路径或盘符。
+ * 返回 null 表示合法，否则返回中文原因（供测试与失败信息直接展示）。
+ */
+function validateOutKey(rel) {
+  if (typeof rel !== 'string' || rel.length === 0) return '路径为空';
+  if (rel.includes('\\')) return `含反斜杠分隔符：${rel}`;
+  if (rel.startsWith('/') || /^[A-Za-z]:/.test(rel)) return `是绝对路径或盘符路径：${rel}`;
+  if (!rel.startsWith(OUT_PREFIX)) return `不以 out/ 开头：${rel}`;
+  const rest = rel.slice(OUT_PREFIX.length);
+  if (!rest) return `out/ 之后为空：${rel}`;
+  if (rest.startsWith(OUT_PREFIX)) return `重复 out/ 前缀（out/out/…）：${rel}`;
+  const segs = rel.split('/');
+  if (segs.some((s) => s === '' || s === '.' || s === '..')) return `含空段或 ./.. 段：${rel}`;
+  return null;
+}
+
+/**
+ * 磁盘目录的 out/** 清单：rel -> { bytes, sha256 }。
+ * 参数固定是 **out 目录本身**（例如 <root>/out）；键统一加一次 `out/` 前缀，
+ * 与 ASAR 清单、REQUIRED_MODULES 采用同一规范——不得靠调用者传父目录实现对齐。
+ * 非法键、重复键、空清单都直接抛错（宁可失败也不要产出不一致的清单）。
+ */
 function outManifestOfDir(outDir) {
   const files = {};
-  for (const rel of listFilesRecursive(outDir)) {
+  const rels = listFilesRecursive(outDir);
+  if (rels.length === 0) {
+    throw new Error(`out 清单为空：${outDir} 下没有文件（确认传入的是 out 目录本身，且构建已完成）`);
+  }
+  for (const rel of rels) {
+    const key = OUT_PREFIX + rel;
+    const invalid = validateOutKey(key);
+    if (invalid) throw new Error(`非法 out 清单键（${invalid}）`);
+    if (key in files) throw new Error(`重复 out 清单键：${key}`);
     const buf = fs.readFileSync(path.join(outDir, ...rel.split('/')));
-    files[rel] = { bytes: buf.length, sha256: sha256Buf(buf) };
+    files[key] = { bytes: buf.length, sha256: sha256Buf(buf) };
   }
   return { files };
 }
 
-/** asar 内 out/** 清单（unpacked 条目落盘读取） */
+/** asar 内 out/** 清单（unpacked 条目落盘读取）；键规范与 outManifestOfDir 相同 */
 function outManifestOfAsar(asarPath) {
   const { header, dataStart } = readAsarHeader(asarPath);
   const entries = asarEntries(header);
   const files = {};
   for (const rel of [...entries.keys()].sort()) {
-    if (!rel.startsWith('out/')) continue;
+    if (!rel.startsWith(OUT_PREFIX)) continue;
+    const invalid = validateOutKey(rel);
+    if (invalid) throw new Error(`归档内非法 out 条目（${invalid}）`);
+    if (rel in files) throw new Error(`归档内重复 out 条目：${rel}`);
     const buf = readAsarEntryBuf(asarPath, entries, dataStart, rel);
     files[rel] = buf === null
       ? { error: 'missing-or-unreadable' }
@@ -411,6 +458,8 @@ if (require.main === module) main();
 
 module.exports = {
   REQUIRED_MODULES,
+  OUT_PREFIX,
+  validateOutKey,
   crc32,
   readAsarHeader,
   asarEntries,

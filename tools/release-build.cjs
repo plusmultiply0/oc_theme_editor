@@ -135,8 +135,9 @@ function runStep(name, cmd, args, opts = {}) {
   return { name, code, secs: Number(secs) };
 }
 
-const gitsha = () => {
-  const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8', windowsHide: true });
+/** HEAD 提交 hash。root 显式可传（夹具测试传夹具根；默认编排根 ROOT）。 */
+const gitsha = (root = ROOT) => {
+  const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', windowsHide: true });
   return (r.stdout || '').trim();
 };
 
@@ -265,7 +266,24 @@ function writeReleaseReceipt(candidateDir, buildId, sourceCommit, manifestPath, 
 function packOutAsar(rootOutDir, stagingDir, asarPath) {
   fs.rmSync(stagingDir, { recursive: true, force: true });
   fs.cpSync(rootOutDir, path.join(stagingDir, 'out'), { recursive: true });
-  require('@electron/asar').createPackageSync(stagingDir, asarPath);
+  // @electron/asar 4.x 只提供异步 createPackage（createPackageSync 已移除）；
+  // 用子进程包装为同步调用，与 makeZip 的 spawnSync 模式一致
+  const script = [
+    "const asar = require('@electron/asar');",
+    'const [src, dest] = process.argv.slice(1);',
+    'asar.createPackage(src, dest).then(',
+    '  () => process.exit(0),',
+    '  (e) => { console.error(e && (e.stack || e.message)); process.exit(1); },',
+    ');',
+  ].join('\n');
+  const r = spawnSync(process.execPath, ['-e', script, stagingDir, asarPath], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (r.status !== 0) {
+    throw new Error(`asar 打包失败（exit=${r.status}）：${r.stderr || r.stdout || '(无输出)'}`);
+  }
 }
 
 /** 从候选目录内容生成 zip（排除 manifest / build-record / evidence，避免自引用） */
@@ -425,7 +443,15 @@ function runBuild(buildId, opts) {
   step('lint', npmBin, ['run', 'lint']);
 
   // 2) 测试（注入项目临时目录策略，不直接调不带策略的 npm run test:integration）
-  step('test:unit', nodeBin, [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/unit'], { env: testEnv() });
+  //    R3：--strict-completeness 让包装器做「完成集合相等」机器校验
+  //    （预期集合=同配置 vitest list；JSON 结果绑定本次 runId；缺失/解析失败一律失败关闭）；
+  //    --expect-no-skip：发布链不允许未批准的 skipped/todo（当前测试库无 skip/todo）。
+  step(
+    'test:unit',
+    nodeBin,
+    [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/unit', '--strict-completeness', '--expect-no-skip'],
+    { env: testEnv() },
+  );
 
   // 2.5) 集成测试的**前置构建**（P4-F2）：部分集成用例依赖 out/ 编译产物
   //      （如 electron-runtime.test.ts 断言 out/main/index.js 存在、
@@ -436,10 +462,18 @@ function runBuild(buildId, opts) {
   ensureIntegrationPrereq();
 
   // 集成测试用受控并发（任务 B）：并行资源竞争会造成超时/假失败
+  // R3：同样启用严格完整性（预期集合 + JSON 机器结果 + 完成集合相等）
   step(
     'test:integration',
     nodeBin,
-    [path.join(__dirname, 'r5-run-suite.cjs'), 'run', 'tests/integration', ...INTEGRATION_CONCURRENCY_ARGS],
+    [
+      path.join(__dirname, 'r5-run-suite.cjs'),
+      'run',
+      'tests/integration',
+      ...INTEGRATION_CONCURRENCY_ARGS,
+      '--strict-completeness',
+      '--expect-no-skip',
+    ],
     { env: testEnv() },
   );
 
@@ -626,4 +660,9 @@ module.exports = {
   testEnv,
   RELEASE_REQUIRED_STEPS,
   INTEGRATION_CONCURRENCY_ARGS,
+  // R1/R2：门禁场景 5e 组合式验收需要的真实实现（记录/回执/asar/zip）
+  writeBuildRecord,
+  writeReleaseReceipt,
+  packOutAsar,
+  makeZip,
 };

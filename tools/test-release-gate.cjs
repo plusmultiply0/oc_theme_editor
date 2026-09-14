@@ -21,6 +21,10 @@
  *   - **R1 生命周期（5e）**：极小合成候选真实走 record writer → register →
  *     core verify → receipt writer → 最终 verify（发布级），两次 verify 幂等
  *     且产物 hash 不变；篡改记录/回执/换 buildId 登记均失败；
+ *   - **R3（场景9）**：包装器严格完整性——完成集合相等（少跑/文件名不同/计划总数
+ *     谎报）、worker 未完成（pending）、空结果、文件失败、收集错误、非允许 skip、
+ *     机器结果缺失/绑错运行、非零退出、超时、超长 stderr、嵌入伪摘要、
+ *     allowlist 豁免、非严格模式兼容；
  *   - verify 模式：缺 buildId → exit 2；manifest 缺失 → 失败关闭不构建；
  *   - 未知模式 → exit 2；
  *   - mock 清除继承的绑定变量（GATE_*），再按场景注入。
@@ -36,8 +40,36 @@ const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD = path.join(ROOT, 'tools', 'release-build.cjs');
+// R1（5e）：真实 CLI 与 hash 工具
+const CAND = path.join(ROOT, 'tools', 'candidate-manifest.cjs');
+const VERIFY_RELEASE = path.join(ROOT, 'tools', 'verify-release.cjs');
+const crypto = require('node:crypto');
+const sha256Buf = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+const sha256File = (f) => sha256Buf(fs.readFileSync(f));
 
 const rmDir = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+
+// 门禁自身需要与 vitest 相同的临时目录处置（R3/5e）：os.tmpdir() 下新建的
+// *.asar 会被本机安全进程延迟打开并**持久锁住**（见 tests/fixtures/test-tmp.ts
+// 头注释），而场景 5e 会真实打 asar + Compress-Archive 打包。把 TEMP/TMP
+// 指向项目盘安全根后重新执行自身（一次性）：os.tmpdir() 返回安全根（asar 不被
+// 锁），且 safe-delete-shim 的 OS_TMP_DIRS 快照同值，夹具清理获得临时目录豁免。
+const GATE_TMP_ROOT = process.env.OTS_TEST_TMP
+  ? path.resolve(process.env.OTS_TEST_TMP)
+  : path.join(ROOT, 'node_modules', '.cache', 'gate-fixtures');
+if (!process.env.OTS_GATE_TMP_REDIRECTED) {
+  fs.mkdirSync(GATE_TMP_ROOT, { recursive: true });
+  const r = spawnSync(
+    process.execPath,
+    [__filename, ...process.argv.slice(2)],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, TEMP: GATE_TMP_ROOT, TMP: GATE_TMP_ROOT, OTS_GATE_TMP_REDIRECTED: '1' },
+      windowsHide: true,
+    },
+  );
+  process.exit(r.status === null ? 1 : r.status);
+}
 
 /** 步骤顺序（含 node 侧步骤），用于断言「后续未执行」。
  *  默认测试传 --skip-gui（开发构建），此时步骤里不含 smoke:gui；
@@ -440,7 +472,12 @@ for (const name of FAIL_STEPS) {
   rb.packOutAsar(path.join(root, 'out'), path.join(candRoot, 'asar-staging'), path.join(outDir, 'resources', 'app.asar'));
   // 真 zip：候选目录内容打包
   const zipPath = path.join(root, `candidate-${buildId}.zip`);
-  expect(makeZipOf(outDir, zipPath).status === 0 && fs.existsSync(zipPath), '真 zip 生成（Compress-Archive）');
+  const zr = makeZipOf(outDir, zipPath);
+  expect(
+    zr.status === 0 && fs.existsSync(zipPath),
+    '真 zip 生成（Compress-Archive）',
+    `status=${zr.status} error=${zr.error && zr.error.message} stderr=${String(zr.stderr || '').slice(0, 300)}`,
+  );
 
   const gsha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', windowsHide: true }).stdout.trim();
   const coreArgs = [VERIFY_RELEASE, '--root', root, '--manifest', path.join(candRoot, 'candidate-manifest.json'),
@@ -564,6 +601,205 @@ for (const name of FAIL_STEPS) {
   const r = runOrch(root, ['frobnicate']);
   expect(r.status === 2, '未知模式退出 2', `实际 ${r.status}`);
   rmDir(root);
+}
+
+// ---------- 9) R3：包装器严格完整性——完成集合相等 / 机器结果 / skip 豁免 ----------
+// 注入 fake spawn：`vitest list` 返回预期清单，`vitest run` 写出给定 JSON 机器结果。
+// JSON 字段语义与本地 vitest dist（JsonReporter/StatusMap）一致。
+{
+  console.log('\n== R3（场景9）：包装器严格完整性——完成集合/机器结果/skip 豁免 ==');
+  const { runSuite } = require('./r5-run-suite.cjs');
+  // repo 指向临时夹具：collectExpectedFiles 会对 list 输出做存在性校验（解析失败关闭）
+  const fxRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'r5gate-fx-'));
+  const EXPECT = ['tests/a.test.ts', 'tests/b.test.ts', 'tests/c.test.ts', 'tests/d.test.ts', 'tests/e.test.ts'];
+  for (const f of EXPECT) {
+    fs.mkdirSync(path.dirname(path.join(fxRepo, f)), { recursive: true });
+    fs.writeFileSync(path.join(fxRepo, f), '// fixture\n');
+  }
+
+  const passFile = (name, count = 1) => ({
+    name,
+    status: 'passed',
+    message: '',
+    assertionResults: Array.from({ length: count }, (_, i) => ({ fullName: `t${i} passes`, status: 'passed', title: `t${i}` })),
+  });
+  /** 构造本地 vitest JSON reporter 机器结果（字段契约见 tools/r5-run-suite.cjs 头注释） */
+  const mkJson = (testResults, o = {}) => {
+    const n = testResults.reduce((s, f) => s + (f.assertionResults ? f.assertionResults.length : 0), 0);
+    const nf = testResults.reduce((s, f) => s + (f.assertionResults || []).filter((t) => t.status === 'failed').length, 0);
+    return JSON.stringify({
+      numTotalTestSuites: testResults.length,
+      numPassedTestSuites: testResults.length,
+      numFailedTestSuites: 0,
+      numPendingTestSuites: 0,
+      numTotalTests: o.numTotalTests != null ? o.numTotalTests : n,
+      numPassedTests: n - nf,
+      numFailedTests: o.numFailedTests != null ? o.numFailedTests : nf,
+      numPendingTests: 0,
+      numTodoTests: 0,
+      success: o.success != null ? o.success : nf === 0 && testResults.length > 0,
+      startTime: o.startTime != null ? o.startTime : Date.now(),
+      testResults,
+    });
+  };
+  const GOOD_TEXT = ' Test Files  5 passed (5)\n      Tests  5 passed (5)';
+  /** 注入 spawn：list → 预期清单；run → 写 JSON + 给定文本/退出状态 */
+  const makeSpawn = ({
+    listStdout = EXPECT.join('\n'), listStatus = 0,
+    runStatus = 0, runSignal = null, runError = null,
+    json = null, writeJson = true, stdout = GOOD_TEXT, stderr = '',
+  } = {}) => (execPath, cmdArgs) => {
+    if (cmdArgs.includes('list')) {
+      return { status: listStatus, signal: null, error: null, stdout: listStdout, stderr: '' };
+    }
+    if (writeJson && json != null) {
+      const flag = cmdArgs.find((a) => String(a).startsWith('--outputFile.json='));
+      if (flag) fs.writeFileSync(flag.slice('--outputFile.json='.length), json);
+    }
+    return { status: runStatus, signal: runSignal, error: runError, stdout, stderr };
+  };
+  const base = {
+    repo: fxRepo,
+    vitestArgs: ['run', 'tests/unit'],
+    timeoutMs: 60000,
+    strict: { enabled: true, expectNoSkip: true, skipAllowlist: [] },
+  };
+  const strictProblems = (r) => (r.strict && r.strict.problems ? r.strict.problems.join('；') : JSON.stringify(r.strict));
+
+  // 9.1 正例：集合全等、全过、无 skip → 0
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(EXPECT.map((f) => passFile(f))) }) });
+    expect(r.exitCode === 0, '9.1 正例（完成集合全等全过）→ 退出 0', strictProblems(r));
+  }
+  // 9.2 复现负例①：文本谎报分母 `Test Files 7 passed (15)` + 实际只完成 7 个非预期文件 → 拒绝
+  {
+    const seven = ['tests/f1.test.ts', 'tests/f2.test.ts', 'tests/f3.test.ts', 'tests/f4.test.ts', 'tests/f5.test.ts', 'tests/f6.test.ts', 'tests/f7.test.ts'];
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ stdout: ' Test Files  7 passed (15)\n      Tests  7 passed (15)', json: mkJson(seven.map((f) => passFile(f))) }),
+    });
+    expect(r.exitCode === 1, '9.2 少跑文件（7/15，文本谎报）→ 拒绝', strictProblems(r));
+    expect(/未完成文件/.test(strictProblems(r)), '9.2 指出未完成文件');
+  }
+  // 9.3 验收负例：数量相同（5=5）但文件名不同 → 拒绝（旧比分母逻辑会放行）
+  {
+    const five = ['tests/a.test.ts', 'tests/b.test.ts', 'tests/c.test.ts', 'tests/d.test.ts', 'tests/e2.test.ts'];
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(five.map((f) => passFile(f))) }) });
+    expect(r.exitCode === 1, '9.3 数量相同但文件名不同 → 拒绝', strictProblems(r));
+    const p = strictProblems(r);
+    expect(/未完成文件/.test(p) && /预期之外文件/.test(p), '9.3 同时指出缺失与多余文件', p);
+  }
+  // 9.4 验收负例：worker 未完成（存在 pending 测试）→ 拒绝
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[1].assertionResults = [{ fullName: 'still running', status: 'pending', title: 'still running' }];
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files) }) });
+    expect(r.exitCode === 1, '9.4 存在 pending（worker 未完成）→ 拒绝', strictProblems(r));
+    expect(/pending/.test(strictProblems(r)), '9.4 点名 pending');
+  }
+  // 9.5 验收负例：空结果（未完成任何文件）→ 拒绝
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson([]) }) });
+    expect(r.exitCode === 1, '9.5 空机器结果 → 拒绝', strictProblems(r));
+  }
+  // 9.6 复现负例③：文件失败 / 收集失败 → 拒绝
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[2].status = 'failed';
+    files[2].assertionResults = [{ fullName: 'boom', status: 'failed', title: 'boom' }];
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files, { success: false }) }) });
+    expect(r.exitCode === 1, '9.6 文件失败 → 拒绝', strictProblems(r));
+    expect(/文件未通过/.test(strictProblems(r)), '9.6 点名失败文件');
+  }
+  // 9.7 收集错误（文件级 message 非空）→ 拒绝
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[0].message = 'Error: Cannot find module "./missing.js"';
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(files) }) });
+    expect(r.exitCode === 1, '9.7 收集错误（message 非空）→ 拒绝', strictProblems(r));
+    expect(/收集错误/.test(strictProblems(r)), '9.7 点名收集错误');
+  }
+  // 9.8 复现负例②：非允许 skip（1 passed / 9 skipped）→ 拒绝
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[0].assertionResults = [
+      { fullName: 'only one runs', status: 'passed', title: 'only one runs' },
+      ...Array.from({ length: 9 }, (_, i) => ({ fullName: `skipped ${i}`, status: 'skipped', title: `skipped ${i}` })),
+    ];
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ stdout: ' Test Files  5 passed (5)\n      Tests  1 passed | 9 skipped (10)', json: mkJson(files) }),
+    });
+    expect(r.exitCode === 1, '9.8 非允许 skip → 拒绝', strictProblems(r));
+    expect(/非允许 skip/.test(strictProblems(r)), '9.8 点名非允许 skip');
+  }
+  // 9.9 正例：同上但 skip 在 allowlist（文件级豁免）→ 0
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[0].assertionResults = [
+      { fullName: 'only one runs', status: 'passed', title: 'only one runs' },
+      ...Array.from({ length: 9 }, (_, i) => ({ fullName: `skipped ${i}`, status: 'skipped', title: `skipped ${i}` })),
+    ];
+    const r = runSuite({
+      ...base,
+      strict: { enabled: true, expectNoSkip: true, skipAllowlist: ['tests/a.test.ts'] },
+      spawn: makeSpawn({ stdout: ' Test Files  5 passed (5)\n      Tests  1 passed | 9 skipped (10)', json: mkJson(files) }),
+    });
+    expect(r.exitCode === 0, '9.9 allowlist 豁免的 skip → 退出 0', strictProblems(r));
+  }
+  // 9.10 机器结果缺失 → 失败关闭
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ writeJson: false }) });
+    expect(r.exitCode === 1, '9.10 机器结果缺失 → 拒绝', strictProblems(r));
+    expect(/结果缺失/.test(strictProblems(r)), '9.10 报告结果缺失');
+  }
+  // 9.11 结果属于其他运行（startTime 不在本次窗口）→ 失败关闭
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ json: mkJson(EXPECT.map((f) => passFile(f)), { startTime: Date.now() - 10 * 60 * 1000 }) }) });
+    expect(r.exitCode === 1, '9.11 结果绑定失败（非本次 runId 窗口）→ 拒绝', strictProblems(r));
+    expect(/不属于本次运行/.test(strictProblems(r)), '9.11 报告 runId 绑定失败');
+  }
+  // 9.12 非零退出码（即便文本与 JSON 都好看）→ 拒绝
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ runStatus: 1, json: mkJson(EXPECT.map((f) => passFile(f))) }) });
+    expect(r.exitCode === 1, '9.12 非零退出码 → 拒绝', `exitCode=${r.exitCode}`);
+  }
+  // 9.13 超时（spawn error ETIMEDOUT）→ 拒绝
+  {
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ runStatus: null, runSignal: 'SIGTERM', runError: new Error('spawnSync ETIMEDOUT'), json: mkJson(EXPECT.map((f) => passFile(f))) }),
+    });
+    expect(r.exitCode === 1 && r.timedOut, '9.13 超时 → 拒绝并标记 timeout', `exitCode=${r.exitCode} timedOut=${r.timedOut}`);
+  }
+  // 9.14 验收负例：stderr 很长（1 万行垃圾）不得破坏判定——正例语义保持退出 0
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ stderr: 'noise line\n'.repeat(10000), json: mkJson(EXPECT.map((f) => passFile(f))) }) });
+    expect(r.exitCode === 0, '9.14 超长 stderr 不误判 → 退出 0', strictProblems(r));
+  }
+  // 9.15 验收负例：末尾嵌入伪摘要（文本全绿）掩盖 JSON 真实失败 → 以机器结果为准拒绝
+  {
+    const files = EXPECT.map((f) => passFile(f));
+    files[4].assertionResults = [{ fullName: 'hidden fail', status: 'failed', title: 'hidden fail' }];
+    const r = runSuite({
+      ...base,
+      spawn: makeSpawn({ stdout: '正文…\n Test Files  5 passed (5)\n      Tests  5 passed (5)', json: mkJson(files, { success: false }) }),
+    });
+    expect(r.exitCode === 1, '9.15 伪摘要掩盖失败 → 机器结果为准拒绝', strictProblems(r));
+  }
+  // 9.16 预期清单收集失败（vitest list 退出非 0）→ 未跑测试即失败关闭
+  {
+    const r = runSuite({ ...base, spawn: makeSpawn({ listStatus: 1 }) });
+    expect(r.exitCode === 1, '9.16 预期清单收集失败 → 失败关闭', strictProblems(r));
+    expect(/预期文件集合收集失败/.test(strictProblems(r)), '9.16 报告清单收集失败');
+  }
+  // 9.17 兼容：非严格模式（不带 --strict-completeness）正例保持退出 0
+  {
+    const r = runSuite({ repo: fxRepo, vitestArgs: ['run', 'tests/unit'], timeoutMs: 60000, spawn: makeSpawn() });
+    expect(r.exitCode === 0, '9.17 非严格模式正例 → 退出 0（旧行为兼容）', JSON.stringify(r.completeness && r.completeness.problems));
+  }
+
+  rmDir(fxRepo);
 }
 
 if (failures.length) {

@@ -28,7 +28,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..');
+// --root 可在 main 中重新指向（夹具测试传夹具根）；默认为编排根
+let ROOT = path.resolve(__dirname, '..');
 
 /** 图片修复三模块：本轮修复落点，out/** 核对集合必须至少覆盖这些（S3 执行方案 4） */
 const REQUIRED_MODULES = [
@@ -367,7 +368,9 @@ function checkZipMatchesDir(zipPath, dir) {
   } catch (e) {
     return [`zip 无法解析：${e.message}`];
   }
-  const zipMap = new Map(zipEntries.map((e) => [e.name, e]));
+  // 条目名规范化：zip 规范用 `/`，但 Windows PowerShell 5.1 的 Compress-Archive
+  // 会写 `\`（本仓库 makeZip 即用它）——比较前统一为 `/`，否则整目录假不一致
+  const zipMap = new Map(zipEntries.map((e) => [e.name.replace(/\\/g, '/'), e]));
   for (const [name, e] of zipMap) {
     const d = diskMap.get(name);
     if (!d) { problems.push(`zip 内多出磁盘没有的条目：${name}`); continue; }
@@ -391,6 +394,11 @@ function parseArgs(argv) {
     else if (a === '--manifest') opts.manifest = argv[++i];
     else if (a === '--source-commit') opts.sourceCommit = argv[++i];
     else if (a === '--skip-deep-zip') opts.skipDeepZip = true;
+    // R1：发布级判定旗标（缺失时 runVerify 传了也不生效——必须显式解析）
+    else if (a === '--require-release-eligibility') opts.requireReleaseEligibility = true;
+    // R1/R2：仓库根（夹具测试必传；manifest/候选/out/锁文件/git 查询都以其解析）
+    else if (a === '--root') opts.root = argv[++i];
+    else if (a.startsWith('--root=')) opts.root = a.slice('--root='.length);
   }
   return opts;
 }

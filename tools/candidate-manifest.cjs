@@ -192,7 +192,16 @@ function cmdRegister(argv) {
     process.exit(1);
   }
 
-  const packMethod = opts.packMethod || 'manual-repack';
+  // S5：打包方式必须**显式声明**，不再静默兜底为 manual-repack。
+  // 旧默认会让「electron-builder 真实打包链」被登记成手工重封（并写出
+  // reproducibleBuild=false 与手工重封备注），使发布材料里的来源方式不真实。
+  // 缺参即报错，宁可拒绝登记，也不替调用方猜测来源。
+  const packMethod = opts.packMethod;
+  if (!packMethod) {
+    console.error('[FAIL] 缺少 --pack-method：必须显式声明打包方式（electron-builder | manual-repack）。');
+    console.error('       不提供默认值是刻意的——来源方式不能由工具替调用方猜测。');
+    process.exit(1);
+  }
   if (!['electron-builder', 'manual-repack'].includes(packMethod)) {
     console.error(`--pack-method 只支持 electron-builder | manual-repack，收到 ${packMethod}`);
     process.exit(1);
@@ -318,6 +327,9 @@ function cmdRegister(argv) {
     sourceCommitSubject: execFileSync('git', ['log', '-1', '--format=%s', sourceCommit], { cwd: ROOT, encoding: 'utf8' }).trim(),
     registeredAt: new Date().toISOString(),
     packMethod,
+    // S5：字段保留旧名以维持 candidate-manifest/3 的结构稳定，但含义**必须**按
+    // 注释理解：它只表示「本次打包由 electron-builder 自动化链产出」，
+    // **不是**两次构建字节级一致的证明（本仓库从未做过位级可复现验证）。
     reproducibleBuild: packMethod === 'electron-builder',
     lockfileSha256,
     buildRecord: {

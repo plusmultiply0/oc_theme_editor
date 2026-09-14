@@ -545,6 +545,10 @@ function runBuild(buildId, opts) {
     '--build-record', record,
     '--zip', zipPath,
     '--build-id', buildId,
+    // S5：本分支是 electron-builder 真实打包链，必须显式声明；
+    // 否则登记器默认 manual-repack 会写出「手工重封」备注与
+    // reproducibleBuild=false，让发布材料里的来源方式不真实。
+    '--pack-method', 'electron-builder',
   ]);
 
   // 10) 发布身份核验（core 层，verify-release 三元显式绑定）：

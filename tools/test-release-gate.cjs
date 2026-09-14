@@ -553,8 +553,13 @@ for (const name of FAIL_STEPS) {
   // 2) 真实 register：绑定记录 hash + out 清单 + zip
   const manifest = path.join(candRoot, 'candidate-manifest.json');
   const reg = runCli([CAND, 'register', '--root', root, '--manifest', manifest,
-    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId], root);
+    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId,
+    '--pack-method', 'electron-builder'], root);
   expect(reg.status === 0, '真实 register 退出 0', reg.stderr);
+  // S5：真实 builder 链登记后不得出现「手工重封」痕迹
+  const m1 = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  expect(m1.packMethod === 'electron-builder', '登记为 electron-builder（非手工重封）', String(m1.packMethod));
+  expect(!/手工重封/.test(JSON.stringify(m1.notes || '')), '不含手工重封备注', JSON.stringify(m1.notes));
 
   // 3) 真实 core verify（无旗标）：只校验事实/产物/来源，不要求回执。
   //    S2：core 只能打 CORE_VERIFY_GREEN（stage=core publishable=false），
@@ -603,14 +608,16 @@ for (const name of FAIL_STEPS) {
   // 9) 负例 c（S1 翻转）：--build-id 与 record.buildId 不一致 → 登记阶段即拒绝
   const manifest2 = path.join(candRoot, 'candidate-manifest-alt.json');
   const reg2 = runCli([CAND, 'register', '--root', root, '--manifest', manifest2,
-    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', 'b-life-2'], root);
+    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', 'b-life-2',
+    '--pack-method', 'electron-builder'], root);
   expect(reg2.status !== 0, 'S1：--build-id 与记录不一致 → 登记拒绝', reg2.stdout + reg2.stderr);
   expect(/不一致/.test(reg2.stdout + reg2.stderr), '点名构建身份不一致', reg2.stdout + reg2.stderr);
 
   // 9b) 负例 c'（S1）：绕过登记器手工改名 manifest（record=A、manifest=B）→ 核验端拒绝。
   //     核验端不假设所有 manifest 都由当前登记器正确写出，独立执行交叉校验。
   const reg2b = runCli([CAND, 'register', '--root', root, '--manifest', manifest2,
-    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId], root);
+    '--candidate-dir', outDir, '--build-record', recordPath, '--zip', zipPath, '--build-id', buildId,
+    '--pack-method', 'electron-builder'], root);
   expect(reg2b.status === 0, '同身份第二份登记（别名 manifest 文件）仍可进行', reg2b.stderr);
   const m2raw = JSON.parse(fs.readFileSync(manifest2, 'utf8'));
   m2raw.buildId = 'b-life-2';
@@ -633,12 +640,25 @@ for (const name of FAIL_STEPS) {
     rb.RELEASE_REQUIRED_STEPS.filter((n) => n !== 'smoke:gui').map((name) => ({ name, code: 0, secs: 1 })));
   const manifest3 = path.join(cand3, 'candidate-manifest.json');
   const reg3 = runCli([CAND, 'register', '--root', root, '--manifest', manifest3,
-    '--candidate-dir', out3, '--build-record', record3, '--zip', zip3, '--build-id', buildId3], root);
+    '--candidate-dir', out3, '--build-record', record3, '--zip', zip3, '--build-id', buildId3,
+    '--pack-method', 'electron-builder'], root);
   expect(reg3.status === 0, '缺 smoke:gui 的开发构建仍可登记（core 层不要求齐全）', reg3.stderr);
   const vr3 = runCli([VERIFY_RELEASE, '--root', root, '--manifest', manifest3,
     '--candidate-dir', out3, '--build-id', buildId3, '--require-release-eligibility'], root);
   expect(vr3.status === 1, '发布级 verify 拒绝缺步候选', vr3.stdout);
   expect(/缺失必需步骤/.test(vr3.stdout), '点名缺失步骤');
+
+  // 11) S5：打包方式必须显式声明——不再静默兜底为 manual-repack
+  const manifest4 = path.join(cand3, 'candidate-manifest-nopm.json');
+  const reg4 = runCli([CAND, 'register', '--root', root, '--manifest', manifest4,
+    '--candidate-dir', out3, '--build-record', record3, '--zip', zip3, '--build-id', buildId3], root);
+  expect(reg4.status !== 0, 'S5：缺 --pack-method → 拒绝登记', reg4.stdout + reg4.stderr);
+  expect(/--pack-method/.test(reg4.stdout + reg4.stderr), '点名缺少 --pack-method', reg4.stdout + reg4.stderr);
+  // 非法取值同样拒绝
+  const reg5 = runCli([CAND, 'register', '--root', root, '--manifest', manifest4,
+    '--candidate-dir', out3, '--build-record', record3, '--zip', zip3, '--build-id', buildId3,
+    '--pack-method', 'zip-by-hand'], root);
+  expect(reg5.status !== 0, 'S5：非法 --pack-method → 拒绝登记', reg5.stdout + reg5.stderr);
 
   rmDir(root);
 }

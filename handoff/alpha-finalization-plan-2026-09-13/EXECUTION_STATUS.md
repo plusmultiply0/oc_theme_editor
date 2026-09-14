@@ -60,8 +60,17 @@
 **RPC 错误与 Unhandled Error 均为 0**，此前「长耗时下 `onTaskUpdate` 超时」的现象**未再出现**。
 
 **遗留阻塞（P4 仍为阻塞）**：
-- P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件锁；原因未定，不指认持锁者）。
-  需在本机释放占用后重跑，或换一台无该锁的环境复现以区分「环境」与「产品」。
+- P4-F1：e2e 应用步骤遭遇**目标文件被占用**（环境文件锁）——**已定性（2026-09-14 补证），
+  非产品缺陷**。证据：最小复现（纯 Node，无 Electron / 无本仓库代码）在临时目录反复
+  「写 staged → rename 覆盖 target」，**300 次命中 18 次 `EPERM`（6%）**；`%TEMP%` 与
+  `HOME` 下均有命中。持锁者已定位：本机 `WinDefend`/`WdNisSvc` 均为 `Stopped`，而
+  **`QQPCRtp`（腾讯电脑管家实时防护）`Running`**。应用侧 `physical-fs`（Electron 下走
+  `original-fs`）与 `archive-io`（`noAsar` 窗口 + `uncacheArchive`）**均无缺陷**；失败点是
+  `commit.ts:98` 的 `rename` 覆盖已存在的 `app.asar`。详见 `P4_DIAGNOSIS_AND_FIX_PLAN.md` §2.3.1。
+  验收项「EPERM/首次 apply 失败有具体错误码及诊断信息，未靠关闭防护或吞异常放行」**已满足**
+  （错误码 `FILE_LOCKED`、诊断明确、未吞异常、未关闭防护）。
+  **处置**：维持「不关防护、不改系统设置、不强杀进程」；需人工把仓库根与 `%TEMP%` 加入
+  电脑管家信任区（或暂停实时防护），再以发布模式重跑整链。
 - ~~P4-F2（新发现，待确认）~~ → **已修复（提交 `690eea6`）**：编排器把
   `test:integration` 排在 `build` **之前**，而部分集成用例**依赖 `out/` 产物**
   （`electron-runtime.test.ts` 显式断言 `out/main/index.js` 存在并抛

@@ -1,0 +1,30 @@
+{
+  "startedAt": "2026-09-13T07:34:54.943Z",
+  "probeImmediate": {
+    "ok": 100,
+    "failures": []
+  },
+  "probeNewFile": {
+    "ok": 50,
+    "failures": []
+  },
+  "applyLoop": {
+    "targetId": "opencode-desktop-win-asar:71ae1059010a3b9f",
+    "installPath": "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-tmp\\ots-install-QUVv4I\\install",
+    "archivePath": "d:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-tmp\\ots-install-QUVv4I\\install\\resources\\app.asar",
+    "lockTimeline": {
+      "afterInstall": "unlocked",
+      "afterDiscover": "unlocked",
+      "afterPickImport": "unlocked",
+      "afterStage": "unlocked"
+    },
+    "stageOk": true,
+    "apply1": {
+      "ok": true
+    },
+    "conclusion": "apply 一次成功——问题未在本环境复现，或与并发/时序相关"
+  },
+  "cleanupRetry": {
+    "immediate": "ok"
+  }
+}

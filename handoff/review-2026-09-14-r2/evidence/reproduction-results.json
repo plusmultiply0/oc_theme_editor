@@ -1,0 +1,155 @@
+{
+  "kind": "diagnostic-regression-reproduction-not-release-evidence",
+  "root": "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher",
+  "timestamp": "2026-09-14T06:56:59.243Z",
+  "isolation": "All build writes and subprocesses mocked in memory; actual source functions executed; no app launched.",
+  "lifecycle": {
+    "releaseEligible": false,
+    "missingRequiredSteps": [
+      "register",
+      "verify:release"
+    ],
+    "checkBefore": {
+      "ok": false,
+      "problems": [
+        "releaseEligible=false",
+        "缺失必需步骤：register、verify:release"
+      ],
+      "required": [
+        "typecheck",
+        "lint",
+        "test:unit",
+        "test:integration",
+        "build",
+        "test:e2e",
+        "test:e2e:electron",
+        "audit",
+        "dist",
+        "smoke:gui",
+        "verify-package",
+        "zip",
+        "register",
+        "verify:release"
+      ]
+    },
+    "checkAfter": {
+      "ok": false,
+      "problems": [
+        "releaseEligible=false",
+        "缺失必需步骤：register、verify:release"
+      ],
+      "required": [
+        "typecheck",
+        "lint",
+        "test:unit",
+        "test:integration",
+        "build",
+        "test:e2e",
+        "test:e2e:electron",
+        "audit",
+        "dist",
+        "smoke:gui",
+        "verify-package",
+        "zip",
+        "register",
+        "verify:release"
+      ]
+    },
+    "hypotheticalPendingRewriteChangesBoundHash": true
+  },
+  "recordCanWeakenPolicy": {
+    "ok": true,
+    "problems": [],
+    "required": [
+      "build"
+    ]
+  },
+  "completeness": [
+    {
+      "id": "partial-files-with-expected-count",
+      "text": " Test Files  7 passed (15)\n Tests  84 passed (84)\n",
+      "opts": {
+        "expectedFiles": 15
+      },
+      "actualAccepted": true,
+      "wrapperExitWithSyntheticZeroExit": 0,
+      "summary": {
+        "filesTotal": 15,
+        "testsTotal": 84,
+        "testsFailed": null,
+        "testsPassed": 84,
+        "testsSkipped": null,
+        "testsTodo": null,
+        "filesFailed": null,
+        "filesPassed": 7,
+        "unhandledErrors": 0,
+        "hasSummary": true
+      }
+    },
+    {
+      "id": "skips-in-default-release-call",
+      "text": " Test Files  1 passed (1)\n Tests  1 passed | 9 skipped (10)\n",
+      "opts": {},
+      "actualAccepted": true,
+      "wrapperExitWithSyntheticZeroExit": 0,
+      "summary": {
+        "filesTotal": 1,
+        "testsTotal": 10,
+        "testsFailed": null,
+        "testsPassed": 1,
+        "testsSkipped": 9,
+        "testsTodo": null,
+        "filesFailed": null,
+        "filesPassed": 1,
+        "unhandledErrors": 0,
+        "hasSummary": true
+      }
+    },
+    {
+      "id": "failed-file-zero-tests",
+      "text": " Test Files  1 failed (1)\n Tests  0 passed (0)\n",
+      "opts": {},
+      "actualAccepted": true,
+      "wrapperExitWithSyntheticZeroExit": 0,
+      "summary": {
+        "filesTotal": 1,
+        "testsTotal": 0,
+        "testsFailed": null,
+        "testsPassed": 0,
+        "testsSkipped": null,
+        "testsTodo": null,
+        "filesFailed": 1,
+        "filesPassed": null,
+        "unhandledErrors": 0,
+        "hasSummary": true
+      }
+    }
+  ],
+  "prereq": {
+    "markerExists": true,
+    "workerExists": false,
+    "compilationCalls": 0
+  },
+  "console": [
+    "exit=0 signal=none",
+    "log=D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-logs\\suite-2026-09-14T06-56-59-241Z-0dea.log",
+    "command=C:\\nvm4w\\nodejs\\node.exe D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\vitest\\vitest.mjs run",
+    "tempRoot=D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-tmp\\run-2026-09-14T06-56-59-241Z-0dea",
+    "summary files=7passed/15total tests=84passed/84total failed=0 unhandledErrors=0",
+    " Test Files  7 passed (15)\n Tests  84 passed (84)",
+    "exit=0 signal=none",
+    "log=D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-logs\\suite-2026-09-14T06-56-59-243Z-5146.log",
+    "command=C:\\nvm4w\\nodejs\\node.exe D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\vitest\\vitest.mjs run",
+    "tempRoot=D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-tmp\\run-2026-09-14T06-56-59-243Z-5146",
+    "summary files=1passed/1total tests=1passed/10total failed=0 unhandledErrors=0",
+    " Test Files  1 passed (1)\n Tests  1 passed | 9 skipped (10)",
+    "exit=0 signal=none",
+    "log=D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-logs\\suite-2026-09-14T06-56-59-243Z-7a1a.log",
+    "command=C:\\nvm4w\\nodejs\\node.exe D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\vitest\\vitest.mjs run",
+    "tempRoot=D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\.cache\\ots-test-tmp\\run-2026-09-14T06-56-59-243Z-7a1a",
+    "summary files=?passed/1total tests=0passed/0total failed=0 unhandledErrors=0",
+    " Test Files  1 failed (1)\n Tests  0 passed (0)",
+    "\n=== prepare:out（集成测试前置）===",
+    "  已存在 out\\main\\index.js，跳过"
+  ]
+}

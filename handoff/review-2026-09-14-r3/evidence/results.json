@@ -1,0 +1,54 @@
+{
+  "kind": "synthetic-review-fixture-not-release-evidence",
+  "project": "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher",
+  "evidenceDir": "C:\\Users\\ylzho\\Documents\\novel\\opencode-snow-theme\\review-2026-09-14-r3\\evidence-run-TNl7jK",
+  "sourceHashes": {
+    "release-build.cjs": "95f9d01b94fbc8eeaf349aa14f7e2a33fb68839b9b9d3dd782e0f086f01bcc40",
+    "r5-run-suite.cjs": "fce36a0256f267a836d971ece352ccaf65b218dc6bd000446913f748d71f24bb",
+    "release-eligibility.cjs": "dfc1bb81774a6eeb0dd296c3cc8d1189bf6e117707f3e6cfc77e41d5b86c3b86",
+    "verify-release.cjs": "e3f42e4fd703d8f7772917b0dcee6b9ad78d50c0e029d79895d9341375180137",
+    "candidate-manifest.cjs": "d4dec29565014ce94ca68a295b82d70e3d796b5f9950af87117e5016de845629",
+    "release-gate.sh": "809fb7421c450fec64520805e7c7913b69d72a2d4df04ef0871e1d6d68bd7894"
+  },
+  "identity": {
+    "recordBuildId": "original-build",
+    "manifestBuildId": "renamed-build",
+    "receiptBuildId": "renamed-build",
+    "registerExit": 0,
+    "fullVerifyExit": 0
+  },
+  "stageMarker": {
+    "coreWithoutReceiptExit": 0,
+    "corePrintsReleaseGreen": true,
+    "finalWithoutReceiptExit": 1
+  },
+  "malformedMachineResultAccepted": {
+    "ok": true,
+    "problems": [],
+    "counts": {
+      "expectedFiles": 1,
+      "filesRun": 1,
+      "filesFailed": 0,
+      "missingFiles": 0,
+      "extraFiles": 0,
+      "testsTotal": 0,
+      "testsPassed": 0,
+      "testsFailed": 0,
+      "testsSkipped": 0,
+      "testsTodo": 0,
+      "testsPending": 0
+    }
+  },
+  "collectorLeavesOptionValuesAsFilters": [
+    "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\vitest\\vitest.mjs",
+    "list",
+    "--filesOnly",
+    "tests/unit/theme.test.ts",
+    "dot",
+    "my-report.json"
+  ],
+  "defaultRegistration": {
+    "packMethod": "manual-repack",
+    "reproducibleBuild": false
+  }
+}

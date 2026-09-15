@@ -1,0 +1,36 @@
+{
+  "scope": "Synthetic fixtures only; no real build or installation writes",
+  "runDir": "C:\\Users\\ylzho\\Documents\\novel\\opencode-snow-theme\\review-2026-09-13\\isolated-bm0vKF",
+  "releaseGate": {
+    "status": 0,
+    "stdout": "=== typecheck ===\nEXIT typecheck = 0 (0s)\n=== lint ===\nEXIT lint = 0 (0s)\n=== test:unit ===\nEXIT test:unit = 0 (0s)\n=== test:integration ===\nEXIT test:integration = 0 (0s)\n=== build ===\nEXIT build = 0 (0s)\n=== test:e2e ===\nEXIT test:e2e = 0 (0s)\n=== test:e2e:electron ===\nEXIT test:e2e:electron = 0 (1s)\n=== audit ===\nEXIT audit = 0 (0s)\n=== 构建候选包（带镜像）===\nEXIT dist = 17\n=== verify:package ===\nEXIT verify:package = 0 (0s)\nALL_GREEN\n",
+    "stderr": "",
+    "log": "=== typecheck ===\nMOCK_NPM run typecheck\nEXIT typecheck = 0 (0s)\n=== lint ===\nMOCK_NPM run lint\nEXIT lint = 0 (0s)\n=== test:unit ===\nMOCK_NPM run test:unit\nEXIT test:unit = 0 (0s)\n=== test:integration ===\nMOCK_NPM run test:integration\nEXIT test:integration = 0 (0s)\n=== build ===\nMOCK_NPM run build\nEXIT build = 0 (0s)\n=== test:e2e ===\nMOCK_NPM run test:e2e\nEXIT test:e2e = 0 (0s)\n=== test:e2e:electron ===\nMOCK_NPM run test:e2e:electron\nEXIT test:e2e:electron = 0 (1s)\n=== audit ===\nMOCK_NPM run audit\nEXIT audit = 0 (0s)\n=== 构建候选包（带镜像）===\nMOCK_DIST_FAILED\nEXIT dist = 17\n=== verify:package ===\nMOCK_NPM run verify:package\nEXIT verify:package = 0 (0s)\nALL_GREEN\n"
+  },
+  "thumbnailCleanup": {
+    "imageId": "img-20260913T041304222Z-8df23eb2",
+    "thumbnailId": "thumb-20260913T041304223Z-188f87a4",
+    "beforeSuccess": true,
+    "removed": 1,
+    "contentExists": true,
+    "thumbnailExists": false,
+    "afterSuccess": false,
+    "afterError": {
+      "code": "IMAGE_DECODE_FAILED",
+      "message": "无法生成预览图",
+      "recoveryHint": "图片可能已损坏，请换一张。",
+      "detail": "Error: ENOENT: no such file or directory, open 'C:\\Users\\ylzho\\Documents\\novel\\opencode-snow-theme\\review-2026-09-13\\isolated-bm0vKF\\thumbnails\\thumb-20260913T041304223Z-188f87a4.png'"
+    }
+  },
+  "uncappedRead": {
+    "configuredMax": 4096,
+    "actualReadBytes": 65536,
+    "success": false,
+    "error": "IMAGE_CONTENT_MISMATCH"
+  },
+  "assertions": {
+    "failedDistReportedAllGreen": true,
+    "referencedThumbnailDeleted": true,
+    "cachedReadExceedsLimitBeforeRejection": true
+  }
+}

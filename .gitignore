@@ -33,3 +33,10 @@ handoff/images/
 candidate-*/
 candidate-*.zip
 candidate-*.txt
+
+# 复审/诊断夹具：内含嵌套 .git 与 .asar/.exe 构建产物，只保留文本证据
+handoff/review-*/evidence*/fixture/
+handoff/review-*/evidence*/fixture/.git/
+
+# out 目录快照归档：构建产物压缩包，内容含本机绝对路径，不入库
+handoff/**/archive/*.tar.gz

@@ -1,0 +1,39 @@
+{
+  "kind": "synthetic-review-fixture-not-release-evidence",
+  "project": "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher",
+  "evidenceDir": "d:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\handoff\\review-2026-09-14-r3\\evidence-run-sXZLwy",
+  "assertionMode": "post-fix (S1-S5): correct behavior, not defect reproduction",
+  "sourceHashes": {
+    "release-build.cjs": "452c1555e231eeaa37a1599ea9b8262b7ca5ba9616e86a22dfbd62101479d139",
+    "r5-run-suite.cjs": "3f0b8f0c507eade6b8a4ed7f5c812df1b56f7e1efccfb07f1ca841a4f10900ac",
+    "release-eligibility.cjs": "dfc1bb81774a6eeb0dd296c3cc8d1189bf6e117707f3e6cfc77e41d5b86c3b86",
+    "verify-release.cjs": "f767c1729721190c1cd0808aeca94faeef64c4b021c8bcf4c4fde78fdd54f730",
+    "candidate-manifest.cjs": "f5afc97cd05b41260d16c4ff58b15a747c9425c6d5b3a59b0b8dbd723f01ba27",
+    "release-gate.sh": "5720537844423c2f8d5824943d0d9dc9cd3ac96b339a29108f63b783753f5a95"
+  },
+  "identity": {
+    "recordBuildId": "original-build",
+    "manifestBuildId": "original-build",
+    "mismatchedRegisterExit": 1,
+    "registerExit": 0,
+    "fullVerifyExit": 0
+  },
+  "stageMarker": {
+    "coreWithoutReceiptExit": 0,
+    "corePrintsCoreGreen": true,
+    "corePrintsReleaseGreen": false,
+    "finalWithoutReceiptExit": 1
+  },
+  "malformedMachineResultRejected": true,
+  "collectorStripsOptionValues": [
+    "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\node_modules\\vitest\\vitest.mjs",
+    "list",
+    "--filesOnly",
+    "tests/unit/theme.test.ts"
+  ],
+  "registration": {
+    "packMethod": "electron-builder",
+    "reproducibleBuild": true,
+    "requiresExplicitPackMethod": true
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "scope": "Current source; synthetic fixtures only",
+  "runDir": "C:\\Users\\ylzho\\Documents\\novel\\opencode-snow-theme\\review-2026-09-13-r2\\isolated-G51tcg",
+  "cleanupRace": {
+    "imported": true,
+    "removed": 2,
+    "contentExists": false,
+    "thumbnailExists": false,
+    "readSuccess": false,
+    "readError": "IMAGE_CONTENT_MISMATCH"
+  },
+  "truncatedThumbnail": {
+    "previewSuccess": true,
+    "returnedImageDecodable": false,
+    "thumbnailBytesAfterPreview": 16,
+    "privateCopyHealthy": true
+  },
+  "testWrapper": {
+    "childStatusInjected": 23,
+    "wrapperStatus": 0,
+    "output": "exit=23 signal=none\nMOCK_TEST_FAILED\n"
+  },
+  "distFailurePropagation": {
+    "status": 17,
+    "allGreen": false,
+    "output": "=== typecheck ===\nEXIT typecheck = 0 (0s)\n=== lint ===\nEXIT lint = 0 (0s)\n=== test:unit ===\nEXIT test:unit = 0 (1s)\n=== test:integration ===\nEXIT test:integration = 0 (0s)\n=== build ===\nEXIT build = 0 (0s)\n=== test:e2e ===\nEXIT test:e2e = 0 (0s)\n=== test:e2e:electron ===\nEXIT test:e2e:electron = 0 (0s)\n=== audit ===\nEXIT audit = 0 (1s)\n=== dist ===\nEXIT dist = 17 (0s)\nSTOPPED at dist\n"
+  },
+  "candidate": {
+    "sourceCommit": "871703da2bd775a2af1a9eb464b813a57e6fb8ae",
+    "buildId": "manual-repack-20260912",
+    "sourceHasKeepContentIds": true,
+    "packageHasKeepContentIds": false,
+    "sourceHasReadThumbnail": true,
+    "packageHasReadThumbnail": false
+  }
+}

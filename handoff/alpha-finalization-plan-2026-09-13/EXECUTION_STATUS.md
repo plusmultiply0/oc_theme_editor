@@ -40,11 +40,30 @@
 | R3 | `33925dd` | 完整性检查升级为**完成集合相等**的机器校验（预期集合 + JSON 结果 + runId 绑定）；顺带修 `--require-release-eligibility` 从未被解析、`gitsha(root)` 签名、asar 异步包装、zip 条目分隔符 | 门禁 160 项全过 | 已提交 |
 | R4 | `a794c08` | `build` 提前到 `test:integration` 之前（集成与打包共用同一份 out）；删除 `prepare:out` 前置；打包前 out 快照复核 | 门禁 167 项全过（含新场景 5b3/5b4） | 已提交 |
 | S1 | `6947483` | record↔manifest/receipt **同一次构建身份**交叉校验（共享 `checkRecordBinding`；锁文件 hash 必填） | 门禁 179 项全过（含 5e 负例翻转、9b 手工改名拒绝、5e-fn 函数级负例） | 已提交 |
-| S2 | 未提交 | core 与发布级成功标记分离（`CORE_VERIFY_GREEN` / `RELEASE_GREEN`）；`ALL_GREEN` 仅在发布级只读终检真实退出 0 后输出；shell 不再自行补标记 | 门禁验证中 | 进行中 |
+| S2 | `f848d0f` | core 与发布级成功标记分离（`CORE_VERIFY_GREEN` / `RELEASE_GREEN`）；`ALL_GREEN` 仅在发布级只读终检真实退出 0 后输出；shell 不再自行补标记 | 门禁 183 项全过 | 已提交 |
 | S3 | `2cc2e31` | 机器报告 schema：缺失/非数组 `assertionResults` 失败关闭（不兜底成零项成功）；零项文件与全零报告拒绝；计数类型校验；suite 级 pending/failed 必须为 0 | 门禁 194 项全过（新增 9.18–9.23 六类畸形报告负例）；真实严格入口 212/212 通过 | 已提交 |
 | S4 | `b146d87` | 参数解析：两段式报告参数**连值一起剔除**（过滤条件不被污染）；strict 默认禁 skip（与纯函数一致），放行需显式 `--allow-skip` | 门禁 204 项全过（新增 9.24–9.28） | 已提交 |
-| S5 | 进行中 | 打包方式必须显式声明（取消 `manual-repack` 兜底默认）；`reproducibleBuild` 语义文档化 | 门禁验证中 | 进行中 |
-| S6 | 进行中 | 文档纠偏：修复矩阵、RUNBOOK 同步、删除「换会话清计数 / 关防护 / 全目录信任」类建议 | 文档核对 | 进行中 |
+| S5 | `f5710b4` | 打包方式必须显式声明（取消 `manual-repack` 兜底默认）；`reproducibleBuild` 语义文档化 | 门禁 209 项全过（新增缺 `--pack-method` 拒绝、非法值拒绝、正例登记为 `electron-builder`） | 已提交 |
+| S6 | `430a4c0` | 文档纠偏：修复矩阵、RUNBOOK 同步、删除「换会话清计数 / 关防护 / 全目录信任」类建议；r3 复现脚本语义翻转为「修复后预期」 | 文档核对完成；`reproduce-review.cjs` 实跑 27s `EXIT=0` | 已提交 |
+| S7 | `8cba0db` | S5 回归修复：两个手工拼参数的负例补 `--pack-method`；新增两条防回归（缺参拒绝、非法值拒绝，且不产出 manifest） | `candidate-manifest.test.ts` 21 tests 全过 | 已提交 |
+| 归档 | `cdd6f03` | 四轮复审与 P4 诊断工作区入库；`.gitignore` 排除夹具目录（含嵌套 `.git`、`.asar/.exe`）与 `out` 快照压缩包 | 工作树已干净 | 已提交 |
+
+**全量测试结果（2026-09-15，`OTS_TEST_TMP` 指向系统临时目录）**：
+- 当前树 `npm run test:integration`：**51 failed / 128 passed / 179**；
+  `npm run test`（含 unit）：**55 failed / 334 passed / 389**，失败**全部**在
+  `tests/integration`，unit 无失败。
+- 基线对照 `a794c08`（S1–S5 之前，同命令口径）：**55 failed / 122 passed / 177**。
+  → 当前失败数**低于**基线，差值来自新增 2 条用例通过 + S7 消除的 2 条失败；
+  剩余失败与基线同源同类，判定为**环境问题，非本轮改动引入**。
+- 失败形态：49 条 `EBUSY ... unlink <临时目录>/…/app.asar`、若干 `FILE_LOCKED`，
+  集中在 `transaction / archive-verify / main-services / main-recovery /
+  stage-idempotence / discover / electron-runtime / image-format-cycle`。
+  `OTS_TEST_TMP` 只是绕开手段，不是修复；文件锁需系统侧排查。
+
+**本轮仍未完成（如实登记）**：
+- **全量测试通过**：未达成。上述失败均为环境性文件锁（基线同源），不得以此宣称
+  测试全绿；也不得把「换临时目录重跑」当成修复。
+- **同一 buildId 完整发布链**：未执行。门禁是编排器**行为**测试（大量桩注入），不能替代真实产物；真实安装关口需当次授权，不得由本表推断发布资格。
 
 **基建（非产品）**：门禁夹具清理原为进程内 `fs.rmSync`，本机存在间歇性文件锁会
 **无限期阻塞**（实测 >9 分钟、CPU 增量 0、无子进程）。已改为**有界子进程删除**

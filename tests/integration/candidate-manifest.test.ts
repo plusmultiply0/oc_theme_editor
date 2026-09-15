@@ -313,6 +313,10 @@ describe('P2 负例：任一冻结/来源问题都必须失败且不产出成功
       record,
       '--build-id',
       'x',
+      // S5：--pack-method 是必填项（缺参会在更早的入参校验处失败），
+      // 本例要断言的是「Git 读不到时不当作干净」，故显式给出打包方式。
+      '--pack-method',
+      'electron-builder',
     ];
     const r = await runTool(root, args, {
       ...process.env,
@@ -349,11 +353,44 @@ describe('P2 负例：任一冻结/来源问题都必须失败且不产出成功
       f.manifest,
       '--candidate-dir',
       f.candidateDir,
+      // S5：--pack-method 必填，缺它会在更早的入参校验处失败、盖掉本例要断言的诊断
+      '--pack-method',
+      'electron-builder',
       '--build-id',
       'x',
     ]);
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/缺少 --build-record/);
+  });
+
+  it('S5：缺少 --pack-method → 拒绝（来源方式不能由工具替调用方猜测）', async () => {
+    const f = await makeFixture('p2-nopackmethod-');
+    // 刻意不传 --pack-method：旧实现会静默兜底为 manual-repack，把真实 builder 链
+    // 登记成手工重封（并写 reproducibleBuild=false），来源元数据因此不真实。
+    const r = await runTool(f.root, [
+      'register',
+      '--root',
+      f.root,
+      '--manifest',
+      f.manifest,
+      '--candidate-dir',
+      f.candidateDir,
+      '--build-record',
+      f.record,
+      '--build-id',
+      'x',
+    ]);
+    expect(r.status, '缺 --pack-method 必须拒绝登记').toBe(1);
+    expect(r.stderr + r.stdout).toMatch(/--pack-method/);
+    expect(fs.existsSync(f.manifest), '拒绝时不得产出成功登记').toBe(false);
+  });
+
+  it('S5：非法 --pack-method → 拒绝（只认两种声明值）', async () => {
+    const f = await makeFixture('p2-badpackmethod-');
+    const r = await runTool(f.root, [...REGISTER_ARGS(f), '--pack-method', 'zip-by-hand', '--force']);
+    expect(r.status).toBe(1);
+    expect(r.stderr + r.stdout).toMatch(/--pack-method/);
+    expect(fs.existsSync(f.manifest)).toBe(false);
   });
 
   it('构建记录 sourceCommit 与 HEAD 不符（过期记录）→ 拒绝', async () => {

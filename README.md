@@ -216,6 +216,17 @@
 日志目录：`%LOCALAPPDATA%\OpenCodeThemeSwitcher\`（按实例子目录组织）。
 发之前请自行确认里面没有你不想公开的内容——它记录的是路径与哈希，不含图片内容和你与 AI 的对话。
 
+### 中文显示成乱码时
+
+仓库里的源码、日志与工具输出统一是 **UTF-8**。如果你在 Windows PowerShell 5.1 里读到乱码，
+问题通常在**读取端按 ANSI/GBK 解码**，而不是文件坏了：
+
+- 读文件显式指定编码：`Get-Content <文件> -Encoding UTF8`（PowerShell 7、VS Code 默认就是 UTF-8）；
+- 终端里直接跑 `npm run release:build` 等命令看到乱码时，先 `chcp 65001` 把控制台代码页切到 UTF-8；
+- 工具侧已把 PowerShell 子进程的 stdout 钉成 UTF-8（`tools/ps-run.cjs`），并由
+  `tests/unit/encoding.test.ts` 守住两条规则：项目文本必须是合法 UTF-8（无 BOM/无乱码残留）、
+  不得绕过统一入口裸调 PowerShell。
+
 ## 开发命令
 
 ```bash

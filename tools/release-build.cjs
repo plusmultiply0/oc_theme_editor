@@ -46,6 +46,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+// 编码：PowerShell 子进程统一走 ps-run 入口（stdout 钉成 UTF-8），避免中文乱码
+const { runPowerShell } = require('./ps-run.cjs');
 
 const SCRIPT_ROOT = path.resolve(__dirname, '..');
 let ROOT = SCRIPT_ROOT;
@@ -294,9 +296,9 @@ function makeZip(candidateDir, zipPath) {
     '$ErrorActionPreference = "Stop"',
     `Compress-Archive -Path (Join-Path '${candidateDir.replace(/'/g, "''")}' '*') -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`,
   ].join('; ');
-  const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
-    cwd: ROOT, stdio: 'inherit', windowsHide: true,
-  });
+  // 编码：统一走 ps-run 入口（PowerShell stdout 钉成 UTF-8），
+  // 否则这个子进程的中文诊断会以 GBK 字节混进 UTF-8 日志流
+  const r = runPowerShell(psScript, { cwd: ROOT, stdio: 'inherit' });
   if (r.status !== 0) throw new Error(`生成 zip 失败（exit=${r.status}）`);
 }
 

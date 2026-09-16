@@ -43,6 +43,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+// 编码：PowerShell 子进程统一走 ps-run 入口（stdout 钉成 UTF-8），避免中文乱码
+const { runPowerShell } = require('./ps-run.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD = path.join(ROOT, 'tools', 'release-build.cjs');
@@ -157,15 +159,13 @@ function runCli(args, cwd) {
   return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-/** PowerShell Compress-Archive 真打包（与编排器 makeZip 同机制） */
+/** PowerShell Compress-Archive 真打包（与编排器 makeZip 同机制；编码统一走 ps-run） */
 function makeZipOf(dir, zipPath) {
   const ps = [
     '$ErrorActionPreference = "Stop"',
     `Compress-Archive -Path (Join-Path '${dir.replace(/'/g, "''")}' '*') -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`,
   ].join('; ');
-  return spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
-    windowsHide: true, timeout: 120000,
-  });
+  return runPowerShell(ps, { encoding: 'utf8', timeout: 120000 });
 }
 
 /** 执行编排器（夹具内；清除继承绑定变量后按场景注入 OTS_STEP_STUB）。 */

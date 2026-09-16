@@ -302,5 +302,105 @@ tests\e2e\theme-switcher.spec.ts:174:7
 但它是一处**编排意图与实际行为不一致**：要么是刻意（e2e 需要系统 Temp），
 要么是漏了。建议在 §7.6 的三条之外，**单列为待确认项**，避免后人误判。
 
+## 8. 发布链第五次尝试：推进到 `verify:release`，新阻断点
+
+提交 `60bf282`（本轮 e2e 取证）后重跑，buildId = `20260916094710-60bf282-cbc753`，
+`OTS_TEST_TMP` 指向系统盘：
+
+| 步骤 | 结果 |
+|---|---|
+| typecheck | 0（61.9s） |
+| lint | 0（8.8s） |
+| **test:unit** | **0（12.1s）** ← 229/229 |
+| build | 0（68.1s） |
+| **test:integration** | **0（234.1s）** ← 179/179 |
+| **test:e2e** | **0（40.7s）** ← **16 passed** |
+| **test:e2e:electron** | **0（8.1s）** ← 41 项检查全 `[OK]` |
+| audit | 0（3.9s）← FAIL 0 / WARN 0 |
+| dist | 0（89.7s） |
+| smoke:gui | 0（15.8s）← **E 项开关修复生效** |
+| verify-package | 0（2.3s） |
+| register | 0（3.4s） |
+| **verify:release** | **1（4.9s）** ← **STOPPED** |
+
+两条正面结论：
+
+1. **§7 的 e2e 失败确认为间歇失败**：同一条链这次 `test:e2e` **16/16 通过**
+   （36.2s），与 §7.7 的链序复刻一致。**不再把它当作确定性缺陷**。
+2. **test:e2e:electron 的 41 项检查全绿**，其中包含 D 项新增的三条：
+   ```
+   [OK] 遗留准备区已就位（独立实例，无同进程句柄）
+   [OK] 启动清理确实删除了遗留准备区（计数 >= 1） | cleaned=1
+   [OK] 遗留准备区目录已被物理删除
+   [OK] 无遗留准备区时计数为 0（不把没删掉任何东西报成清理成功） | cleaned=0
+   ```
+   D 项的修复在真实 Electron 里得到独立验证。
+
+### 8.1 新阻断点：`verify:release` 把 zip 的目录条目误判为「多出的文件」
+
+```
+[FAIL] zip 内部与候选目录逐条目一致 | zip 内多出磁盘没有的条目：resources/app.asar.unpacked/；
+       zip 内多出磁盘没有的条目：resources/app.asar.unpacked/node_modules/；
+       zip 内多出磁盘没有的条目：resources/app.asar.unpacked/node_modules/@img/
+RELEASE_VERIFY FAILED
+```
+
+**根因（已用直接读 zip 中央目录坐实）**：
+
+```
+candidate-20260916094710-60bf282-cbc753.zip
+  条目总数 = 82
+  以分隔符结尾的目录条目 = 3        ← 恰好就是报错的那三条
+    resources\app.asar.unpacked\
+    resources\app.asar.unpacked\node_modules\
+    resources\app.asar.unpacked\node_modules\@img\
+```
+
+对照 `tools/verify-release.cjs` 的两个函数：
+
+- `listFilesRecursive`（建 `diskMap`）**只收集文件** —— 目录不进 map；
+- `checkZipMatchesDir` 把 zip 条目名 `\` → `/` 归一化后直接查 `diskMap`，
+  查不到就报「zip 内多出磁盘没有的条目」。
+
+于是**每一个目录条目都必然被误报**。这是**比较口径不对称**（zip 含目录条目
+vs 磁盘侧只枚举文件），不是产物真的多文件 —— 那 3 个目录在磁盘上**确实存在**，
+只是里面到 `@img/sharp-win32-x64/` 才有文件，中间层级成了「对文件枚举不可见」的目录。
+
+**为什么以前没炸**：这是**潜伏的工具缺陷**，此前从未被触发。
+
+| zip | 条目 | 目录条目 | 结果 |
+|---|---|---|---|
+| `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip`（旧，schema/1，手工 repack） | 81 | **0** | 该检查历来通过 |
+| `candidate-20260916094710-60bf282-cbc753.zip`（新，schema/3，`electron-builder --dir`） | 82 | **3** | 首次触发 |
+
+`release-build.cjs` 改用 `electron-builder --win --dir` 直出候选目录（`:556`），
+该布局下 `resources/app.asar.unpacked/node_modules/@img/` 这类
+**「自身无文件、只有子目录」的层级**被 `Compress-Archive` 写成显式目录条目，
+而这个检查**只对着旧的手工 repack zip 验证过**。
+
+`verify-release.cjs` 最近三次改动为 `f848d0f` / `6947483` / `33925dd`，
+**均早于本轮 A–E 的改动** —— 不是本轮引入的回归。
+
+### 8.2 处置
+
+- 本轮**未改** `verify-release.cjs`：该比较口径属独立缺陷，与 N1–N5 修复无关。
+  按计划「不扩展范围」，本项**只取证与记录**，并把复现命令写清（见 8.1）。
+- 未放宽检查、未删目录条目、未改 zip 打包方式来「让门禁变绿」。
+- `ALL_GREEN` **仍未产出**，候选 `20260916094710-60bf282-cbc753` **未完成**。
+- 真实安装→应用→重启→恢复**需用户当次授权**，未执行。
+
+### 8.3 建议修法（待用户决策，二选一，均不放松判据）
+
+比较口径对称化，任选其一：
+
+1. **盘侧也枚举目录**（推荐）：让 `listFilesRecursive` 同时产出目录条目
+   （以 `/` 结尾），与 zip 的目录条目一一对应。这样「磁盘多/zip 少」
+   两个方向都能真正校验到目录层级。
+2. **比 zip 侧跳过目录条目**：忽略以 `/` 结尾的条目。改动更小，
+   但会**失去对目录层级的校验能力**（zip 里凭空多一个空目录将不被发现）。
+
+另建议补一条**回归测试**：用含「自身无文件、只有子目录」层级的夹具目录
+打 zip，断言不再产生假不一致 —— 防止同类潜伏缺陷再次逃逸。
+
 
 

@@ -331,8 +331,47 @@ async function run() {
       pendingCount === 1 && scans[0].pending[0].state === 'applied',
       pendingCount === 1 ? scans[0].pending[0].state : '',
     );
+    /*
+     * 启动清理遗留准备区（R7）。
+     *
+     * 这里必须说清楚前面几次踩过的坑，否则后人会再踩一遍：
+     *
+     * 1) 原断言 `cleaned >= 1` 是**恒假**的。它依赖「本进程前面那次 apply 留下的
+     *    `stage/<opId>/app` 能被当场删掉」。但 apply 的准备区清理是**故意异步、
+     *    且吞掉错误**的（apply.ts 注释：真机取证 2026-09-12，递归删除上百 MB
+     *    准备区在部分 Windows 环境会被安全软件逐文件扫描而阻塞几十分钟）。
+     *    于是同一进程里 asar 缓存仍持有 `stage/<opId>/app` 下的句柄，
+     *    `rm` 抛 `EBUSY` 被吞掉 → `cleaned=0`。断言与产品行为无关，只是恒假。
+     *
+     * 2) 「自己造一个 nested 目录然后期望 cleaned===1」也**不成立**：stage 目录
+     *    通常非空（还压着上一次 apply 的遗留），`rm(整个 stage)` 一样会 EBUSY，
+     *    计数依旧是 0。造一个小目录改变不了这个事实。
+     *
+     * 3) 所以正确的测法是：**验证 cleanAllStages 的契约本身**，而不是跟同进程的
+     *    句柄竞争。用一个独立的实例目录（本进程从未在此 staging 过，因此没有
+     *    残留句柄），在里面造出「上一次运行遗留的 stage 产物」，再确认：
+     *      - 它被真的删掉，且计数为 1（计数口径＝确实删掉的目录数）；
+     *      - 再调一次返回 0（不会把「什么都没删」报成清理成功）。
+     *
+     * 跨进程的真实场景另有用例覆盖：`node tools/n5-crossproc-cleanup.cjs`
+     * （子进程扮演「下一次启动」，验证遗留准备区确实被删掉并计数为 1）。
+     */
+    const orphanInstanceId = 'e2e-orphan-instance';
+    const orphanLayout = core.layout.runtimeDirs(runtimeRoot, orphanInstanceId);
+    await core.layout.ensureDirs(orphanLayout);
+    const orphanOp = path.join(orphanLayout.stageDir, 'op-e2e-orphan');
+    fs.mkdirSync(path.join(orphanOp, 'app', 'out', 'main'), { recursive: true });
+    fs.writeFileSync(path.join(orphanOp, 'app', 'package.json'), '{"name":"orphan"}');
+    fs.writeFileSync(path.join(orphanOp, 'staged.asar'), 'partial-staged');
+    check('遗留准备区已就位（独立实例，无同进程句柄）', fs.existsSync(orphanLayout.stageDir), orphanLayout.stageDir);
+
     const cleaned = await core.recovery.cleanAllStages(runtimeRoot);
-    check('启动清理遗留准备区', cleaned >= 1, `cleaned=${cleaned}`);
+    // 本实例下只有一个 stage（orphan），所以计数应为 1；不能再假设一定是 1，
+    // 因为同进程的 apply 遗留可能恰好在此时被后台删除而多计 —— 用下界断言更稳。
+    check('启动清理确实删除了遗留准备区（计数 >= 1）', cleaned >= 1, `cleaned=${cleaned}`);
+    check('遗留准备区目录已被物理删除', !fs.existsSync(orphanLayout.stageDir), orphanLayout.stageDir);
+    const cleanedAgain = await core.recovery.cleanAllStages(runtimeRoot);
+    check('无遗留准备区时计数为 0（不把没删掉任何东西报成清理成功）', cleanedAgain === 0, `cleaned=${cleanedAgain}`);
 
     return { cases: CASES };
   } finally {

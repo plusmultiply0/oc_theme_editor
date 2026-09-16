@@ -49,6 +49,7 @@
     "verify:package": "node tools/verify-package.cjs",
     "verify:release": "node tools/verify-release.cjs",
     "test:gate": "node tools/test-release-gate.cjs",
+    "test:cleanup-semantics": "node tools/n5-crossproc-cleanup.cjs",
     "dist": "npm run build && electron-builder --win --dir",
     "smoke": "electron tools/smoke-main.cjs",
     "audit": "node tools/audit.cjs"

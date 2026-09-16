@@ -1,0 +1,64 @@
+{
+  "recordedAt": "2026-09-16T05:38:01.501Z",
+  "commit": "bf4a68fa41fe815455fb9c501b779d2e3b1f9c2d",
+  "commitShort": "bf4a68f",
+  "node": "v22.22.2",
+  "platform": "win32",
+  "arch": "x64",
+  "versions": {
+    "vitest": "3.2.7",
+    "electron": "36.9.5",
+    "typescript": "5.9.3"
+  },
+  "env": {
+    "TEMP": "C:\\Users\\ylzho\\AppData\\Local\\Temp",
+    "TMP": "C:\\Users\\ylzho\\AppData\\Local\\Temp",
+    "osTmpdir": "C:\\Users\\ylzho\\AppData\\Local\\Temp"
+  },
+  "concurrency": {
+    "integrationArgs": [
+      "--pool=forks",
+      "--maxWorkers=1",
+      "--no-file-parallelism"
+    ],
+    "source": "tools/release-build.cjs INTEGRATION_CONCURRENCY_ARGS (任务 B 受控并发)"
+  },
+  "outPresent": true,
+  "outMain": true,
+  "outWorker": true,
+  "testFiles": {
+    "integration": [
+      "archive-verify.test.ts",
+      "candidate-manifest.test.ts",
+      "discover.test.ts",
+      "electron-runtime.test.ts",
+      "image-content-fixed.test.ts",
+      "image-format-cycle.test.ts",
+      "image-import-formats.test.ts",
+      "image-read-limits.test.ts",
+      "main-recovery.test.ts",
+      "main-services.test.ts",
+      "pack-integrity.test.ts",
+      "stage-idempotence.test.ts",
+      "thumbnail-retention.test.ts",
+      "transaction.test.ts",
+      "verify-real-install.test.ts"
+    ],
+    "unit": [
+      "archive-io-window.test.ts",
+      "image-animated.test.ts",
+      "image-formats.test.ts",
+      "image-probe.test.ts",
+      "pack-worker-lifecycle.test.ts",
+      "paths.test.ts",
+      "release-eligibility.test.ts",
+      "run-suite-wrapper.test.ts",
+      "schema.test.ts",
+      "smoke-packaged.test.ts",
+      "surfaces.test.ts",
+      "theme.test.ts",
+      "ui-logic.test.ts",
+      "verify-release.test.ts"
+    ]
+  }
+}

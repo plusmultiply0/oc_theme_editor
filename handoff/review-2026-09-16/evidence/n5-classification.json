@@ -1,0 +1,1640 @@
+{
+  "generatedAt": "2026-09-16T06:19:26.035Z",
+  "commit": "bf4a68fa41fe815455fb9c501b779d2e3b1f9c2d",
+  "machineResult": {
+    "numTotalTestSuites": 58,
+    "numTotalTests": 179,
+    "numPassedTests": 179,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "counts": {
+    "total": 179,
+    "passed": 179,
+    "failed": 0,
+    "pending": 0,
+    "todo": 0,
+    "skipped": 0
+  },
+  "byCategory": {
+    "passed": 179
+  },
+  "errnoCounts": {},
+  "needsAttention": [],
+  "cleanupOnly": [],
+  "cases": [
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "逐条完整性校验 健康归档全部通过",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "逐条完整性校验 非白名单条目被改动（字节级）→ 按头部完整性发现，绝不放行",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "逐条完整性校验 共享 offset 且长度不同的条目被识别（事故的直接形态）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "脚本可解析检查（哈希不能证明内容是好的） 截断的 CJS 文件即使 hash 自洽也会被拦下（本次事故形态）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "脚本可解析检查（哈希不能证明内容是好的） 正常 ESM 不会被 CJS 包装器误判为损坏",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "脚本可解析检查（哈希不能证明内容是好的） 非法 JSON 被拦下",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "接管基线比对（输入不可信必须拒绝） 首次接管以接手时状态为基线；之后被外部改动的归档必须拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "接管基线比对（输入不可信必须拒绝） 白名单条目允许与基线不同（它们本来就是要被替换的）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "端到端：损坏输入不能一路走到 applied 首次接管：健康安装正常走完（基线以接手时状态为准）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "端到端：损坏输入不能一路走到 applied 非首次接管：安装被外部改动后拒绝，且目标 hash 不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "端到端：损坏输入不能一路走到 applied 输入本身已损坏（内容换掉但长度不变）时，第一次接管也会被脚本解析检查拦下",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "重打包结果校验（verifyPackedResult） unpacked 集合与原始不一致时拒绝，一致时通过",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "重打包结果校验（verifyPackedResult） 白名单条目内容与预期不符时拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "真实安装上的合法形态不得误判（恢复后体检 2026-09-11） 空文件（size=0、块=[sha256(空)]）与相邻文件共享 offset 是合法产物",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "真实安装上的合法形态不得误判（恢复后体检 2026-09-11） 顶层 return 是合法 CJS（mkdirp/bin/cmd.js 形态），不得判为损坏",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/archive-verify.test.ts",
+      "test": "真实安装上的合法形态不得误判（恢复后体检 2026-09-11） 行中 export（注释后跟 export）不被误判为损坏 —— ESM 不可用时按无法判定跳过",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 正例：小夹具真实注册 → 核验，Git 仍干净、HEAD 未变 register 成功写入忽略目录内的 manifest，且不弄脏工作树、不改 HEAD",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 正例：小夹具真实注册 → 核验，Git 仍干净、HEAD 未变 登记目标已存在时默认拒绝覆盖",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 正例：小夹具真实注册 → 核验，Git 仍干净、HEAD 未变 --force 才允许覆盖已有登记",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 源码改脏 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 新增未跟踪源码/脚本 → 拒绝（不能统一忽略 ??）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 未跟踪内容若在豁免路径（candidate-*/、handoff/）内 → 不阻断",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 Git 不可用（非仓库）→ 明确失败，不当作干净",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 缺少 --manifest → 明确失败（不回落根目录历史 manifest）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 缺少构建记录 → 拒绝（不接受「旧 out 就代表刚构建」）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 S5：缺少 --pack-method → 拒绝（来源方式不能由工具替调用方猜测）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 S5：非法 --pack-method → 拒绝（只认两种声明值）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 构建记录 sourceCommit 与 HEAD 不符（过期记录）→ 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 构建记录锁文件 hash 不符 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 当前 out 与构建记录不一致（登记的不是记录那次构建）→ 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 空/旧格式构建记录 → 拒绝（R1：旧 /1 自引用记录不得入册）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 build-record/1 旧记录 → 拒绝并点名自引用原因（R1）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 R2 负例：记录重复步骤 → 登记拒绝（Map 后项覆盖前项不再容忍）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 R2 负例：步骤状态非法 → 登记拒绝（不得以缺字段隐含 passed）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 R2 负例：测试注入环境 → 登记拒绝（mock 成功不得当作真实通过）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P2 负例：任一冻结/来源问题都必须失败且不产出成功登记 候选目录不存在完整候选 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/candidate-manifest.test.ts",
+      "test": "P4 A：worker 事件循环在异步等待期间保持可响应 异步等待子进程时定时器持续触发，且不阻塞 IPC（最大延迟远小于 RPC 60s 上限）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 识别已验证版本为 supported，并给出归档指纹",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 未验证版本判为 unknown，并给出原因，且不会被当成可应用目标",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 同名归档但包名不认识时判为 unsupported",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 目录里没有归档时判为 unknown，不猜测兼容",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 路径不存在时识别直接失败",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 候选位置只来自明确登记，不做全盘搜索",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "目标识别（T30、T31） 按候选位置扫描可发现目标，不存在的目录不出现在结果里",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "卸载登记表的过滤（回归：真机上扫出满屏无关软件） 只把名称相关的登记项当候选，无关软件一个都不扫",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "卸载登记表的过滤（回归：真机上扫出满屏无关软件） 登记值里的引号与尾部反斜杠会被清掉",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "卸载登记表的过滤（回归：真机上扫出满屏无关软件） 解析器按子键分组，认得出 DisplayName 与 InstallLocation",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "卸载登记表的过滤（回归：真机上扫出满屏无关软件） 目录里没有归档的候选不算「未通过」，只计入已检查位置",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "归档只读访问（T31、T36） 能列出归档条目并读到 HTML 入口",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "归档只读访问（T31、T36） 归档被改写后指纹随之变化，可用于提交前复核（T37）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "应用前预检（T32、T33） 目标正在运行时拒绝，并提示用户自行退出",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "应用前预检（T32、T33） 无法确认进程状态时按「未退出」处理，不冒险写入",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "应用前预检（T32、T33） 磁盘空间不足时在开始写入前拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "应用前预检（T32、T33） 目录不可写时拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "应用前预检（T32、T33） 预检通过时报告归档大小与所需空间",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/discover.test.ts",
+      "test": "应用前预检（T32、T33） 所需空间覆盖备份、staged 与临时文件三份开销",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/electron-runtime.test.ts",
+      "test": "真实 Electron 主进程闭环（R1、R7、R8） 使用 original-fs 的物理归档 I/O，完成 识别→应用→恢复 全链路",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "源图与已确认内容解绑 导入后替换源图：内容仍是导入时那份，应用写进安装的也是它",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "源图与已确认内容解绑 导入后删除源图：照样能准备与应用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "源图与已确认内容解绑 私有副本被改一个字节：拒绝使用，安装 hash 不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "源图与已确认内容解绑 私有副本被删除：拒绝应用，安装 hash 不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "准备记录与内容绑定 准备记录带上内容指纹，且与导入返回的 hash 一致",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "准备记录与内容绑定 旧准备记录（无 contentHash）失效：拒绝应用且安装不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "读取上限与失败清理 选图之后源文件变大：按上限读取，导入直接拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "读取上限与失败清理 导入失败时清掉自己产生的副本与缩略图，不留半个文件",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-content-fixed.test.ts",
+      "test": "缓存清理只动本工具自己的目录 保留被引用的副本，删掉没人引用的；不递归进用户目录",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-format-cycle.test.ts",
+      "test": "格式轮换闭环（合成安装） .jfif → .png → .webp → 同图 no-op → 恢复上一主题 → 恢复首次接管",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "JPEG 别名：选图入口 全部别名（含大写与中文名）都能选中并成功导入，实际格式 jpeg",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "JPEG 别名：选图入口 对话框与主进程校验用同一份扩展名集合",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "JPEG 别名：选图入口 取消选择不产生记录，也不影响已登记的图片",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "JPEG 别名：拖拽入口 jfif / JFIF / jpe 走 importData 也能导入，格式 enum 仍是 jpeg",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "JPEG 别名：拖拽入口 两个入口对同一份字节给出相同结论",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "后缀与实际内容不一致 PNG 内容命名为 .jpg：导入成功、按实际内容处理并给出说明",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "后缀与实际内容不一致 未登记的扩展名直接拒绝（扩展名只用于筛选）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "异常输入必须被拒绝，且不产生可应用状态 文本伪装成 jfif → 中文错误，且后续生成不可用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "异常输入必须被拒绝，且不产生可应用状态 SVG 伪装成 jfif → 中文错误，且后续生成不可用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "异常输入必须被拒绝，且不产生可应用状态 截断的 JPEG → 中文错误，且后续生成不可用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "异常输入必须被拒绝，且不产生可应用状态 空文件 → 中文错误，且后续生成不可用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "异常输入必须被拒绝，且不产生可应用状态 超限图片在读完之前就被拒（选图与拖拽都拒）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "异常输入必须被拒绝，且不产生可应用状态 拖拽入口对异常内容同样拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "原有格式不回归 PNG（含透明）与 WebP 仍可导入",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-import-formats.test.ts",
+      "test": "原有格式不回归 sharp 不产 JFIF 标记这一事实本身也要成立（样本构造的前提）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "readCapped：短读与读取量（R4） 底层每次只给 1 字节（极端短读）时，文件仍被完整读出，不误判 EOF",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "readCapped：短读与读取量（R4） 副本被换成 64 KiB 时，实际读取不超过确认字节数 + 1，且仍以 IMAGE_CONTENT_MISMATCH 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "probeImageBytes：产品级限额（R4） 超限像素在 raw 分配前被拒绝（IMAGE_TOO_LARGE）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "probeImageBytes：产品级限额（R4） 默认限额下正常小图解码成功",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "previewDataUrl：回退源与缩略图限额（R4） 未固定记录的源文件预览与导入共用限制：超限像素一致拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "previewDataUrl：回退源与缩略图限额（R4） 未固定记录的源文件预览：限额内正常成功",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "previewDataUrl：回退源与缩略图限额（R4） 缩略图被换成超大文件：按异常处理回退重建，预览仍成功且缩略图恢复",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/image-read-limits.test.ts",
+      "test": "previewDataUrl：回退源与缩略图限额（R4） 缩略图被换成非 PNG 内容：回退重建成功",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "启动恢复服务（R7） bootstrap 会扫描到未完成事务并给出可判定的状态与可执行动作",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "启动恢复服务（R7） 目标处于中间状态时判为 needs_recovery 并阻断后续 apply",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "启动恢复服务（R7） 未生效的事务按事实落成 failed，之后不再阻断",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "启动恢复服务（R7） bootstrap 会清掉残留准备区，但不碰备份与事务日志",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "手动指定安装目录（R6） 登记一个包含归档的目录后，它成为可操作目标",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "手动指定安装目录（R6） 登记不认识的目录时返回具体原因，而不是含糊成功",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "手动指定安装目录（R6） 登记未知版本时给出「未经验证」而不是当成可用目标",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-recovery.test.ts",
+      "test": "手动指定安装目录（R6） apply 闸门：存在阻断性未完成事务时，写入在进入事务之前就被拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 识别出合成安装，并给出可核对的扫描范围",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 选择并导入图片后拿到尺寸、哈希与代表色，原图保持不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 拖拽导入只接收内容与文件名，不接收路径",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 生成主题时返回 token、CSS 与逐条可读性报告，且预览与写入同源",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 用户指定的主色读不清时，报告如实判不合格并阻断进入应用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 准备阶段产出摘要但不改动目标，应用后才写入归档",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 应用后可列出原版与上一主题，恢复上一主题回到应用前的指纹",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "主进程服务：识别 → 生成 → 准备 → 应用 → 恢复 重复点击应用不会开出第二个事务",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/main-services.test.ts",
+      "test": "未验证目标 版本不在白名单时识别为 unknown，准备阶段直接拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 同一逻辑路径下的两个不同版本依赖，重打包后各自完整、不共享 offset",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 顺序反过来也一样（去重方向不影响结果）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 即使长度相同、内容不同也不会互相覆盖",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 内容完全相同的两个文件仍可安全去重，读回内容与 size 正确",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 开发项目 cwd 里存在同名文件时不再污染结果（在仓库根运行本测试即覆盖此场景）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 在干净的临时 cwd 下派生真实工作进程，结果一致",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/pack-integrity.test.ts",
+      "test": "打包内容来源（事故 F1） 事故复现脚本仍能复现依赖库缺陷 —— 证明修复靠的是隔离 cwd，不是改库",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "连续换图（A→B→C） 每次都成功：HTML 链接始终恰好一个，图片更新，白名单外条目不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "连续换图（A→B→C） 同图重复应用（C→C）走 no-op：不改写归档、不新增事务",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 正常注入通过",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 缺少本工具链接 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 重复链接 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） href 不正确 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 链接不在 head 内（在锚点之后）→ 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 锚点缺失 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 注释里的伪 link 不算数：只有注释版时必须拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 注释里的伪 link 不影响真实注入的判定",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 属性写法容错：单引号、大小写、无引号、多余空白、去 ./ 都认",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 链接在 head 之前 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 链接在 body 里 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 缺少闭合 head（连锚点都没有）→ 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 有 </head> 但缺开头 <head> → 拒绝（head 区间分支）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 单引号写法的重复链接 → 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 标记冲突（出现两次）→ 拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 重复注入三次不丢内容：单行 HTML（注入行与前面内容同一行）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 重复注入三次不丢内容：多行 HTML（</head> 自成一行，真实安装的形态）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/stage-idempotence.test.ts",
+      "test": "HTML 结构性门禁（替换「HTML 必须变化」） 官方自己的样式链接并存时不受影响（只数本工具那一条）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "cleanOrphanCaches：在用文件保留（R3） 清理后活跃 content 与 thumbnail 都保留，孤儿被删，预览仍成功",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "cleanOrphanCaches：在用文件保留（R3） keep 引用的 imageId（跨重启、内存无 record）：content 保留，thumb 允许清理",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "cleanOrphanCaches：在用文件保留（R3） 清理与导入交错：已登记记录（导入进行中）的文件不被清理",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "cleanOrphanCaches：在用文件保留（R3） S2 确定性交错：清理 readdir 挂起期间完成导入的图片不被误删",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "previewDataUrl：回退与错误语义（R3） 缩略图文件被删后，预览从已校验私有副本回退重建，并恢复缩略图",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "previewDataUrl：回退与错误语义（R3） 缩略图被换坏文件后，预览回退成功且不返回坏内容",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "previewDataUrl：回退与错误语义（R3） 私有副本丢失：报 IMAGE_CONTENT_MISMATCH（缓存/副本语义），不是「图片已损坏」",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "previewDataUrl：回退与错误语义（R3） 私有副本被改动：拒绝使用（IMAGE_CONTENT_MISMATCH），回显不复读旧缓存",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "readThumbnail 完整性校验（S4） 截断但保留文件头的缩略图：拒绝缓存、回退重建，返回的 data URL 真实可解码",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "readThumbnail 完整性校验（S4） metadata 可读但像素数据被截断的缩略图：同样拒绝并回退",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "readThumbnail 完整性校验（S4） 超大尺寸 PNG 冒充缩略图：拒绝缓存并回退重建出合规缩略图",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/thumbnail-retention.test.ts",
+      "test": "readThumbnail 完整性校验（S4） 缩略图损坏且私有副本也损坏：明确失败，不把坏 data URL 当成功",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "正常闭环（T34–T42） 应用后归档被替换、白名单外条目不变、unpacked 标记保留",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "正常闭环（T34–T42） HTML 注入幂等：换主题不会累积多条 link",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "正常闭环（T34–T42） 重复应用同一主题为 no-op，不产生写入",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "正常闭环（T34–T42） 应用 → 换主题 → 恢复上一主题 → 恢复首次接管快照，逐步核对 hash",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "正常闭环（T34–T42） 恢复是新操作而不是撤销历史：历史记录不被改写",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） stage 失败：安装不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 磁盘不足：写入前拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 目标运行中：拒绝应用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 备份 hash 校验失败：安装不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 提交前目标被改动：拒绝并停在原状态",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 提交中断：目标保持原 hash，不出现半成品",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 提交后日志写入失败：不盲目回滚，标记为需恢复",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 事务日志写入失败：安装未被修改",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 损坏的 manifest 被识别，不会被当成有效记录",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 同时两次 apply：第二次被锁拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） apply 与 restore 并发：restore 被锁拒绝",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 启动遇到未完成事务：按磁盘事实判定状态",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 版本变化后拒绝恢复",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 首次接管时目标已被改动 → 原版不可确认，原版入口被禁用",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 首次接管时目标「没有本工具标记」也不等于原版：证据不足一律降级（R2 回归）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 旧元数据里「靠标记缺失推断的原版」会被迁移降级，并留一份 .bak（R2 迁移）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 来源不明的第三方主题层：准备阶段直接拒绝，不自动覆盖（R3）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "故障注入（7.3） 主题内容指纹可用于重复应用判定",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "准备区清理不参与结果（真机取证 2026-09-12） 清理挂起时应用仍然正常返回（不会被拖在 100%）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "原版证据的登记与迁移（R2） 登记出厂指纹后，命中指纹的旧记录会被升级为有证据的原版",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "原版证据的登记与迁移（R2） 指纹表为空时不冒充原版（默认行为）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "备份健康标记与恢复（事故 F3） 恢复前会检查备份健康度，已知故障快照被拒绝且目标不变",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "备份健康标记与恢复（事故 F3） 应用成功后创建的备份被标记为已知健康",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/transaction.test.ts",
+      "test": "备份健康标记与恢复（事故 F3） 健康标记缺失的旧记录按 unverified 处理（迁移）",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/verify-real-install.test.ts",
+      "test": "verify-real-install：图片核验必须真实解码 完整 JPEG：识别与解码两项都通过，退出码 0",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/verify-real-install.test.ts",
+      "test": "verify-real-install：图片核验必须真实解码 只剩文件头的残图：解码项失败，退出码非 0",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/verify-real-install.test.ts",
+      "test": "verify-real-install：图片核验必须真实解码 期望哈希不符时退出码非 0",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    },
+    {
+      "file": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/integration/verify-real-install.test.ts",
+      "test": "verify-real-install：图片核验必须真实解码 期望尺寸不符时退出码非 0",
+      "category": "passed",
+      "status": "passed",
+      "errnos": [],
+      "cleanupErrors": [],
+      "message": ""
+    }
+  ]
+}

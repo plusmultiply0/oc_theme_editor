@@ -1,0 +1,921 @@
+
+> opencode-theme-switcher@0.1.0-alpha.1 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher[39m
+
+[90mstdout[2m | tests/integration/pack-integrity.test.ts[2m > [22m[2m打包内容来源（事故 F1）[2m > [22m[2m同一逻辑路径下的两个不同版本依赖，重打包后各自完整、不共享 offset
+[22m[39mCLEANUP_WARN C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-pack-ots-pack-case--9OHBNc 未删除
+
+[90mstdout[2m | tests/integration/pack-integrity.test.ts[2m > [22m[2m打包内容来源（事故 F1）[2m > [22m[2m顺序反过来也一样（去重方向不影响结果）
+[22m[39mCLEANUP_WARN C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-pack-ots-pack-case--ngXIaS 未删除
+
+ [32m✓[39m tests/integration/image-import-formats.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 1512[2mms[22m[39m
+   [33m[2m✓[22m[39m JPEG 别名：选图入口[2m > [22m全部别名（含大写与中文名）都能选中并成功导入，实际格式 jpeg [33m 675[2mms[22m[39m
+   [33m[2m✓[22m[39m JPEG 别名：拖拽入口[2m > [22mjfif / JFIF / jpe 走 importData 也能导入，格式 enum 仍是 jpeg [33m 370[2mms[22m[39m
+[90mstdout[2m | tests/integration/pack-integrity.test.ts[2m > [22m[2m打包内容来源（事故 F1）[2m > [22m[2m即使长度相同、内容不同也不会互相覆盖
+[22m[39mCLEANUP_WARN C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-pack-ots-pack-samesize--xkGOm0 未删除
+
+[90mstdout[2m | tests/integration/pack-integrity.test.ts[2m > [22m[2m打包内容来源（事故 F1）[2m > [22m[2m内容完全相同的两个文件仍可安全去重，读回内容与 size 正确
+[22m[39mCLEANUP_WARN C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-pack-ots-pack-dup--iI2kRO 未删除
+
+ [31m❯[39m tests/integration/stage-idempotence.test.ts [2m([22m[2m20 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[33m 3446[2mms[22m[39m
+[31m   [31m×[31m 连续换图（A→B→C）[2m > [22m每次都成功：HTML 链接始终恰好一个，图片更新，白名单外条目不变[39m[33m 1805[2mms[22m[39m
+[31m     → 第 1 次应用失败：FILE_LOCKED 目标文件被占用，替换失败: expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-UBOz70\install\resources\app.asar'[39m
+[31m   [31m×[31m 连续换图（A→B→C）[2m > [22m同图重复应用（C→C）走 no-op：不改写归档、不新增事务[39m[33m 1589[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-00lbl6\install\resources\app.asar'[39m
+[31m   [31m×[31m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m正常注入通过[39m[32m 12[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-idem-UKLYAM\instances\c3d5503601041eea\backups\previous\previous-2026-09-15T00-01-44-986Z.asar'[39m
+[31m   [31m×[31m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m缺少本工具链接 → 拒绝[39m[32m 25[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-idem-ddLr7Q\instances\1e6c55b3010432dc\stage\op-20260915T000142416Z-ytodyl\staged.asar'[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m重复链接 → 拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22mhref 不正确 → 拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m链接不在 head 内（在锚点之后）→ 拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m锚点缺失 → 拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m注释里的伪 link 不算数：只有注释版时必须拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m注释里的伪 link 不影响真实注入的判定[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m属性写法容错：单引号、大小写、无引号、多余空白、去 ./ 都认[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m链接在 head 之前 → 拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m链接在 body 里 → 拒绝[32m 0[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m缺少闭合 head（连锚点都没有）→ 拒绝[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m有 </head> 但缺开头 <head> → 拒绝（head 区间分支）[32m 0[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m单引号写法的重复链接 → 拒绝[32m 0[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m标记冲突（出现两次）→ 拒绝[32m 0[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m重复注入三次不丢内容：单行 HTML（注入行与前面内容同一行）[32m 3[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m重复注入三次不丢内容：多行 HTML（</head> 自成一行，真实安装的形态）[32m 1[2mms[22m[39m
+   [32m✓[39m HTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m官方自己的样式链接并存时不受影响（只数本工具那一条）[32m 0[2mms[22m[39m
+[90mstdout[2m | tests/integration/pack-integrity.test.ts[2m > [22m[2m打包内容来源（事故 F1）[2m > [22m[2m开发项目 cwd 里存在同名文件时不再污染结果（在仓库根运行本测试即覆盖此场景）
+[22m[39mCLEANUP_WARN C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-pack-ots-pack-case--jcYLtP 未删除
+
+ [32m✓[39m tests/integration/thumbnail-retention.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1207[2mms[22m[39m
+[90mstdout[2m | tests/integration/pack-integrity.test.ts[2m > [22m[2m打包内容来源（事故 F1）[2m > [22m[2m在干净的临时 cwd 下派生真实工作进程，结果一致
+[22m[39mCLEANUP_WARN C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-pack-ots-pack-real--pVieLY 未删除
+
+ [31m❯[39m tests/integration/image-format-cycle.test.ts [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 5019[2mms[22m[39m
+[31m   [31m×[31m 格式轮换闭环（合成安装）[2m > [22m.jfif → .png → .webp → 同图 no-op → 恢复上一主题 → 恢复首次接管[39m[33m 5016[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-cycle-gJYaK0\instances\bc2b538601043e9b\backups\previous\previous-2026-09-15T00-01-45-858Z.asar'[39m
+ [32m✓[39m tests/integration/pack-integrity.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 6699[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m同一逻辑路径下的两个不同版本依赖，重打包后各自完整、不共享 offset [33m 1156[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m顺序反过来也一样（去重方向不影响结果） [33m 816[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m即使长度相同、内容不同也不会互相覆盖 [33m 768[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m内容完全相同的两个文件仍可安全去重，读回内容与 size 正确 [33m 1040[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m开发项目 cwd 里存在同名文件时不再污染结果（在仓库根运行本测试即覆盖此场景） [33m 1013[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m在干净的临时 cwd 下派生真实工作进程，结果一致 [33m 766[2mms[22m[39m
+   [33m[2m✓[22m[39m 打包内容来源（事故 F1）[2m > [22m事故复现脚本仍能复现依赖库缺陷 —— 证明修复靠的是隔离 cwd，不是改库 [33m 1138[2mms[22m[39m
+ [32m✓[39m tests/integration/image-read-limits.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 568[2mms[22m[39m
+ [32m✓[39m tests/integration/verify-real-install.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 7162[2mms[22m[39m
+   [33m[2m✓[22m[39m verify-real-install：图片核验必须真实解码[2m > [22m完整 JPEG：识别与解码两项都通过，退出码 0 [33m 3314[2mms[22m[39m
+   [33m[2m✓[22m[39m verify-real-install：图片核验必须真实解码[2m > [22m只剩文件头的残图：解码项失败，退出码非 0 [33m 1184[2mms[22m[39m
+   [33m[2m✓[22m[39m verify-real-install：图片核验必须真实解码[2m > [22m期望哈希不符时退出码非 0 [33m 1577[2mms[22m[39m
+   [33m[2m✓[22m[39m verify-real-install：图片核验必须真实解码[2m > [22m期望尺寸不符时退出码非 0 [33m 1084[2mms[22m[39m
+ [31m❯[39m tests/integration/archive-verify.test.ts [2m([22m[2m16 tests[22m[2m | [22m[31m7 failed[39m[2m)[22m[33m 7596[2mms[22m[39m
+   [32m✓[39m 逐条完整性校验[2m > [22m健康归档全部通过[32m 82[2mms[22m[39m
+   [32m✓[39m 逐条完整性校验[2m > [22m非白名单条目被改动（字节级）→ 按头部完整性发现，绝不放行[32m 61[2mms[22m[39m
+   [32m✓[39m 逐条完整性校验[2m > [22m共享 offset 且长度不同的条目被识别（事故的直接形态）[32m 40[2mms[22m[39m
+[31m   [31m×[31m 脚本可解析检查（哈希不能证明内容是好的）[2m > [22m截断的 CJS 文件即使 hash 自洽也会被拦下（本次事故形态）[39m[33m 702[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-Uob9pk\install\resources\app.asar'[39m
+   [32m✓[39m 脚本可解析检查（哈希不能证明内容是好的）[2m > [22m正常 ESM 不会被 CJS 包装器误判为损坏[32m 44[2mms[22m[39m
+[31m   [31m×[31m 脚本可解析检查（哈希不能证明内容是好的）[2m > [22m非法 JSON 被拦下[39m[33m 706[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-WNPBqD\install\resources\app.asar'[39m
+   [32m✓[39m 接管基线比对（输入不可信必须拒绝）[2m > [22m首次接管以接手时状态为基线；之后被外部改动的归档必须拒绝[32m 33[2mms[22m[39m
+[31m   [31m×[31m 接管基线比对（输入不可信必须拒绝）[2m > [22m白名单条目允许与基线不同（它们本来就是要被替换的）[39m[33m 653[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-rjRJ2O\install\resources\app.asar'[39m
+[31m   [31m×[31m 端到端：损坏输入不能一路走到 applied[2m > [22m首次接管：健康安装正常走完（基线以接手时状态为准）[39m[33m 1979[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-iiB0Ky\install\resources\app.asar'[39m
+[31m   [31m×[31m 端到端：损坏输入不能一路走到 applied[2m > [22m非首次接管：安装被外部改动后拒绝，且目标 hash 不变[39m[33m 1619[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-verify-runtime-NTP0Xk\instances\9780b49901043e6e\stage\op-20260915T000146636Z-qhxbx1\staged.asar'[39m
+[31m   [31m×[31m 端到端：损坏输入不能一路走到 applied[2m > [22m输入本身已损坏（内容换掉但长度不变）时，第一次接管也会被脚本解析检查拦下[39m[33m 740[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-G57IWg\install\resources\app.asar'[39m
+   [32m✓[39m 重打包结果校验（verifyPackedResult）[2m > [22munpacked 集合与原始不一致时拒绝，一致时通过[32m 129[2mms[22m[39m
+   [32m✓[39m 重打包结果校验（verifyPackedResult）[2m > [22m白名单条目内容与预期不符时拒绝[32m 47[2mms[22m[39m
+   [32m✓[39m 真实安装上的合法形态不得误判（恢复后体检 2026-09-11）[2m > [22m空文件（size=0、块=[sha256(空)]）与相邻文件共享 offset 是合法产物[32m 38[2mms[22m[39m
+   [32m✓[39m 真实安装上的合法形态不得误判（恢复后体检 2026-09-11）[2m > [22m顶层 return 是合法 CJS（mkdirp/bin/cmd.js 形态），不得判为损坏[32m 42[2mms[22m[39m
+[31m   [31m×[31m 真实安装上的合法形态不得误判（恢复后体检 2026-09-11）[2m > [22m行中 export（注释后跟 export）不被误判为损坏 —— ESM 不可用时按无法判定跳过[39m[33m 676[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-JTr2iz\install\resources\app.asar'[39m
+ [31m❯[39m tests/integration/main-services.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[33m 7706[2mms[22m[39m
+   [32m✓[39m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m识别出合成安装，并给出可核对的扫描范围[32m 117[2mms[22m[39m
+   [32m✓[39m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m选择并导入图片后拿到尺寸、哈希与代表色，原图保持不变[32m 129[2mms[22m[39m
+   [32m✓[39m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m拖拽导入只接收内容与文件名，不接收路径[32m 90[2mms[22m[39m
+   [32m✓[39m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m生成主题时返回 token、CSS 与逐条可读性报告，且预览与写入同源[32m 142[2mms[22m[39m
+[31m   [31m×[31m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m用户指定的主色读不清时，报告如实判不合格并阻断进入应用[39m[33m 772[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-zWxobY\install\resources\app.asar'[39m
+[31m   [31m×[31m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m准备阶段产出摘要但不改动目标，应用后才写入归档[39m[33m 1721[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-sewyWQ\instances\d1887d04010442af\stage\op-20260915T000143830Z-bhn4x4\staged.asar'[39m
+[31m   [31m×[31m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m应用后可列出原版与上一主题，恢复上一主题回到应用前的指纹[39m[33m 2050[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-tdPSp9\instances\c5fe820601043003\backups\pre-restore\pre-restore-2026-09-15T00-01-46-748Z.asar'[39m
+[31m   [31m×[31m 主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m重复点击应用不会开出第二个事务[39m[33m 1887[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-9WY2au\install\resources\app.asar'[39m
+[31m   [31m×[31m 未验证目标[2m > [22m版本不在白名单时识别为 unknown，准备阶段直接拒绝[39m[33m 794[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-my8Cb7\install\resources\app.asar'[39m
+ [31m❯[39m tests/integration/main-recovery.test.ts [2m([22m[2m8 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[33m 2713[2mms[22m[39m
+[31m   [31m×[31m 启动恢复服务（R7）[2m > [22mbootstrap 会扫描到未完成事务并给出可判定的状态与可执行动作[39m[33m 739[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-9OjjGr\install\resources\app.asar'[39m
+[31m   [31m×[31m 启动恢复服务（R7）[2m > [22m目标处于中间状态时判为 needs_recovery 并阻断后续 apply[39m[33m 769[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-VIWYKQ\install\resources\app.asar'[39m
+   [32m✓[39m 启动恢复服务（R7）[2m > [22m未生效的事务按事实落成 failed，之后不再阻断[32m 116[2mms[22m[39m
+[31m   [31m×[31m 启动恢复服务（R7）[2m > [22mbootstrap 会清掉残留准备区，但不碰备份与事务日志[39m[33m 726[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-cTK0Ni\install\resources\app.asar'[39m
+   [32m✓[39m 手动指定安装目录（R6）[2m > [22m登记一个包含归档的目录后，它成为可操作目标[32m 77[2mms[22m[39m
+   [32m✓[39m 手动指定安装目录（R6）[2m > [22m登记不认识的目录时返回具体原因，而不是含糊成功[32m 7[2mms[22m[39m
+   [32m✓[39m 手动指定安装目录（R6）[2m > [22m登记未知版本时给出「未经验证」而不是当成可用目标[32m 47[2mms[22m[39m
+   [32m✓[39m 手动指定安装目录（R6）[2m > [22mapply 闸门：存在阻断性未完成事务时，写入在进入事务之前就被拒绝[32m 228[2mms[22m[39m
+ [32m✓[39m tests/unit/verify-release.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 444[2mms[22m[39m
+ [31m❯[39m tests/integration/image-content-fixed.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 8189[2mms[22m[39m
+   [33m[2m✓[22m[39m 源图与已确认内容解绑[2m > [22m导入后替换源图：内容仍是导入时那份，应用写进安装的也是它 [33m 2093[2mms[22m[39m
+[31m   [31m×[31m 源图与已确认内容解绑[2m > [22m导入后删除源图：照样能准备与应用[39m[33m 2540[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+   [33m[2m✓[22m[39m 源图与已确认内容解绑[2m > [22m私有副本被改一个字节：拒绝使用，安装 hash 不变 [33m 746[2mms[22m[39m
+   [33m[2m✓[22m[39m 源图与已确认内容解绑[2m > [22m私有副本被删除：拒绝应用，安装 hash 不变 [33m 750[2mms[22m[39m
+   [33m[2m✓[22m[39m 准备记录与内容绑定[2m > [22m准备记录带上内容指纹，且与导入返回的 hash 一致 [33m 876[2mms[22m[39m
+   [33m[2m✓[22m[39m 准备记录与内容绑定[2m > [22m旧准备记录（无 contentHash）失效：拒绝应用且安装不变 [33m 822[2mms[22m[39m
+   [32m✓[39m 读取上限与失败清理[2m > [22m选图之后源文件变大：按上限读取，导入直接拒绝[32m 120[2mms[22m[39m
+   [32m✓[39m 读取上限与失败清理[2m > [22m导入失败时清掉自己产生的副本与缩略图，不留半个文件[32m 69[2mms[22m[39m
+   [32m✓[39m 缓存清理只动本工具自己的目录[2m > [22m保留被引用的副本，删掉没人引用的；不递归进用户目录[32m 134[2mms[22m[39m
+ [31m❯[39m tests/integration/discover.test.ts [2m([22m[2m19 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 2052[2mms[22m[39m
+[31m   [31m×[31m 目标识别（T30、T31）[2m > [22m识别已验证版本为 supported，并给出归档指纹[39m[33m 724[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-MsAdcG\install\resources\app.asar'[39m
+   [32m✓[39m 目标识别（T30、T31）[2m > [22m未验证版本判为 unknown，并给出原因，且不会被当成可应用目标[32m 51[2mms[22m[39m
+   [32m✓[39m 目标识别（T30、T31）[2m > [22m同名归档但包名不认识时判为 unsupported[32m 61[2mms[22m[39m
+   [32m✓[39m 目标识别（T30、T31）[2m > [22m目录里没有归档时判为 unknown，不猜测兼容[32m 3[2mms[22m[39m
+   [32m✓[39m 目标识别（T30、T31）[2m > [22m路径不存在时识别直接失败[32m 2[2mms[22m[39m
+   [32m✓[39m 目标识别（T30、T31）[2m > [22m候选位置只来自明确登记，不做全盘搜索[32m 2[2mms[22m[39m
+   [32m✓[39m 目标识别（T30、T31）[2m > [22m按候选位置扫描可发现目标，不存在的目录不出现在结果里[32m 145[2mms[22m[39m
+   [32m✓[39m 卸载登记表的过滤（回归：真机上扫出满屏无关软件）[2m > [22m只把名称相关的登记项当候选，无关软件一个都不扫[32m 3[2mms[22m[39m
+   [32m✓[39m 卸载登记表的过滤（回归：真机上扫出满屏无关软件）[2m > [22m登记值里的引号与尾部反斜杠会被清掉[32m 1[2mms[22m[39m
+   [32m✓[39m 卸载登记表的过滤（回归：真机上扫出满屏无关软件）[2m > [22m解析器按子键分组，认得出 DisplayName 与 InstallLocation[32m 3[2mms[22m[39m
+   [32m✓[39m 卸载登记表的过滤（回归：真机上扫出满屏无关软件）[2m > [22m目录里没有归档的候选不算「未通过」，只计入已检查位置[32m 40[2mms[22m[39m
+   [32m✓[39m 归档只读访问（T31、T36）[2m > [22m能列出归档条目并读到 HTML 入口[32m 41[2mms[22m[39m
+   [32m✓[39m 归档只读访问（T31、T36）[2m > [22m归档被改写后指纹随之变化，可用于提交前复核（T37）[32m 53[2mms[22m[39m
+[31m   [31m×[31m 应用前预检（T32、T33）[2m > [22m目标正在运行时拒绝，并提示用户自行退出[39m[33m 758[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-zOma82\install\resources\app.asar'[39m
+   [32m✓[39m 应用前预检（T32、T33）[2m > [22m无法确认进程状态时按「未退出」处理，不冒险写入[32m 37[2mms[22m[39m
+   [32m✓[39m 应用前预检（T32、T33）[2m > [22m磁盘空间不足时在开始写入前拒绝[32m 58[2mms[22m[39m
+   [32m✓[39m 应用前预检（T32、T33）[2m > [22m目录不可写时拒绝[32m 6[2mms[22m[39m
+   [32m✓[39m 应用前预检（T32、T33）[2m > [22m预检通过时报告归档大小与所需空间[32m 57[2mms[22m[39m
+   [32m✓[39m 应用前预检（T32、T33）[2m > [22m所需空间覆盖备份、staged 与临时文件三份开销[32m 0[2mms[22m[39m
+ [32m✓[39m tests/unit/archive-io-window.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 209[2mms[22m[39m
+ [32m✓[39m tests/unit/image-animated.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 239[2mms[22m[39m
+ [32m✓[39m tests/unit/theme.test.ts [2m([22m[2m46 tests[22m[2m)[22m[33m 775[2mms[22m[39m
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 包装层（S5）[2m > [22m[2m成功（status 0 + 完整汇总）退出 0，并把 TEMP/TMP 注入指定的安全根下的独立运行子目录
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-aOon2x\logs\suite-2026-09-15T00-01-52-915Z-5083.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-aOon2x\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-aOon2x\tmp\run-2026-09-15T00-01-52-915Z-5083
+summary files=2passed/2total tests=15passed/15total failed=0 unhandledErrors=0
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+   Duration  1.00s
+
+ [32m✓[39m tests/unit/release-eligibility.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 包装层（S5）[2m > [22m[2m普通失败（status 23）退出 23，不吞成 0
+[22m[39mexit=23 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-1XLTeJ\logs\suite-2026-09-15T00-01-52-937Z-f804.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-1XLTeJ\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-1XLTeJ\tmp\run-2026-09-15T00-01-52-937Z-f804
+summary files=?passed/?total tests=?passed/?total failed=0 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 缺少 Test Files / Tests 汇总行（可能未跑完或被中断）
+failed
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 包装层（S5）[2m > [22m[2m信号终止（status null + signal）退出 1
+[22m[39mexit=null signal=SIGTERM
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-5Rvd0w\logs\suite-2026-09-15T00-01-52-948Z-0704.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-5Rvd0w\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-5Rvd0w\tmp\run-2026-09-15T00-01-52-948Z-0704
+summary files=?passed/?total tests=?passed/?total failed=0 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 缺少 Test Files / Tests 汇总行（可能未跑完或被中断）
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 包装层（S5）[2m > [22m[2mspawn 错误（error 对象）退出 1，日志失败也不改变判定
+[22m[39mexit=null signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lAf6nS\logs\suite-2026-09-15T00-01-52-956Z-d129.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lAf6nS\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lAf6nS\tmp\run-2026-09-15T00-01-52-956Z-d129
+spawnError=spawn failed
+summary files=?passed/?total tests=?passed/?total failed=0 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 缺少 Test Files / Tests 汇总行（可能未跑完或被中断）
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 包装层（S5）[2m > [22m[2m日志按 runId 命名：连续两次运行互不覆盖，且运行目录互不相同
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lQuIQi\logs\suite-2026-09-15T00-01-52-986Z-ec88.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lQuIQi\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lQuIQi\tmp\run-2026-09-15T00-01-52-986Z-ec88
+summary files=2passed/2total tests=15passed/15total failed=0 unhandledErrors=0
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+   Duration  1.00s
+run-1
+exit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lQuIQi\logs\suite-2026-09-15T00-01-52-995Z-8262.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lQuIQi\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-lQuIQi\tmp\run-2026-09-15T00-01-52-995Z-8262
+summary files=2passed/2total tests=15passed/15total failed=0 unhandledErrors=0
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+   Duration  1.00s
+run-2
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 完整性检查（P4 任务 B）[2m > [22m[2m进程自称退出 0，但输出缺汇总 → 判定失败，不得放行
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-knl14q\logs\suite-2026-09-15T00-01-53-012Z-7db5.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-knl14q\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-knl14q\tmp\run-2026-09-15T00-01-53-012Z-7db5
+summary files=?passed/?total tests=?passed/?total failed=0 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 缺少 Test Files / Tests 汇总行（可能未跑完或被中断）
+all green
+no summary here
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 完整性检查（P4 任务 B）[2m > [22m[2m进程自称退出 0，但存在 Unhandled Error → 判定失败（RPC 错误不得被吞成绿）
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-TLTpXm\logs\suite-2026-09-15T00-01-53-033Z-7899.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-TLTpXm\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-TLTpXm\tmp\run-2026-09-15T00-01-53-033Z-7899
+summary files=2passed/2total tests=15passed/15total failed=0 unhandledErrors=1
+COMPLETENESS_FAIL:
+  - 存在 1 个 Unhandled Error（含 RPC/worker 通信错误）
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+     Errors  1 error
+⎯⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯⎯
+Vitest caught 1 unhandled error during the test run.
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 完整性检查（P4 任务 B）[2m > [22m[2m进程自称退出 0，但汇总显示有失败用例 → 判定失败
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-T9X2kr\logs\suite-2026-09-15T00-01-53-045Z-e0b1.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-T9X2kr\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-T9X2kr\tmp\run-2026-09-15T00-01-53-045Z-e0b1
+summary files=?passed/1total tests=14passed/15total failed=1 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 测试失败 1 项
+  - 文件失败 1 个
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 完整性检查（P4 任务 B）[2m > [22m[2mexpectedFiles 与实际完成文件数不符 → 判定失败（少跑文件不得放行）
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-MCvKt1\logs\suite-2026-09-15T00-01-53-055Z-7760.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-MCvKt1\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-MCvKt1\tmp\run-2026-09-15T00-01-53-055Z-7760
+summary files=2passed/2total tests=15passed/15total failed=0 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 应运行文件 15 个，实际完成 2 个
+ Test Files  2 passed (2)
+      Tests  15 passed (15)
+   Duration  1.00s
+
+[90mstdout[2m | tests/unit/run-suite-wrapper.test.ts[2m > [22m[2mr5-run-suite 完整性检查（P4 任务 B）[2m > [22m[2mexpectNoSkip 下出现 skipped/todo → 判定失败
+[22m[39mexit=0 signal=none
+log=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-fCnNng\logs\suite-2026-09-15T00-01-53-064Z-b8d7.log
+command=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-fCnNng\node_modules\vitest\vitest.mjs run
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-suite-wrapper-fCnNng\tmp\run-2026-09-15T00-01-53-064Z-b8d7
+summary files=2passed/2total tests=13passed/15total failed=0 unhandledErrors=0
+COMPLETENESS_FAIL:
+  - 存在 skipped=2 / todo=0，与预期不一致
+ Test Files  2 passed (2)
+      Tests  13 passed | 2 skipped (15)
+
+ [32m✓[39m tests/unit/run-suite-wrapper.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 218[2mms[22m[39m
+ [32m✓[39m tests/unit/ui-logic.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m tests/unit/image-probe.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 508[2mms[22m[39m
+ [32m✓[39m tests/unit/schema.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m tests/unit/image-formats.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m tests/unit/paths.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/unit/smoke-packaged.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/unit/surfaces.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [31m❯[39m tests/integration/transaction.test.ts [2m([22m[2m29 tests[22m[2m | [22m[31m29 failed[39m[2m)[22m[33m 28979[2mms[22m[39m
+[31m   [31m×[31m 正常闭环（T34–T42）[2m > [22m应用后归档被替换、白名单外条目不变、unpacked 标记保留[39m[33m 1929[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-hjrRzZ\install\resources\app.asar'[39m
+[31m   [31m×[31m 正常闭环（T34–T42）[2m > [22mHTML 注入幂等：换主题不会累积多条 link[39m[33m 1578[2mms[22m[39m
+[31m     → expected +0 to be 1 // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-RJyZ0g\install\resources\app.asar'[39m
+[31m   [31m×[31m 正常闭环（T34–T42）[2m > [22m重复应用同一主题为 no-op，不产生写入[39m[33m 5068[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-FJcb72\instances\b47aa9fc01043827\backups\original\original-2026-09-15T00-01-50-757Z.asar'[39m
+[31m   [31m×[31m 正常闭环（T34–T42）[2m > [22m应用 → 换主题 → 恢复上一主题 → 恢复首次接管快照，逐步核对 hash[39m[33m 2356[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-DVG8Px\install\resources\app.asar'[39m
+[31m   [31m×[31m 正常闭环（T34–T42）[2m > [22m恢复是新操作而不是撤销历史：历史记录不被改写[39m[33m 2243[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-oXfb73\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22mstage 失败：安装不变[39m[32m 74[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-wyLn8U\instances\e95daa9b01042f5f\backups\pre-restore\pre-restore-2026-09-15T00-01-54-766Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m磁盘不足：写入前拒绝[39m[32m 75[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-6KAUha\instances\e5bf0a6f010441fe\stage\op-20260915T000150978Z-drypq1\staged.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m目标运行中：拒绝应用[39m[33m 657[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-sxiwrx\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m备份 hash 校验失败：安装不变[39m[33m 1255[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-MUYllk\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m提交前目标被改动：拒绝并停在原状态[39m[33m 1242[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-vHMD6m\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m提交中断：目标保持原 hash，不出现半成品[39m[33m 1367[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-9ByBmo\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m提交后日志写入失败：不盲目回滚，标记为需恢复[39m[33m 1321[2mms[22m[39m
+[31m     → expected 'FILE_LOCKED' to be 'NEEDS_RECOVERY' // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-FmYCFi\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m事务日志写入失败：安装未被修改[39m[33m 1269[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-Gma0cj\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m损坏的 manifest 被识别，不会被当成有效记录[39m[32m 42[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-BBQPDp\instances\14f1afde01043653\backups\previous\previous-2026-09-15T00-02-02-101Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m同时两次 apply：第二次被锁拒绝[39m[32m 42[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-USSejd\instances\0883beca010448f3\backups\previous\previous-2026-09-15T00-02-00-803Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22mapply 与 restore 并发：restore 被锁拒绝[39m[33m 645[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-F3r3Vm\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m启动遇到未完成事务：按磁盘事实判定状态[39m[32m 54[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-mhziFN\instances\f09a34be01043ecf\backups\previous\previous-2026-09-15T00-01-59-493Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m版本变化后拒绝恢复[39m[33m 1219[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-XH5nqL\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m首次接管时目标已被改动 → 原版不可确认，原版入口被禁用[39m[33m 590[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-T2t9lZ\instances\cab9925001043456\backups\previous\previous-2026-09-15T00-02-05-281Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m首次接管时目标「没有本工具标记」也不等于原版：证据不足一律降级（R2 回归）[39m[33m 1212[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-qh0JRB\install\resources\app.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m旧元数据里「靠标记缺失推断的原版」会被迁移降级，并留一份 .bak（R2 迁移）[39m[32m 45[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-FMC5lN\instances\eac81ca501043b9a\backups\original\original-2026-09-15T00-02-05-879Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m来源不明的第三方主题层：准备阶段直接拒绝，不自动覆盖（R3）[39m[32m 56[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-0XRdeJ\instances\1ed40344010441ba\backups\original\original-2026-09-15T00-02-04-078Z.asar'[39m
+[31m   [31m×[31m 故障注入（7.3）[2m > [22m主题内容指纹可用于重复应用判定[39m[32m 7[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-hTLUjo\instances\6c7b834801043ddd\backups\original\original-2026-09-15T00-01-58-119Z.asar'[39m
+[31m   [31m×[31m 准备区清理不参与结果（真机取证 2026-09-12）[2m > [22m清理挂起时应用仍然正常返回（不会被拖在 100%）[39m[33m 1275[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-hXzU1Z\install\resources\app.asar'[39m
+[31m   [31m×[31m 原版证据的登记与迁移（R2）[2m > [22m登记出厂指纹后，命中指纹的旧记录会被升级为有证据的原版[39m[33m 699[2mms[22m[39m
+[31m     → expected false to be true // Object.is equality[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-CMMZlb\install\resources\app.asar'[39m
+[31m   [31m×[31m 原版证据的登记与迁移（R2）[2m > [22m指纹表为空时不冒充原版（默认行为）[39m[32m 14[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-3Tcc40\instances\a3def7bb01044ab9\backups\pre-restore\pre-restore-2026-09-15T00-02-07-961Z.asar'[39m
+[31m   [31m×[31m 备份健康标记与恢复（事故 F3）[2m > [22m恢复前会检查备份健康度，已知故障快照被拒绝且目标不变[39m[33m 1321[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-UQqSM5\install\resources\app.asar'[39m
+[31m   [31m×[31m 备份健康标记与恢复（事故 F3）[2m > [22m应用成功后创建的备份被标记为已知健康[39m[33m 1271[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-wHOtzS\install\resources\app.asar'[39m
+[31m   [31m×[31m 备份健康标记与恢复（事故 F3）[2m > [22m健康标记缺失的旧记录按 unverified 处理（迁移）[39m[32m 49[2mms[22m[39m
+[31m     → EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-O15Kjv\instances\3de930dd0104550b\backups\original\original-2026-09-15T00-02-10-567Z.asar'[39m
+ [31m❯[39m tests/integration/electron-runtime.test.ts [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 151408[2mms[22m[39m
+[31m   [31m×[31m 真实 Electron 主进程闭环（R1、R7、R8）[2m > [22m使用 original-fs 的物理归档 I/O，完成 识别→应用→恢复 全链路[39m[33m 151406[2mms[22m[39m
+[31m     → 等待 Electron 闭环结果超时（150s），且 D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\tools\electron-fixture-e2e-result.json 未生成[39m
+[90mstdout[2m | tests/integration/candidate-manifest.test.ts[2m > [22m[2mP4 A：worker 事件循环在异步等待期间保持可响应[2m > [22m[2m异步等待子进程时定时器持续触发，且不阻塞 IPC（最大延迟远小于 RPC 60s 上限）
+[22m[39m[P4-A] 异步等待期间最大事件循环延迟 = 39ms（RPC 上限 60000ms）
+
+[90mstdout[2m | tests/integration/candidate-manifest.test.ts
+[22m[39m[candidate-manifest] 夹具清理：删除 19 个，保留 0 个
+
+ [31m❯[39m tests/integration/candidate-manifest.test.ts [2m([22m[2m19 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 156040[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 正例：小夹具真实注册 → 核验，Git 仍干净、HEAD 未变[2m > [22mregister 成功写入忽略目录内的 manifest，且不弄脏工作树、不改 HEAD [33m 20925[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 正例：小夹具真实注册 → 核验，Git 仍干净、HEAD 未变[2m > [22m登记目标已存在时默认拒绝覆盖 [33m 9386[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 正例：小夹具真实注册 → 核验，Git 仍干净、HEAD 未变[2m > [22m--force 才允许覆盖已有登记 [33m 10428[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m源码改脏 → 拒绝 [33m 7405[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m新增未跟踪源码/脚本 → 拒绝（不能统一忽略 ??） [33m 7402[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m未跟踪内容若在豁免路径（candidate-*/、handoff/）内 → 不阻断 [33m 9700[2mms[22m[39m
+[31m   [31m×[31m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22mGit 不可用（非仓库）→ 明确失败，不当作干净[39m[33m 453[2mms[22m[39m
+[31m     → expected '[FAIL] 缺少 --pack-method：必须显式声明打包方式（el…' to match /无法读取 Git 状态/[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m缺少 --manifest → 明确失败（不回落根目录历史 manifest） [33m 5876[2mms[22m[39m
+[31m   [31m×[31m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m缺少构建记录 → 拒绝（不接受「旧 out 就代表刚构建」）[39m[33m 6010[2mms[22m[39m
+[31m     → expected '[FAIL] 缺少 --pack-method：必须显式声明打包方式（el…' to match /缺少 --build-record/[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m构建记录 sourceCommit 与 HEAD 不符（过期记录）→ 拒绝 [33m 8103[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m构建记录锁文件 hash 不符 → 拒绝 [33m 7781[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m当前 out 与构建记录不一致（登记的不是记录那次构建）→ 拒绝 [33m 7695[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m空/旧格式构建记录 → 拒绝（R1：旧 /1 自引用记录不得入册） [33m 7481[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22mbuild-record/1 旧记录 → 拒绝并点名自引用原因（R1） [33m 7399[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22mR2 负例：记录重复步骤 → 登记拒绝（Map 后项覆盖前项不再容忍） [33m 7943[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22mR2 负例：步骤状态非法 → 登记拒绝（不得以缺字段隐含 passed） [33m 7279[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22mR2 负例：测试注入环境 → 登记拒绝（mock 成功不得当作真实通过） [33m 7136[2mms[22m[39m
+   [33m[2m✓[22m[39m P2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m候选目录不存在完整候选 → 拒绝 [33m 5949[2mms[22m[39m
+   [33m[2m✓[22m[39m P4 A：worker 事件循环在异步等待期间保持可响应[2m > [22m异步等待子进程时定时器持续触发，且不阻塞 IPC（最大延迟远小于 RPC 60s 上限） [33m 10908[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 55 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m脚本可解析检查（哈希不能证明内容是好的）[2m > [22m截断的 CJS 文件即使 hash 自洽也会被拦下（本次事故形态）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-Uob9pk\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m脚本可解析检查（哈希不能证明内容是好的）[2m > [22m非法 JSON 被拦下
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-WNPBqD\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m接管基线比对（输入不可信必须拒绝）[2m > [22m白名单条目允许与基线不同（它们本来就是要被替换的）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-rjRJ2O\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m端到端：损坏输入不能一路走到 applied[2m > [22m首次接管：健康安装正常走完（基线以接手时状态为准）
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/archive-verify.test.ts:[2m278:23[22m[39m
+    [90m276| [39m    [35mconst[39m inst [33m=[39m [35mawait[39m [34mfixture[39m()[33m;[39m
+    [90m277| [39m    [35mconst[39m { r } [33m=[39m [35mawait[39m [34mapplyOn[39m(inst)[33m;[39m
+    [90m278| [39m    [34mexpect[39m(r[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m279| [39m  })[33m;[39m
+    [90m280| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m端到端：损坏输入不能一路走到 applied[2m > [22m首次接管：健康安装正常走完（基线以接手时状态为准）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-iiB0Ky\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m端到端：损坏输入不能一路走到 applied[2m > [22m非首次接管：安装被外部改动后拒绝，且目标 hash 不变
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-verify-runtime-NTP0Xk\instances\9780b49901043e6e\stage\op-20260915T000146636Z-qhxbx1\staged.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m端到端：损坏输入不能一路走到 applied[2m > [22m输入本身已损坏（内容换掉但长度不变）时，第一次接管也会被脚本解析检查拦下
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-G57IWg\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/archive-verify.test.ts[2m > [22m真实安装上的合法形态不得误判（恢复后体检 2026-09-11）[2m > [22m行中 export（注释后跟 export）不被误判为损坏 —— ESM 不可用时按无法判定跳过
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-JTr2iz\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/candidate-manifest.test.ts[2m > [22mP2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22mGit 不可用（非仓库）→ 明确失败，不当作干净
+[31m[1mAssertionError[22m: expected '[FAIL] 缺少 --pack-method：必须显式声明打包方式（el…' to match /无法读取 Git 状态/[39m
+
+[32m- Expected:[39m 
+/无法读取 Git 状态/
+
+[31m+ Received:[39m 
+"[FAIL] 缺少 --pack-method：必须显式声明打包方式（electron-builder | manual-repack）。
+       不提供默认值是刻意的——来源方式不能由工具替调用方猜测。
+"
+
+[36m [2m❯[22m tests/integration/candidate-manifest.test.ts:[2m322:22[22m[39m
+    [90m320| [39m    })[33m;[39m
+    [90m321| [39m    [34mexpect[39m(r[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m322| [39m    [34mexpect[39m(r[33m.[39mstderr)[33m.[39m[34mtoMatch[39m([36m/无法读取 Git 状态/[39m)[33m;[39m
+    [90m   | [39m                     [31m^[39m
+    [90m323| [39m  })[33m;[39m
+    [90m324| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/candidate-manifest.test.ts[2m > [22mP2 负例：任一冻结/来源问题都必须失败且不产出成功登记[2m > [22m缺少构建记录 → 拒绝（不接受「旧 out 就代表刚构建」）
+[31m[1mAssertionError[22m: expected '[FAIL] 缺少 --pack-method：必须显式声明打包方式（el…' to match /缺少 --build-record/[39m
+
+[32m- Expected:[39m 
+/缺少 --build-record/
+
+[31m+ Received:[39m 
+"[FAIL] 缺少 --pack-method：必须显式声明打包方式（electron-builder | manual-repack）。
+       不提供默认值是刻意的——来源方式不能由工具替调用方猜测。
+"
+
+[36m [2m❯[22m tests/integration/candidate-manifest.test.ts:[2m356:22[22m[39m
+    [90m354| [39m    ])[33m;[39m
+    [90m355| [39m    [34mexpect[39m(r[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m356| [39m    [34mexpect[39m(r[33m.[39mstderr)[33m.[39m[34mtoMatch[39m([36m/缺少 --build-record/[39m)[33m;[39m
+    [90m   | [39m                     [31m^[39m
+    [90m357| [39m  })[33m;[39m
+    [90m358| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/discover.test.ts[2m > [22m目标识别（T30、T31）[2m > [22m识别已验证版本为 supported，并给出归档指纹
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-MsAdcG\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/discover.test.ts[2m > [22m应用前预检（T32、T33）[2m > [22m目标正在运行时拒绝，并提示用户自行退出
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-zOma82\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/electron-runtime.test.ts[2m > [22m真实 Electron 主进程闭环（R1、R7、R8）[2m > [22m使用 original-fs 的物理归档 I/O，完成 识别→应用→恢复 全链路
+[31m[1mError[22m: 等待 Electron 闭环结果超时（150s），且 D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\tools\electron-fixture-e2e-result.json 未生成[39m
+[36m [2m❯[22m Timeout.tick [as _onTimeout] tests/integration/electron-runtime.test.ts:[2m104:16[22m[39m
+    [90m102| [39m      [35mif[39m ([33mDate[39m[33m.[39m[34mnow[39m() [33m-[39m started [33m>[39m timeoutMs) {
+    [90m103| [39m        child[33m.[39m[34mkill[39m()[33m;[39m
+    [90m104| [39m        reject(new Error(`等待 Electron 闭环结果超时（${Math.round(timeoutMs / …
+    [90m   | [39m               [31m^[39m
+    [90m105| [39m        [35mreturn[39m[33m;[39m
+    [90m106| [39m      }
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/image-content-fixed.test.ts[2m > [22m源图与已确认内容解绑[2m > [22m导入后删除源图：照样能准备与应用
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/image-content-fixed.test.ts:[2m168:29[22m[39m
+    [90m166| [39m    [35mif[39m ([33m![39mstaged[33m.[39msuccess) [35mreturn[39m[33m;[39m
+    [90m167| [39m    const applied = await c.operations.apply({ operationId: staged.dat…
+    [90m168| [39m    [34mexpect[39m(applied[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                            [31m^[39m
+    [90m169| [39m  })[33m;[39m
+    [90m170| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/image-format-cycle.test.ts[2m > [22m格式轮换闭环（合成安装）[2m > [22m.jfif → .png → .webp → 同图 no-op → 恢复上一主题 → 恢复首次接管
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-cycle-gJYaK0\instances\bc2b538601043e9b\backups\previous\previous-2026-09-15T00-01-45-858Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-recovery.test.ts[2m > [22m启动恢复服务（R7）[2m > [22mbootstrap 会扫描到未完成事务并给出可判定的状态与可执行动作
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-9OjjGr\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-recovery.test.ts[2m > [22m启动恢复服务（R7）[2m > [22m目标处于中间状态时判为 needs_recovery 并阻断后续 apply
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-VIWYKQ\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-recovery.test.ts[2m > [22m启动恢复服务（R7）[2m > [22mbootstrap 会清掉残留准备区，但不碰备份与事务日志
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-cTK0Ni\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m用户指定的主色读不清时，报告如实判不合格并阻断进入应用
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-zWxobY\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m准备阶段产出摘要但不改动目标，应用后才写入归档
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/main-services.test.ts:[2m221:29[22m[39m
+    [90m219| [39m
+    [90m220| [39m    const applied = await c.operations.apply({ operationId: staged.dat…
+    [90m221| [39m    [34mexpect[39m(applied[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                            [31m^[39m
+    [90m222| [39m    [35mif[39m ([33m![39mapplied[33m.[39msuccess) [35mreturn[39m[33m;[39m
+    [90m223| [39m    [34mexpect[39m(applied[33m.[39mdata[33m.[39mstatus)[33m.[39m[34mtoBe[39m([32m'applied'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m准备阶段产出摘要但不改动目标，应用后才写入归档
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-sewyWQ\instances\d1887d04010442af\stage\op-20260915T000143830Z-bhn4x4\staged.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m应用后可列出原版与上一主题，恢复上一主题回到应用前的指纹
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/main-services.test.ts:[2m263:30[22m[39m
+    [90m261| [39m
+    [90m262| [39m    const restored = await c.operations.restore({ targetId: target.tar…
+    [90m263| [39m    [34mexpect[39m(restored[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                             [31m^[39m
+    [90m264| [39m    [34mexpect[39m([35mawait[39m [34msha256File[39m(c[33m.[39minstall[33m.[39marchivePath))[33m.[39m[34mtoBe[39m(beforeHash)[33m;[39m
+    [90m265| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m应用后可列出原版与上一主题，恢复上一主题回到应用前的指纹
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-tdPSp9\instances\c5fe820601043003\backups\pre-restore\pre-restore-2026-09-15T00-01-46-748Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m主进程服务：识别 → 生成 → 准备 → 应用 → 恢复[2m > [22m重复点击应用不会开出第二个事务
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-9WY2au\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/main-services.test.ts[2m > [22m未验证目标[2m > [22m版本不在白名单时识别为 unknown，准备阶段直接拒绝
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-my8Cb7\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/stage-idempotence.test.ts[2m > [22m连续换图（A→B→C）[2m > [22m每次都成功：HTML 链接始终恰好一个，图片更新，白名单外条目不变
+[31m[1mAssertionError[22m: 第 1 次应用失败：FILE_LOCKED 目标文件被占用，替换失败: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/stage-idempotence.test.ts:[2m93:102[22m[39m
+    [90m 91| [39m        themeSummary[33m:[39m [32m`主题 [39m[36m${[39m[33mString[39m[33m.[39m[34mfromCharCode[39m([34m65[39m [33m+[39m i)[36m}[39m[32m`[39m[33m,[39m
+    [90m 92| [39m      })[33m;[39m
+    [90m 93| [39m      expect(r.success, `第 ${i + 1} 次应用失败：${r.success ? '' : `${r.erro…
+    [90m   | [39m                                                                                                     [31m^[39m
+    [90m 94| [39m        [35mtrue[39m[33m,[39m
+    [90m 95| [39m      )[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/stage-idempotence.test.ts[2m > [22m连续换图（A→B→C）[2m > [22m每次都成功：HTML 链接始终恰好一个，图片更新，白名单外条目不变
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-UBOz70\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/stage-idempotence.test.ts[2m > [22m连续换图（A→B→C）[2m > [22m同图重复应用（C→C）走 no-op：不改写归档、不新增事务
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/stage-idempotence.test.ts:[2m133:27[22m[39m
+    [90m131| [39m
+    [90m132| [39m    [35mconst[39m first [33m=[39m [35mawait[39m [34mapplyC[39m()[33m;[39m
+    [90m133| [39m    [34mexpect[39m(first[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m134| [39m    [35mif[39m ([33m![39mfirst[33m.[39msuccess) [35mreturn[39m[33m;[39m
+    [90m135| [39m    [34mexpect[39m(first[33m.[39mdata[33m.[39mnoop)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/stage-idempotence.test.ts[2m > [22m连续换图（A→B→C）[2m > [22m同图重复应用（C→C）走 no-op：不改写归档、不新增事务
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-00lbl6\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/stage-idempotence.test.ts[2m > [22mHTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m正常注入通过
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-idem-UKLYAM\instances\c3d5503601041eea\backups\previous\previous-2026-09-15T00-01-44-986Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/stage-idempotence.test.ts[2m > [22mHTML 结构性门禁（替换「HTML 必须变化」）[2m > [22m缺少本工具链接 → 拒绝
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-idem-ddLr7Q\instances\1e6c55b3010432dc\stage\op-20260915T000142416Z-ytodyl\staged.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m应用后归档被替换、白名单外条目不变、unpacked 标记保留
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m91:23[22m[39m
+    [90m 89| [39m      themeSummary[33m:[39m [32m'测试主题'[39m[33m,[39m
+    [90m 90| [39m    })[33m;[39m
+    [90m 91| [39m    [34mexpect[39m(r[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m 92| [39m    [35mif[39m ([33m![39mr[33m.[39msuccess) [35mreturn[39m[33m;[39m
+    [90m 93| [39m    [34mexpect[39m(r[33m.[39mdata[33m.[39mnoop)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m应用后归档被替换、白名单外条目不变、unpacked 标记保留
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-hjrRzZ\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22mHTML 注入幂等：换主题不会累积多条 link
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m138:27[22m[39m
+    [90m136| [39m      themeSummary[33m:[39m [32m'主题1'[39m[33m,[39m
+    [90m137| [39m    })[33m;[39m
+    [90m138| [39m    [34mexpect[39m([35mawait[39m [34mcount[39m())[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m139| [39m    [35mawait[39m [34mdoApply[39m({
+    [90m140| [39m      target[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22mHTML 注入幂等：换主题不会累积多条 link
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-RJyZ0g\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m重复应用同一主题为 no-op，不产生写入
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-FJcb72\instances\b47aa9fc01043827\backups\original\original-2026-09-15T00-01-50-757Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m应用 → 换主题 → 恢复上一主题 → 恢复首次接管快照，逐步核对 hash
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m181:23[22m[39m
+    [90m179| [39m      themeSummary[33m:[39m [32m'A'[39m[33m,[39m
+    [90m180| [39m    })[33m;[39m
+    [90m181| [39m    [34mexpect[39m(a[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m182| [39m    [35mconst[39m hashA [33m=[39m [35mawait[39m [34msha256File[39m(inst[33m.[39marchivePath)[33m;[39m
+    [90m183| [39m    [34mexpect[39m(hashA)[33m.[39mnot[33m.[39m[34mtoBe[39m(original)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m应用 → 换主题 → 恢复上一主题 → 恢复首次接管快照，逐步核对 hash
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-DVG8Px\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m恢复是新操作而不是撤销历史：历史记录不被改写
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m235:24[22m[39m
+    [90m233| [39m    })[33m;[39m
+    [90m234| [39m    const rr = await restoreTarget({ target, layout, kind: 'previous' …
+    [90m235| [39m    [34mexpect[39m(rr[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m236| [39m    [35mif[39m ([33m![39mrr[33m.[39msuccess) [35mreturn[39m[33m;[39m
+    [90m237| [39m    [34mexpect[39m(rr[33m.[39mdata[33m.[39mmanifest[33m.[39mkind)[33m.[39m[34mtoBe[39m([32m'restore-previous'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m正常闭环（T34–T42）[2m > [22m恢复是新操作而不是撤销历史：历史记录不被改写
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-oXfb73\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22mstage 失败：安装不变
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-wyLn8U\instances\e95daa9b01042f5f\backups\pre-restore\pre-restore-2026-09-15T00-01-54-766Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m磁盘不足：写入前拒绝
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-6KAUha\instances\e5bf0a6f010441fe\stage\op-20260915T000150978Z-drypq1\staged.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m目标运行中：拒绝应用
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-sxiwrx\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m备份 hash 校验失败：安装不变
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-MUYllk\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m提交前目标被改动：拒绝并停在原状态
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-vHMD6m\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m提交中断：目标保持原 hash，不出现半成品
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-9ByBmo\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m提交后日志写入失败：不盲目回滚，标记为需恢复
+[31m[1mAssertionError[22m: expected 'FILE_LOCKED' to be 'NEEDS_RECOVERY' // Object.is equality[39m
+
+Expected: [32m"NEEDS_RECOVERY"[39m
+Received: [31m"FILE_LOCKED"[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m364:42[22m[39m
+    [90m362| [39m    })[33m;[39m
+    [90m363| [39m    [34mexpect[39m(r[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m364| [39m    [35mif[39m ([33m![39mr[33m.[39msuccess) [34mexpect[39m(r[33m.[39merror[33m.[39mcode)[33m.[39m[34mtoBe[39m([32m'NEEDS_RECOVERY'[39m)[33m;[39m
+    [90m   | [39m                                         [31m^[39m
+    [90m365| [39m    [90m// 目标已经换成新内容，绝不能在不知情的情况下回滚[39m
+    [90m366| [39m    [35mconst[39m nowHash [33m=[39m [35mawait[39m [34msha256File[39m(inst[33m.[39marchivePath)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m提交后日志写入失败：不盲目回滚，标记为需恢复
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-FmYCFi\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m事务日志写入失败：安装未被修改
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-Gma0cj\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m损坏的 manifest 被识别，不会被当成有效记录
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-BBQPDp\instances\14f1afde01043653\backups\previous\previous-2026-09-15T00-02-02-101Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m同时两次 apply：第二次被锁拒绝
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-USSejd\instances\0883beca010448f3\backups\previous\previous-2026-09-15T00-02-00-803Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22mapply 与 restore 并发：restore 被锁拒绝
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-F3r3Vm\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m启动遇到未完成事务：按磁盘事实判定状态
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-mhziFN\instances\f09a34be01043ecf\backups\previous\previous-2026-09-15T00-01-59-493Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m版本变化后拒绝恢复
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-XH5nqL\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m首次接管时目标已被改动 → 原版不可确认，原版入口被禁用
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-T2t9lZ\instances\cab9925001043456\backups\previous\previous-2026-09-15T00-02-05-281Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m首次接管时目标「没有本工具标记」也不等于原版：证据不足一律降级（R2 回归）
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m548:29[22m[39m
+    [90m546| [39m      themeSummary[33m:[39m [32m'A'[39m[33m,[39m
+    [90m547| [39m    })[33m;[39m
+    [90m548| [39m    [34mexpect[39m(applied[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                            [31m^[39m
+    [90m549| [39m
+    [90m550| [39m    [90m// 原版备份被记录为「未验证」[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[56/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m首次接管时目标「没有本工具标记」也不等于原版：证据不足一律降级（R2 回归）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-qh0JRB\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[57/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m旧元数据里「靠标记缺失推断的原版」会被迁移降级，并留一份 .bak（R2 迁移）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-FMC5lN\instances\eac81ca501043b9a\backups\original\original-2026-09-15T00-02-05-879Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[58/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m来源不明的第三方主题层：准备阶段直接拒绝，不自动覆盖（R3）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-0XRdeJ\instances\1ed40344010441ba\backups\original\original-2026-09-15T00-02-04-078Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[59/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m故障注入（7.3）[2m > [22m主题内容指纹可用于重复应用判定
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-hTLUjo\instances\6c7b834801043ddd\backups\original\original-2026-09-15T00-01-58-119Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[60/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m准备区清理不参与结果（真机取证 2026-09-12）[2m > [22m清理挂起时应用仍然正常返回（不会被拖在 100%）
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m671:23[22m[39m
+    [90m669| [39m    })[33m;[39m
+    [90m670| [39m
+    [90m671| [39m    [34mexpect[39m(r[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m672| [39m    [35mif[39m ([33m![39mr[33m.[39msuccess) [35mreturn[39m[33m;[39m
+    [90m673| [39m    [34mexpect[39m(r[33m.[39mdata[33m.[39mnoop)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[61/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m准备区清理不参与结果（真机取证 2026-09-12）[2m > [22m清理挂起时应用仍然正常返回（不会被拖在 100%）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-hXzU1Z\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[62/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m原版证据的登记与迁移（R2）[2m > [22m登记出厂指纹后，命中指纹的旧记录会被升级为有证据的原版
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/integration/transaction.test.ts:[2m726:25[22m[39m
+    [90m724| [39m      [90m// 有证据时才允许「恢复原版」，并且真的回到那份快照[39m
+    [90m725| [39m      const r = await restoreTarget({ target, layout, kind: 'original'…
+    [90m726| [39m      [34mexpect[39m(r[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m727| [39m      [34mexpect[39m([35mawait[39m [34msha256File[39m(inst[33m.[39marchivePath))[33m.[39m[34mtoBe[39m(sha)[33m;[39m
+    [90m728| [39m    } [35mfinally[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[63/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m原版证据的登记与迁移（R2）[2m > [22m登记出厂指纹后，命中指纹的旧记录会被升级为有证据的原版
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-CMMZlb\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[64/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m原版证据的登记与迁移（R2）[2m > [22m指纹表为空时不冒充原版（默认行为）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-3Tcc40\instances\a3def7bb01044ab9\backups\pre-restore\pre-restore-2026-09-15T00-02-07-961Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[65/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m备份健康标记与恢复（事故 F3）[2m > [22m恢复前会检查备份健康度，已知故障快照被拒绝且目标不变
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-UQqSM5\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[66/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m备份健康标记与恢复（事故 F3）[2m > [22m应用成功后创建的备份被标记为已知健康
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-install-wHOtzS\install\resources\app.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[67/68]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/transaction.test.ts[2m > [22m备份健康标记与恢复（事故 F3）[2m > [22m健康标记缺失的旧记录按 unverified 处理（迁移）
+[31m[1mError[22m: EBUSY: resource busy or locked, unlink 'C:\Users\ylzho\AppData\Local\Temp\ots-fulltest\ots-runtime-O15Kjv\instances\3de930dd0104550b\backups\original\original-2026-09-15T00-02-10-567Z.asar'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[68/68]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m10 failed[39m[22m[2m | [22m[1m[32m18 passed[39m[22m[90m (28)[39m
+[2m      Tests [22m [1m[31m55 failed[39m[22m[2m | [22m[1m[32m334 passed[39m[22m[90m (389)[39m
+[2m   Start at [22m 08:01:39
+[2m   Duration [22m 158.05s[2m (transform 3.83s, setup 0ms, collect 17.45s, tests 392.89s, environment 14ms, prepare 13.55s)[22m
+
+EXIT=1

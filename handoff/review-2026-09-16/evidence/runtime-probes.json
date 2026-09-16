@@ -1,0 +1,32 @@
+{
+  "kind": "in-memory-current-source-probes-not-real-runtime-test",
+  "root": "D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher",
+  "timestamp": "2026-09-16T03:52:07.540Z",
+  "sourceHashes": {
+    "src/core/patch/archive-io.ts": "e5b78e20a5045ec2d1ffa8b1e25a6a3f84a18d6a1f1966b03daf9470757edba6",
+    "src/core/patch/pack.ts": "42a30327e3f3684fe0cfc69dbdbeea2fbd7af46346b76e308258ab58d9c81664"
+  },
+  "archiveConcurrency": {
+    "enteredConcurrently": true,
+    "noAsarWhileBActive": false,
+    "finalState": {
+      "depth": 0,
+      "noAsar": true
+    },
+    "timeline": [
+      "A enters",
+      "B enters while A is still open",
+      "A completes",
+      "B completes with noAsar=false"
+    ]
+  },
+  "workerAsyncError": {
+    "errorListeners": 0,
+    "escapedError": "fixture async spawn EAGAIN"
+  },
+  "workerSuccessLifecycle": {
+    "resolvedBeforeExitEvent": true,
+    "killCalledOnSuccess": true,
+    "note": "Confirmed ordering only; not proof that this caused the historical file locks."
+  }
+}

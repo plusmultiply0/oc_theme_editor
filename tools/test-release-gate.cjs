@@ -1390,6 +1390,97 @@ for (const name of FAIL_STEPS) {
   rmDir(fx);
 }
 
+// ---------- 12) N5：集成错误的用例身份分类（业务 vs 清理） ----------
+/**
+ * 复审 N5：历史日志的「62 个错误块」不等于 62 个失败用例 —— 只数错误块或
+ * grep EBUSY 次数会得出两个错误结论：把同一用例的业务失败与其清理失败算成
+ * 两次，以及把「只是清理失败、业务断言通过」与「业务断言失败」混为一谈。
+ *
+ * 这里用合成机器结果锁定分类语义（真实集成数据由
+ * tools/n5-classify-integration.cjs --run 采集），并断言原始错误码不被归并 ——
+ * commit.ts 把 EACCES/EPERM 一律记作 FILE_LOCKED，诊断不能继承该归并。
+ */
+{
+  console.log('\n== N5：集成错误分类（按用例身份，业务与清理分开）==');
+  const { classify } = require(path.join(ROOT, 'tools', 'n5-classify-integration.cjs'));
+  const mk = (name, assertionResults, status = 'passed') => ({ name, status, message: '', assertionResults });
+  const fail = (fullName, ...msgs) => ({ fullName, title: fullName.split(' > ').pop(), status: 'failed', failureMessages: msgs });
+  const pass = (fullName) => ({ fullName, title: fullName, status: 'passed' });
+
+  const json = {
+    numTotalTestSuites: 4, numTotalTests: 6, success: false,
+    testResults: [
+      mk('tests/integration/a.test.ts', [
+        fail('a > applies theme',
+          "Error: 应用主题失败: EACCES: permission denied, open 'C:\\t\\x.json'",
+          "Error: 清理失败 rmSync EBUSY: resource busy or locked, unlink 'C:\\t\\x.json'"),
+      ], 'failed'),
+      mk('tests/integration/b.test.ts', [{
+        fullName: 'b > business passes', title: 'business passes', status: 'passed',
+        failureMessages: ["Error: afterEach 清理失败: EBUSY: resource busy, unlink 'C:\\t\\y.asar'"],
+      }]),
+      mk('tests/integration/c.test.ts', [fail('c > restores', 'AssertionError: expected 1 to be 2')], 'failed'),
+      mk('tests/integration/d.test.ts', [
+        { fullName: 'd > skipped one', title: 'skipped one', status: 'pending' },
+        pass('d > passes'),
+      ]),
+      { name: 'tests/integration/e.test.ts', status: 'failed', assertionResults: [], message: "Error: Cannot find module './missing'" },
+    ],
+  };
+  const r = classify(json);
+  const cats = r.byCategory;
+
+  expect(cats['business+cleanup'] === 1, '业务失败且伴随清理失败 → business+cleanup（归为同一用例，不重复计数）', JSON.stringify(cats));
+  expect(cats.cleanup_only === 1, '仅清理失败、业务断言通过 → cleanup_only（环境噪声，不当业务缺陷）', JSON.stringify(cats));
+  expect(cats.business === 1, '纯业务失败（无清理字样）→ business', JSON.stringify(cats));
+  expect(cats.incomplete === 1, 'pending/skipped → incomplete（不算通过也不算业务失败）', JSON.stringify(cats));
+  expect(cats.setup === 1, '整文件收集失败 → setup（用例没真正跑）', JSON.stringify(cats));
+  expect(cats.passed === 1, '正常通过仍记为 passed', JSON.stringify(cats));
+
+  // 原始错误码必须保留，不得归并成 FILE_LOCKED
+  expect(r.errnoCounts.EACCES === 1, '原始错误码 EACCES 被保留（不归并为 FILE_LOCKED）', JSON.stringify(r.errnoCounts));
+  expect(r.errnoCounts.EBUSY === 2, '原始错误码 EBUSY 逐处计数', JSON.stringify(r.errnoCounts));
+  expect(!Object.prototype.hasOwnProperty.call(r.errnoCounts, 'FILE_LOCKED'),
+    '不引入 FILE_LOCKED 归并（归因需证据，EACCES/EPERM 不等于文件锁）');
+
+  // 反面用例：业务断言**讨论**清理话题时必须仍算 business。
+  // electron-runtime 的用例断言「启动清理遗留准备区: cleaned=0」—— 这是产品在
+  // 启动时没清掉遗留（业务缺陷），若按词面「清理」判成 cleanup_only，就直接
+  // 把真实缺陷归类成环境噪声。这条断言防止判据被放宽回词面匹配。
+  {
+    const probe = classify({
+      numTotalTests: 1, numTestResults: 1, success: false,
+      testResults: [mk('tests/integration/x.test.ts', [
+        fail('x > closure', 'AssertionError: Electron 闭环失败项：\n- 启动清理遗留准备区: cleaned=0\n: expected ... to be \'\''),
+      ], 'failed')],
+    });
+    expect(probe.byCategory.business === 1 && !probe.byCategory.cleanup_only,
+      '业务断言里出现「清理」字样仍判为 business（不得按词面误判为环境噪声）',
+      JSON.stringify(probe.byCategory));
+  }
+  // 正面用例：真正的 afterEach/rmSync 清理失败仍应被识别
+  {
+    const probe = classify({
+      numTotalTests: 1, success: false,
+      testResults: [mk('tests/integration/y.test.ts', [{
+        fullName: 'y > ok', title: 'ok', status: 'passed',
+        failureMessages: ["Error: afterEach hook failed: EBUSY: resource busy, unlink 'C:\\t\\z.asar'"],
+      }])],
+    });
+    expect(probe.byCategory.cleanup_only === 1,
+      '带 afterEach/rmSync 的真实清理失败仍被识别为 cleanup_only', JSON.stringify(probe.byCategory));
+  }
+
+  // needsAttention 与 cleanupOnly 必须互斥且覆盖除 passed 外的全部用例
+  const attention = new Set(r.needsAttention.map((c) => `${c.file}|${c.test}`));
+  const noisy = new Set(r.cleanupOnly.map((c) => `${c.file}|${c.test}`));
+  const overlap = [...attention].filter((k) => noisy.has(k));
+  expect(overlap.length === 0, '需关注与仅清理两类不重叠', overlap.join(';'));
+  expect(cats['business+cleanup'] + cats.business + cats.setup + cats.incomplete === r.needsAttention.length,
+    '需关注总数 = 业务 + 业务且清理 + 启动 + 未完成', `${r.needsAttention.length}`);
+  expect(cats.cleanup_only === r.cleanupOnly.length, '仅清理数量与清单一致');
+}
+
 if (failures.length) {
   console.error(`\n${failures.length} 项断言失败`);
   process.exit(1);

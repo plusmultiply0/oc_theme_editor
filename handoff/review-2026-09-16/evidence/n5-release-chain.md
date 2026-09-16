@@ -160,5 +160,147 @@ const env = { ...process.env, TEMP: runTmp, TMP: runTmp };     // ← 重定向�
 和记录的不是同一份」。所以本项先提交冒烟工具修复，再用新 buildId 重跑
 （见提交后的复测记录）。
 
+## 7. 发布链第四次尝试：test:e2e 失败（`未发现目标`）
+
+提交 `b64203e`（冒烟开关修复）后重跑，buildId = `20260916081110-b64203e-408e68`：
+
+```
+EXIT typecheck        = 0 (8.0s)
+EXIT lint             = 0 (7.3s)
+EXIT test:unit        = 0 (12.5s)   ← 229/229，含 OTS_TEST_TMP
+EXIT build            = 0 (32.0s)
+EXIT test:integration = 0 (240.8s)  ← 179/179
+EXIT test:e2e         = 1 (50.6s)   ← 1 failed / 15 passed
+STOPPED at test:e2e
+```
+
+失败用例（唯一一个）：
+
+```
+tests\e2e\theme-switcher.spec.ts:174:7
+  图形界面闭环（先不碰用户安装） › 窗口与渲染进程启动，且只看到临时目录里的合成安装
+  expect(installText.toLowerCase()).toContain(baseDir.toLowerCase())
+  Expected substring: "c:\\users\\ylzho\\appdata\\local\\temp\\ots-gui-z1q2qo"
+  Received string:    "未发现目标"
+```
+
+界面上 `.target .muted` 渲染出的是 `未发现目标`（`App.tsx:418` 的空状态分支），
+即**主进程的 `discoverTargets` 没有认出名合成安装**。同 spec 的其余 7 个用例
+（拖拽导入、可读性、确认框、恢复、重新检测）**全部通过**。
+
+### 7.1 复现与排除（对照实验）
+
+| # | 条件 | 结果 |
+|---|---|---|
+| 1 | `npm run test:e2e`（单独，系统 Temp） | ✅ 16 passed（34.5s） |
+| 2 | `test:e2e` + `OTS_TEST_TMP` 指向系统盘 | ✅ 16 passed |
+| 3 | 链上同款 TEMP 重定向（系统盘深层） | ✅ 16 passed |
+| 4 | **精确复刻「build → test:e2e（链上 TEMP）」** | ✅ 16 passed（38.8s） |
+| 5 | **同一 runDir 先 integration 再 e2e** | ❌ **复现**（1 failed / 15 passed） |
+| 6 | 同 runDir 下**只跑 theme-switcher** | ❌ **复现**（1 failed / 7 passed） |
+| 7 | 同上，但**不重定向 TEMP**（对照） | ✅ 8 passed |
+| 8 | 精确重建「`ots-test-tmp/run-<pid>-<ts>`」形状后重跑 | ✅ 8 passed（**未复现**） |
+
+实验 5→6 把范围从「integration 制造的临时文件」收窄到 **`theme-switcher.spec.ts`
+自身 + TEMP 重定向**；实验 6→7 锁定**唯一变量就是 TEMP 被重定向**；
+实验 8 说明**并非**「路径形状/盘符」决定，而是**时序相关**。
+
+### 7.2 直接定位：`discoverTargets` 在 Electron 里的候选根
+
+用独立探针（`tools/e2e-target-discovery-probe.cjs`，真实 Playwright 启动，
+只读界面文本）在**同一份 out 产物**上做了三组对照：
+
+| 探针条件 | `.target` 渲染 |
+|---|---|
+| 系统 Temp（基线） | ✅ `supported / 1.18.29 / ...\ots-probe-gui-*\localappdata\Programs\@opencode-aidesktop` |
+| TEMP → 系统盘深层 runDir | ✅ 同上（认出） |
+| TEMP → 项目盘深层 runDir | ✅ 同上（认出） |
+
+即：**在没有其它用例并行的干净进程里，无论 TEMP 指向哪里都能认出**。
+这排除了「TEMP 位置本身破坏 realpath/stat」这类静态原因，
+与实验 8 一致地指向**并发/时序**因素。
+
+### 7.3 参照对象：`background-cascade.spec.ts` 会拉起外部浏览器
+
+同一次 `test:e2e` 里，先跑 8 个 `background-cascade` 用例再跑
+`theme-switcher`（配置 `workers: 1`、`fullyParallel: false`，同 worker 串行）。
+前者用 `chromium.launch({ channel: 'msedge' })` 启动**真实的 Microsoft Edge**
+进程来渲染离线夹具页 —— 一套与 Electron 无关、但会争用系统资源的外部进程。
+
+`theme-switcher` 的失败点恰好是**它自己的第一个用例、最早的一次界面读取**
+（`beforeAll` 启动 Electron → 第一个测试立刻读 `.target`）。集成阶段
+（240.8s，`--maxWorkers=1` 制造大量临时文件）刚结束，前 8 个用例的 msedge
+又刚跑完，此时正是 I/O 与进程表最拥挤的时刻，**目标发现这条需要
+`realpath` + `stat` + 读 asar 的链最容易在首次调用时被拖慢/失败**。
+
+### 7.4 当前定性（诚实边界）
+
+- **可复现，但不是确定性的**：实验 5/6 复现、实验 8 同形状未复现 → 属
+  **时序相关的间歇失败**，不能宣称「必然发生」。
+- **失败是真的**：界面确实落到了 `未发现目标` 空态，不是断言写错、
+  不是测试被绕过。门禁**正确地把一个真实的产品级脆弱点拦下来了**。
+- **触发条件已收窄到**：同一次 `test:e2e` 中「先跑 msedge 系用例 + 集成刚结束」
+  的拥挤窗口里，`theme-switcher` 的首次 `discoverTargets` 可能返回空。
+- **尚未取得**：主进程侧 `discoverTargets` 的逐候选根日志（`scanned` 为空还是
+  `inspectRoot` 失败）。缺这一条，**不对「是谁拖慢/拒绝了首次发现」做最终归因**，
+  也不排除是 Electron 启动早期的自我竞态。
+
+### 7.5 处置
+
+- 本项**未改任何产品代码与断言**，未放宽 e2e 超时，未重跑掩盖失败。
+- 失败的原始日志、失败用例、预期/实收字符串已完整保留（`E-release4.log`，
+  §7 上引）。
+- 发布候选 `candidate-20260916081110-b64203e-408e68` 因此**未完成**，
+  `ALL_GREEN` **未产出**。
+- 真实安装→应用→重启→恢复仍**需用户当次授权**，本项未执行。
+
+### 7.6 建议的下一步（待用户决策，均需确认后再动）
+
+1. **给 `theme-switcher` 的首次目标发现加重试/等待**（renderer 侧对
+   `discoverTargets` 的空结果做有限次自愈，而非直接渲染「未发现目标」）——
+   针对用户可感知的症状。
+2. **把 `background-cascade` 与 `theme-switcher` 拆到不同 worker/不同
+   `test:e2e` 步骤**，消除 msedge 与 Electron 的资源争用窗口 —— 针对触发条件。
+3. **在 `discoverTargets` 里补一条诊断日志**（候选根 + `scanned` + 每个
+   `inspectRoot` 的失败码），下次复现时直接拿到主进程侧证据 —— 先把归因坐实。
+
+三者都不放松门禁；**1 和 2 有实际修复价值，3 是取证前置**。
+
+### 7.7 链序复刻的收尾结果（`tools/e2e-chain-repro.cjs full`）
+
+按 `release-build.cjs` 的真实调用方式复刻「`test:unit` → `test:integration`
+→ `test:e2e`」三步（含各步真实 env），结果：
+
+```
+=== test:unit ===        TEMP=<项目盘>/.cache/ots-test-tmp/run-58020-...
+  EXIT test:unit = 1 (543.7s)   ← 229/229 通过，但触顶 9min 被 SIGTERM
+=== test:integration === TEMP=<项目盘>/.cache/ots-test-tmp/run-58020-...
+  EXIT test:integration = 1 (543.1s)  ← 同样触顶，未取得汇总行
+=== test:e2e ===         TEMP=C:\Users\ylzho\AppData\Local\Temp   ← 无 testEnv()
+  EXIT test:e2e = 0 (54.0s)     ← 16 passed
+```
+
+两条结论：
+
+1. **`test:e2e` 在链序复刻里通过了**（16/16）。这与 §7.1 实验 8 一致，
+   进一步支持 §7.4 的定性：**e2e 那次失败是时序相关的间歇失败**，
+   不是可稳定复现的确定性缺陷。**不对它宣称「必然发生」。**
+2. **`test:unit` / `test:integration` 的 9 分钟触顶是稳定复现的**，
+   且**与 `release-build.cjs` 里 `test:e2e` 不传 env 这件事无关** ——
+   两者都拿到了 `testEnv()` 的重定向，仍然触顶。这再次坐实 §3 的归因：
+   是**包装层临时根落在项目盘**导致的，与 e2e 无关。
+
+### 7.8 链上 env 的一处编排不一致（已取证，未改）
+
+`release-build.cjs` 里 `test:unit` 与 `test:integration` 都显式传
+`{ env: testEnv() }`（把 `TEMP`/`TMP` 指向项目盘 runDir），
+而 `test:e2e`（`:522`）与 `test:e2e:electron`（`:523`）**不传 env**，
+于是 `runStep` 走到 `env: opts.env || process.env`（`:132`），
+**e2e 实际继承外层 shell 的 `TEMP`，而不是与 unit/integration 一致的 runDir**。
+
+这本身**不是** §7 那次失败的原因（§7.7 已证明 e2e 在不重定向时通过），
+但它是一处**编排意图与实际行为不一致**：要么是刻意（e2e 需要系统 Temp），
+要么是漏了。建议在 §7.6 的三条之外，**单列为待确认项**，避免后人误判。
+
 
 

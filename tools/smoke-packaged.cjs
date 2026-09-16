@@ -135,8 +135,25 @@ async function main() {
     app = await electron.launch({
       executablePath: exe,
       env,
-      // 本机自动化环境下渲染进程可能因 GPU 初始化崩溃，冒烟时禁用 GPU 不影响结论
-      args: ['--disable-gpu', '--disable-software-rasterizer'],
+      /*
+       * 无显示会话下必须用这组开关（docs/acceptance.md 第 175 行有记录）：
+       * Electron 的 GPU 子进程会反复重启并拖住进程；`--no-sandbox` 与
+       * `--in-process-gpu` 缺一不可。
+       *
+       * 这里此前只传了 `--disable-gpu --disable-software-rasterizer`，结果
+       * Playwright 在 attach 时拿不到可用的 CDP target，报 `Target crashed`
+       * ——而且这个错误会**从子进程异步逃逸出 try/catch**，表现为一句
+       * 没有上下文的 SMOKE_FAIL。补齐开关后同一候选能正常起窗口
+       * （`firstWindow()` 返回标题「OpenCode 换肤助手」）。
+       */
+      args: [
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--no-sandbox',
+        '--in-process-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-gpu-compositing',
+      ],
     });
     const win = await app.firstWindow();
     const obs = await observe(win);

@@ -1,0 +1,44 @@
+{
+  "commit": "f425ea3",
+  "generatedAt": "2026-09-16T06:47:55.547Z",
+  "chain": "node tools/verify-entry.cjs",
+  "order": [
+    "typecheck",
+    "lint",
+    "unit",
+    "build",
+    "integration",
+    "e2e"
+  ],
+  "finalMarker": "VERIFY_OK",
+  "exitCode": 0,
+  "results": {
+    "typecheck": "exit 0（tsc --noEmit -p tsconfig.json 无输出）",
+    "lint": "exit 0（eslint . 干净）",
+    "unit": {
+      "files": "14 passed",
+      "tests": "229 passed"
+    },
+    "integration": {
+      "files": "15 passed",
+      "tests": "179 passed"
+    },
+    "e2e": {
+      "runner": "playwright",
+      "tests": "16 passed",
+      "duration": "43.5s"
+    }
+  },
+  "rawLogLines": {
+    "unitTestFiles": [],
+    "unitTests": [],
+    "integrationTestFiles": [],
+    "integrationTests": [],
+    "e2e": [
+      "  16 passed (43.5s)"
+    ],
+    "final": [
+      "VERIFY_OK（开发验证通过；这不是发布验收——发布链见 tools/release-build.cjs）"
+    ]
+  }
+}

@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const requireCjs = createRequire(import.meta.url);
-const { judge, SMOKE_CONTRACT } = requireCjs('../../tools/smoke-packaged.cjs') as {
+const { judge, judgeReleaseQualification, SMOKE_CONTRACT } = requireCjs('../../tools/smoke-packaged.cjs') as {
   judge: (
     o: {
       visibleTextLen?: number;
@@ -24,6 +24,7 @@ const { judge, SMOKE_CONTRACT } = requireCjs('../../tools/smoke-packaged.cjs') a
     },
     opts?: { relaxed?: boolean },
   ) => string[];
+  judgeReleaseQualification: (o?: { args?: string[]; selfTestNegative?: boolean }) => string[];
   SMOKE_CONTRACT: { titleExact: string; buttonNames: readonly string[]; minVisibleTextLen: number };
 };
 
@@ -96,5 +97,32 @@ describe('冒烟判定 judge（任务 D）', () => {
         { relaxed: true },
       ).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * 复审 R5：无条件关闭沙箱的冒烟结果不能当发布验收。
+ * 这组断言锁住「含安全降级参数 → 不构成发布资格」，防止以后又把诊断运行当绿色证据。
+ */
+describe('冒烟发布资格判定 judgeReleaseQualification（复审 R5）', () => {
+  it('默认配置（不含安全降级开关）→ 可作为发布资格证据', () => {
+    expect(judgeReleaseQualification({ args: ['--disable-gpu', '--disable-gpu-compositing'] })).toEqual([]);
+  });
+
+  it('含 --no-sandbox → 不构成发布资格，原因明确点名该开关', () => {
+    const problems = judgeReleaseQualification({ args: ['--disable-gpu', '--no-sandbox'] });
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain('--no-sandbox');
+    expect(problems[0]).toContain('发布资格');
+  });
+
+  it('含 --in-process-gpu → 不构成发布资格', () => {
+    const problems = judgeReleaseQualification({ args: ['--in-process-gpu'] });
+    expect(problems.length).toBe(1);
+    expect(problems[0]).toContain('--in-process-gpu');
+  });
+
+  it('负例自检运行 → 不构成发布资格（即使参数干净）', () => {
+    expect(judgeReleaseQualification({ args: [], selfTestNegative: true })[0]).toContain('负例自检');
   });
 });

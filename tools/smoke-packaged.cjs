@@ -20,12 +20,21 @@
  * 自检：`--self-test-negative` 走同一套断言，但故意清空 DOM（必须判为失败），
  * 用于证明「检查真的会失败」，避免把永远通过的检查当成守门。
  *
- * 用法：node tools/smoke-packaged.cjs <win-unpacked 目录> [--self-test-negative]
- * 退出码：0 冒烟通过；1 冒烟失败；2 用法错误。
+ * 复审 R5 修正：旧版无条件带 `--no-sandbox --in-process-gpu`（无显示会话下的变通），
+ * 却把那次运行当成与双击等价的验收 —— 关闭沙箱改变了实际运行条件，结论超出证据范围。
+ * 现在默认**保留沙箱**（只关 GPU 相关子进程）；确需在无交互会话里诊断时用
+ * `--diagnostic-degraded`，且该运行按失败关闭记账（不打印 SMOKE_OK、退出码非 0）。
+ *
+ * 用法：node tools/smoke-packaged.cjs <win-unpacked 目录> [--self-test-negative] [--diagnostic-degraded]
+ * 退出码：0 冒烟通过（默认配置）；1 冒烟失败或不构成发布资格；2 用法错误。
  */
 'use strict';
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+
+/** 记录候选 exe 身份（避免把不同 exe 的运行结果混为一谈） */
+const sha256File = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 /** 主界面关键控件契约（与 tests/e2e/theme-switcher.spec.ts 保持一致）。 */
 const SMOKE_CONTRACT = {
@@ -36,6 +45,44 @@ const SMOKE_CONTRACT = {
   /** 必须有可见文本的最小长度（防止空白页蒙混） */
   minVisibleTextLen: 40,
 };
+
+/**
+ * 安全降级开关（复审 R5）：这些参数会改变候选包实际的运行安全条件，
+ * **不得**出现在发布验收里。只有 `--diagnostic-degraded` 显式诊断时才带上，
+ * 且那次运行不构成发布资格（不打印 SMOKE_OK，退出码非 0）。
+ */
+const DEGRADED_ARGS = ['--no-sandbox', '--in-process-gpu'];
+
+/**
+ * 默认启动参数：只关 GPU 相关子进程（无显示会话下的稳定性问题），
+ * **完全不动沙箱**——main 进程配置的是 `sandbox: true`，验收必须在保留沙箱的
+ * 受支持交互会话里进行，否则「冒烟通过」证明不了用户默认环境可启动。
+ */
+const DEFAULT_ARGS = [
+  '--disable-gpu',
+  '--disable-gpu-compositing',
+  '--disable-software-rasterizer',
+  '--disable-dev-shm-usage',
+];
+
+/**
+ * 判定本次冒烟能否作为「发布资格证据」（**纯函数**，供单测直接调用）。
+ * 含安全降级参数、或只是负例自检，都不等于默认配置下的产品验收。
+ * @param {{args?: string[], selfTestNegative?: boolean}} [o]
+ * @returns {string[]} 不构成发布资格的原因（空数组 = 可作为发布资格证据）
+ */
+function judgeReleaseQualification(o = {}) {
+  const args = Array.isArray(o.args) ? o.args : [];
+  const problems = [];
+  const degraded = args.filter((a) => DEGRADED_ARGS.includes(a));
+  if (degraded.length) {
+    problems.push(
+      `启动参数含安全降级开关（${degraded.join('、')}）：只能算「非默认配置诊断」，不能作为发布资格证据`,
+    );
+  }
+  if (o.selfTestNegative) problems.push('负例自检运行不是产品验收');
+  return problems;
+}
 
 /**
  * 判定界面证据是否可用（**纯函数**，供单测直接调用，无需启动 Electron）。
@@ -108,12 +155,30 @@ async function main() {
   const negIdx = argv.indexOf('--self-test-negative');
   const selfTestNegative = negIdx >= 0;
   if (negIdx >= 0) argv.splice(negIdx, 1);
+  const diagIdx = argv.indexOf('--diagnostic-degraded');
+  const diagnosticDegraded = diagIdx >= 0;
+  if (diagIdx >= 0) argv.splice(diagIdx, 1);
   const dir = argv[0];
   if (!dir) {
-    console.error('用法: node tools/smoke-packaged.cjs <win-unpacked 目录> [--self-test-negative]');
+    console.error('用法: node tools/smoke-packaged.cjs <win-unpacked 目录> [--self-test-negative] [--diagnostic-degraded]');
+    console.error('  --diagnostic-degraded：无可用交互会话时的诊断开关（会关闭沙箱）；该运行不构成发布资格（退出码非 0）');
     process.exit(2);
   }
   const exe = path.join(dir, 'OpenCodeThemeSwitcher.exe');
+  const args = diagnosticDegraded ? [...DEFAULT_ARGS, ...DEGRADED_ARGS] : [...DEFAULT_ARGS];
+  const qualification = judgeReleaseQualification({ args, selfTestNegative });
+
+  // 记录本次运行的真实条件（executable / 参数 / 环境），避免把不同配置的结果混为一谈
+  console.log(`SMOKE_EXE ${exe}`);
+  console.log(`SMOKE_ARGS ${JSON.stringify(args)}`);
+  console.log(
+    `SMOKE_ENV platform=${process.platform} session=${process.env.SESSIONNAME || '(无)'} ` +
+      `sandbox=${args.includes('--no-sandbox') ? 'disabled(诊断)' : 'preserved'} ` +
+      `executableSha256=${fs.existsSync(exe) ? sha256File(exe).slice(0, 16) : '(缺失)'}…`,
+  );
+  if (qualification.length) {
+    for (const p of qualification) console.log('SMOKE_NOT_RELEASE_QUALIFYING:', p);
+  }
 
   // 预检：exe 不存在就别启动（Playwright 的 launch 失败会抛出难看的长栈，
   // 且可能从子进程异步逃逸出 try/catch），这里给出干净的 SMOKE_FAIL。
@@ -132,29 +197,15 @@ async function main() {
 
   let app;
   try {
-    app = await electron.launch({
-      executablePath: exe,
-      env,
-      /*
-       * 无显示会话下必须用这组开关（docs/acceptance.md 第 175 行有记录）：
-       * Electron 的 GPU 子进程会反复重启并拖住进程；`--no-sandbox` 与
-       * `--in-process-gpu` 缺一不可。
-       *
-       * 这里此前只传了 `--disable-gpu --disable-software-rasterizer`，结果
-       * Playwright 在 attach 时拿不到可用的 CDP target，报 `Target crashed`
-       * ——而且这个错误会**从子进程异步逃逸出 try/catch**，表现为一句
-       * 没有上下文的 SMOKE_FAIL。补齐开关后同一候选能正常起窗口
-       * （`firstWindow()` 返回标题「OpenCode 换肤助手」）。
-       */
-      args: [
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--no-sandbox',
-        '--in-process-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-gpu-compositing',
-      ],
-    });
+    /*
+     * 复审 R5：这里**不再**无条件带 `--no-sandbox` / `--in-process-gpu`。
+     * 旧的降级参数确实能在无显示会话里起窗口（docs/acceptance.md 6.1 记录过
+     * GPU 子进程反复重启、`Target crashed` 的问题），但那改变了实际运行条件，
+     * 属于「非默认配置诊断」，不能证明用户双击默认启动可用。
+     * 现在默认只关 GPU 相关子进程，保留沙箱；无可用交互会话时应当如实阻断，
+     * 而不是靠关闭保护刷绿。
+     */
+    app = await electron.launch({ executablePath: exe, env, args });
     const win = await app.firstWindow();
     const obs = await observe(win);
 
@@ -196,6 +247,14 @@ async function main() {
       for (const p of problems) console.log('SMOKE_FAIL:', p);
       process.exit(1);
     }
+    if (qualification.length) {
+      /*
+       * 界面断言通过，但本次运行不构成发布资格（例如带了安全降级参数）：
+       * 失败关闭——不打印 SMOKE_OK、退出码非 0，避免日志扫描器把它当成发布绿色。
+       */
+      console.log('SMOKE_DIAGNOSTIC_ONLY（非默认配置诊断；不构成发布资格）');
+      process.exit(1);
+    }
     console.log('SMOKE_OK');
   } catch (e) {
     console.log('SMOKE_FAIL:', e instanceof Error ? e.message.slice(0, 300) : String(e));
@@ -204,7 +263,7 @@ async function main() {
   }
 }
 
-module.exports = { judge, observe, SMOKE_CONTRACT };
+module.exports = { judge, observe, SMOKE_CONTRACT, judgeReleaseQualification, DEGRADED_ARGS, DEFAULT_ARGS };
 
 if (require.main === module) {
   // Playwright 的启动失败可能从内部子进程异步逃逸，绕过 main 的 try/catch，

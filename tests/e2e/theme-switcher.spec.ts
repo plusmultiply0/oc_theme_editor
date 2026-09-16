@@ -115,6 +115,12 @@ test.beforeAll(async () => {
 
   app = await electron.launch({
     cwd: ROOT,
+    /*
+     * 复审 R5/R6：这组安全降级开关只用于**自动化诊断**——无显示会话下 Electron 的
+     * GPU 子进程会反复重启、拖住进程（见 docs/acceptance.md 6.1）。
+     * 它**不是**产品验收证据：候选包默认配置（保留沙箱）的启动验收在
+     * tools/smoke-packaged.cjs，不能用这里的绿色结果替代。
+     */
     args: [
       '--disable-gpu',
       '--no-sandbox',
@@ -170,14 +176,63 @@ function panelWithHeading(name: string) {
   });
 }
 
+/**
+ * R6：目标等待超时时收集可诊断证据（扫描状态、目标区各段文本、期望路径）。
+ * 目的是让「发现失败」和「界面没渲染」区分得开，而不是只给一句超时。
+ */
+async function collectDiscoveryDiagnostics(): Promise<Record<string, string>> {
+  const read = async (selector: string): Promise<string> => {
+    const text = await page
+      .locator(selector)
+      .first()
+      .innerText()
+      .catch(() => '(读取失败)');
+    return text.trim().slice(0, 400);
+  };
+  return {
+    status: await read('.status'),
+    target: await read('.target'),
+    targetMuted: await read('.target .muted'),
+    targetBadge: await read('.target .badge'),
+    expectedBaseDir: baseDir,
+  };
+}
+
 test.describe('图形界面闭环（先不碰用户安装）', () => {
-  test('窗口与渲染进程启动，且只看到临时目录里的合成安装', async () => {
+  test('窗口与渲染进程启动，且只看到临时目录里的合成安装', async (_fixtures, testInfo) => {
     await expect(page.locator('.topbar h1')).toHaveText('OpenCode 换肤助手');
 
-    // 隔离保险：默认选中的目标必须落在临时目录内
-    const installText = await page.locator('.target .muted').innerText();
-    expect(installText.toLowerCase()).toContain(baseDir.toLowerCase());
-    await expect(page.locator('.target .badge')).toHaveText('supported');
+    /*
+     * R6：目标发现走异步 IPC（discoverTargets），标题出现 ≠ 扫描结束。
+     * 旧写法是「标题一出现就 innerText() 快照 + 普通 expect(string)」——静态文本断言
+     * 不会自动重试，首用例可能撞上扫描尚未完成的窗口期（已有一次首用例失败、后续
+     * 成功的记录与之吻合）。这里改用有界自动重试的轮询断言（取规范化文本以兼容
+     * 路径大小写），并在超时时把可诊断证据落进报告；不是「加固定 sleep」或
+     * 「重试到绿」。
+     */
+    const targetPath = page.locator('.target .muted');
+    try {
+      await expect
+        .poll(async () => (await targetPath.innerText()).toLowerCase(), {
+          timeout: 30_000,
+          message: `等待目标发现完成（应显示隔离临时目录 ${baseDir}）`,
+        })
+        .toContain(baseDir.toLowerCase());
+    } catch (e) {
+      const diagnostics = await collectDiscoveryDiagnostics();
+      await testInfo.attach('discover-timeout.json', {
+        body: JSON.stringify(diagnostics, null, 2),
+        contentType: 'application/json',
+      });
+      const shot = await page.screenshot().catch(() => null);
+      if (shot) await testInfo.attach('discover-timeout.png', { body: shot, contentType: 'image/png' });
+      throw new Error(`等待目标路径超时：${JSON.stringify(diagnostics)}（原始错误：${(e as Error).message}）`);
+    }
+
+    // 发现完成后才断言徽标与包名；隔离保险：路径必须落在临时目录内
+    await expect(page.locator('.target .badge')).toHaveText('supported', { timeout: 30_000 });
+    const installText = (await targetPath.innerText()).toLowerCase();
+    expect(installText).toContain(baseDir.toLowerCase());
     expect(installText).toContain('@opencode-aidesktop');
   });
 

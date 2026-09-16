@@ -300,20 +300,92 @@ function makeZip(candidateDir, zipPath) {
   if (r.status !== 0) throw new Error(`生成 zip 失败（exit=${r.status}）`);
 }
 
+/**
+ * 选项解析。三条硬规则：
+ *   1) 需要值的选项**必须有值**——缺值记录在 opts.missingValue 里，由 main 拒绝。
+ *      旧写法 `opts.x = argv[++i]` 在缺值时得到 undefined，随后被当成「没声明」
+ *      而静默放行：调用者以为指定了目标，实际没有。
+ *   2) 未识别的 `--xxx` 记入 opts.unknown，由 main 报错（不再静默丢弃）。
+ *   3) `--x=value` 与 `--x value` 等价，避免标准写法被误判成未知参数。
+ *
+ * 无值选项（--strict/--skip-gui/--skip-e2e）不消耗下一个参数，因此位置参数
+ * （mode / buildId）的位置保持不变。
+ */
+const VALUE_OPTS = { '--root': 'root', '--manifest': 'manifest', '--candidate-dir': 'candidateDir', '--build-id': 'buildId' };
+const FLAG_OPTS = { '--skip-e2e': 'skipE2e', '--skip-gui': 'skipGui', '--strict': 'strict' };
+
 function parseArgs(argv) {
   const opts = {};
   const positional = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--skip-e2e') opts.skipE2e = true;
-    else if (a === '--skip-gui') opts.skipGui = true;
-    else if (a === '--strict') opts.strict = true;
-    else if (a === '--root') opts.root = argv[++i];
-    else positional.push(a);
+    const raw = argv[i];
+    const eq = raw.indexOf('=');
+    const flag = eq > 0 ? raw.slice(0, eq) : raw;
+
+    if (FLAG_OPTS[flag]) {
+      opts[FLAG_OPTS[flag]] = true;
+      continue;
+    }
+    if (VALUE_OPTS[flag]) {
+      if (eq > 0) {
+        opts[VALUE_OPTS[flag]] = raw.slice(eq + 1);
+        continue;
+      }
+      const next = argv[i + 1];
+      // 缺值判定：没有下一个参数，或下一个本身就是另一个选项
+      if (next === undefined || (next.startsWith('--') && next.length > 2)) {
+        opts.missingValue = (opts.missingValue || []).concat(flag);
+        continue;
+      }
+      opts[VALUE_OPTS[flag]] = next;
+      i += 1;
+      continue;
+    }
+    if (raw.startsWith('--')) {
+      opts.unknown = (opts.unknown || []).concat(raw);
+      continue;
+    }
+    positional.push(raw);
   }
-  opts.mode = positional[0];
-  opts.buildId = positional[1];
+  if (opts.mode === undefined) opts.mode = positional[0];
+  if (opts.buildId === undefined) opts.buildId = positional[1];
   return opts;
+}
+
+/**
+ * 路径规范化后比较：Windows 下大小写与分隔符都不该让「同一个目录」被判成不同。
+ * 不做 realpath（候选目录可能尚不存在，且符号链接语义不是这里要解决的问题）。
+ */
+function samePath(a, b) {
+  const na = path.resolve(ROOT, a).replace(/[\\/]+/g, path.sep).toLowerCase();
+  const nb = path.resolve(ROOT, b).replace(/[\\/]+/g, path.sep).toLowerCase();
+  return na === nb;
+}
+
+/**
+ * N4：调用方给出的显式绑定必须与 buildId 推导出的目标一致。
+ *
+ * 背景：shell 入口曾承诺校验 GATE_MANIFEST / GATE_CANDIDATE_DIR 与推导目标一致，
+ * 实际只判断非空，随后只把 buildId 传下来——于是「变量指向 A、buildId 指向 B」时
+ * 下层仍只核验 B 的默认路径，调用者意图与实际验证目标不一致（不是说 B 的坏产物
+ * 能通过，而是核验对象可能不是调用者以为的那个）。这里把比较放到 Node 层，
+ * 按仓库根解析、规范化后严格比较，不一致就在**运行核验之前**非零退出。
+ */
+function assertExplicitBinding(opts, { candidateDir, manifest }) {
+  const mismatches = [];
+  if (opts.manifest && !samePath(opts.manifest, manifest)) {
+    mismatches.push(`--manifest 指向 ${path.resolve(ROOT, opts.manifest)}，但 buildId=${opts.buildId} 推导为 ${manifest}`);
+  }
+  if (opts.candidateDir && !samePath(opts.candidateDir, candidateDir)) {
+    mismatches.push(`--candidate-dir 指向 ${path.resolve(ROOT, opts.candidateDir)}，但 buildId=${opts.buildId} 推导为 ${candidateDir}`);
+  }
+  if (mismatches.length) {
+    console.error('[FAIL] 显式绑定与 buildId 推导目标不一致（拒绝按未声明的目标核验）：');
+    for (const m of mismatches) console.error(`       ${m}`);
+    console.error('       要么让变量与 buildId 指向同一候选，要么只传 buildId 让工具推导；');
+    console.error('       不接受「声明了一个目标、实际核验另一个」这种调用方式。');
+    process.exit(2);
+  }
 }
 
 /** 生成唯一 buildId：时间 + 源码短 SHA + 随机后缀（禁止只用日期） */
@@ -330,7 +402,10 @@ function usage() {
   console.error('  node tools/release-build.cjs verify <buildId>   # 只读核验既有候选（不构建）');
   console.error('  buildId 省略时自动生成（时间-源码短SHA-随机后缀）。');
   console.error('  可选：--skip-e2e / --skip-gui（仅开发构建，发布链不得省略）');
-  console.error('  可选：--strict（要求发布资格；不可发布则非 0 退出）');
+  console.error('  可选：--strict（仅 build 模式：要求发布资格，不可发布则非 0 退出）');
+  console.error('  可选：--manifest <路径> / --candidate-dir <路径>（仅 verify 模式：');
+  console.error('        显式声明核验目标，必须与 buildId 推导结果一致，否则退出 2）');
+  console.error('  未识别的参数或缺少参数值一律退出 2（不静默丢弃）。');
 }
 
 // ---------------- verify（只读） ----------------
@@ -641,11 +716,39 @@ function readReleaseEligibility(candRoot) {
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.root) ROOT = path.resolve(opts.root);
+
+  // N4：未知参数必须报错。此前尾部参数（例如只想给 verify 加 --strict）会被静默丢弃，
+  // 调用者以为生效了、实际没有——这类「以为加了其实没加」比直接失败更危险。
+  if (opts.unknown && opts.unknown.length) {
+    console.error(`[FAIL] 无法识别的参数：${opts.unknown.join(' ')}`);
+    usage();
+    process.exit(2);
+  }
+  // N4：需要值的选项缺值同样不能放行——`--manifest` 后面没跟路径时，旧行为是
+  // 把它当成「没声明绑定」，于是调用者指定的目标被静默忽略。宁可失败。
+  if (opts.missingValue && opts.missingValue.length) {
+    console.error(`[FAIL] 选项缺少参数值：${opts.missingValue.join(' ')}`);
+    usage();
+    process.exit(2);
+  }
+
   if (opts.mode === 'build') {
     const buildId = opts.buildId || newBuildId();
     runBuild(buildId, opts);
   } else if (opts.mode === 'verify') {
     if (!opts.buildId) { usage(); process.exit(2); }
+    // N4：--strict 只对 build 模式有意义（验证「本次构建是否具备发布资格」）。
+    // verify 模式本身已经用 --require-release-eligibility 要求发布级结论，
+    // 再传 --strict 说明调用者对自己的调用方式有误解，明确失败而不是假装接受。
+    if (opts.strict) {
+      console.error('[FAIL] verify 模式不接受 --strict：核验已经要求发布级结论（--require-release-eligibility）');
+      console.error('       若想要求「本次构建具备发布资格」，请用 build 模式加 --strict。');
+      process.exit(2);
+    }
+    // N4：verify 模式的显式绑定校验（build 模式不使用这两个变量）
+    const candidateDir = path.join(ROOT, `candidate-${opts.buildId}`, 'win-unpacked');
+    const manifest = path.join(ROOT, `candidate-${opts.buildId}`, 'candidate-manifest.json');
+    assertExplicitBinding(opts, { candidateDir, manifest });
     runVerify(opts.buildId);
   } else {
     usage();

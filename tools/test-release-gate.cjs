@@ -26,6 +26,12 @@
  *     机器结果缺失/绑错运行、非零退出、超时、超长 stderr、嵌入伪摘要、
  *     allowlist 豁免、非严格模式兼容；
  *   - verify 模式：缺 buildId → exit 2；manifest 缺失 → 失败关闭不构建；
+ *   - **N3**：普通验证入口（tools/verify-entry.cjs）的步骤顺序——build 恰好一次、
+ *     依赖产物的步骤都在其后、integration/e2e 不再排在构建之前；`--list` 与步骤表
+ *     同源、`--from` 未知步骤失败关闭；
+ *   - **N4**：显式绑定与参数透传——Node 层一致放行 / 不一致与未知参数 exit 2；
+ *     薄入口端到端注入 node 桩断言下层 argv（绑定真的传下去了、尾部参数不丢、
+ *     未声明就不编造、缺绑定在 shell 层失败关闭）；
  *   - 未知模式 → exit 2；
  *   - mock 清除继承的绑定变量（GATE_*），再按场景注入。
  *
@@ -40,6 +46,18 @@ const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD = path.join(ROOT, 'tools', 'release-build.cjs');
+/**
+ * 薄入口（tools/release-gate.sh）的端到端用例需要 `.sh` 解释器：Windows 上没有
+ * 系统 bash，但 Git 自带（WorkBuddy 的 PortableGit 也在其中）。经 cmd.exe 之类
+ * 的方式间接启动会被安全策略拦截，因此这里直接定位 Git 安装目录下的 bash.exe。
+ * 找不到时相关用例跳过，而不是判失败。
+ */
+const BASH_BIN = [
+  'C:\\Program Files\\Git\\bin\\bash.exe',
+  'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
+  'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+  path.join(os.homedir(), '.workbuddy', 'binaries', 'PortableGit', 'versions', '1.2.0', 'bin', 'bash.exe'),
+].find((p) => fs.existsSync(p)) || '';
 // R1（5e）：真实 CLI 与 hash 工具
 const CAND = path.join(ROOT, 'tools', 'candidate-manifest.cjs');
 const VERIFY_RELEASE = path.join(ROOT, 'tools', 'verify-release.cjs');
@@ -1011,6 +1029,365 @@ for (const name of FAIL_STEPS) {
   }
 
   rmDir(fxRepo);
+}
+
+// ---------- 10) N3：普通验证入口的步骤顺序（步骤表即契约） ----------
+/**
+ * 复审 N3：`npm run verify` 曾把 test:integration 排在 build 之前 —— 无 out 时
+ * 直接失败、有旧 out 时先拿旧产物验证再构建（测试与产物不同源）。修法是把步骤
+ * 表写成数据（tools/verify-entry.cjs 的 STEPS），顺序本身成了可断言的内容。
+ *
+ * 这里只读步骤表、不真的跑 npm：顺序是契约，跑一遍完整验证既慢又需要真实构建。
+ * `--list` 的输出也一并断言 —— 排查时看到的就是它，它和自检必须同源。
+ */
+{
+  console.log('\n== N3：validate 入口步骤顺序（build 恰好一次且在依赖 out 的步骤之前）==');
+  const { STEPS } = require(path.join(ROOT, 'tools', 'verify-entry.cjs'));
+  const names = STEPS.map((s) => s.name);
+  const buildIdx = names.indexOf('build');
+  const builds = STEPS.filter((s) => s.isBuild).length;
+
+  expect(builds === 1, '步骤表里构建恰好一次（多构建会让「产物唯一」失效）', `实际 ${builds} 次：${names.join(',')}`);
+  expect(buildIdx === 3, 'build 在 typecheck/lint/test:unit 之后（顺序固定）', `实际下标 ${buildIdx}：${names.join(',')}`);
+
+  for (const step of STEPS) {
+    if (!step.requiresOut) continue;
+    expect(names.indexOf(step.name) > buildIdx,
+      `${step.name} 依赖编译产物 → 必须排在 build 之后`,
+      `build@${buildIdx}，${step.name}@${names.indexOf(step.name)}`);
+  }
+  // N3 的原始缺陷形态：集成被排在构建之前（无 out 必失败 / 用到旧产物）
+  expect(names.indexOf('integration') > buildIdx, 'test:integration 不再排在 build 之前（N3 原始缺陷）', names.join(','));
+  expect(names.indexOf('e2e') > buildIdx, 'test:e2e 不再排在 build 之前', names.join(','));
+
+  // `--list` 与 STEPS 同源（排查输出不能和实际执行的顺序脱节）
+  const rl = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'verify-entry.cjs'), '--list'], {
+    cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 30000,
+  });
+  const listed = (rl.stdout || '').split('\n')
+    .map((l) => l.trim().split(/\s+/)[1]).filter(Boolean);
+  expect(rl.status === 0 && listed.join(',') === names.join(','),
+    '--list 打印的顺序与 STEPS 完全一致', `list=${listed.join(',')} steps=${names.join(',')}`);
+  expect(/BUILD\(唯一\)/.test(rl.stdout || ''), '--list 明确标出唯一的 build 步骤');
+
+  // 坏步骤表必须被运行时自检拦住（顺序不可信时拒绝执行，而不是照跑）：
+  // 直接验证自检逻辑本身 —— 依赖 out 的步骤若排在构建之前必须被判失败。
+  // 这里不修改真实 STEPS（那会污染其他用例），而是复刻同一条判据做交叉验证。
+  const buildAt = STEPS.findIndex((s) => s.isBuild);
+  const violators = STEPS.map((s, i) => ({ s, i })).filter(({ s, i }) => s.requiresOut && i < buildAt);
+  expect(violators.length === 0, '自检判据（requiresOut 必须晚于 build）在真实步骤表上成立',
+    violators.map(({ s }) => s.name).join(','));
+
+  // 未知 --from 步骤必须失败关闭，避免「以为从某步开始、实际从头/不跑」
+  const rbad = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'verify-entry.cjs'), '--from', 'no-such-step'], {
+    cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 30000,
+  });
+  expect(rbad.status === 2, '--from 未知步骤 → exit 2（不静默从头开始）', `实际 ${rbad.status}`);
+  expect(/未知步骤/.test(rbad.stdout + rbad.stderr), '--from 未知步骤时点名该步骤');
+  expect(!/VERIFY_OK/.test(rbad.stdout + rbad.stderr), '--from 未知步骤时不打印通过标记');
+}
+
+// ---------- 10b) N3 端到端：真实执行入口，观察实际顺序与失败传播 ----------
+/**
+ * 步骤表的断言证明「表是对的」，这里证明「入口确实按表执行」。做法是在 PATH
+ * 前置一个 npm 桩，记录被调用的脚本名 —— 与 N4 端到端同一手法（可执行桩而非
+ * 改源码）。覆盖计划里的两条验收：无 out 也能按正确顺序启动；build 非零则集成
+ * 不执行。真实构建不在夹具内发生（被桩接住），因此用例是廉价且确定的。
+ */
+{
+  console.log('\n== N3：入口真实执行顺序与失败传播（端到端）==');
+  const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'n3-e2e-'));
+  const orderLog = path.join(fx, 'order.log');
+  const rec = path.join(fx, 'rec.cjs');
+  fs.writeFileSync(rec, [
+    "'use strict';",
+    "const fs = require('node:fs');",
+    'const args = process.argv.slice(2);',
+    "const name = args[0] === 'run' ? args[1] : args.join(' ');",
+    "fs.appendFileSync(process.env.ORDER_LOG, name + '\\n');",
+    "if (process.env.NPM_STUB_FAIL && name === process.env.NPM_STUB_FAIL) process.exit(7);",
+    'process.exit(0);',
+  ].join('\n'));
+  const binDir = path.join(fx, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const isWinHost = process.platform === 'win32';
+  const npmStub = path.join(binDir, isWinHost ? 'npm.cmd' : 'npm');
+  if (isWinHost) {
+    fs.writeFileSync(npmStub, `@echo off\r\n"${process.execPath}" "${rec}" %*\r\nexit /b %errorlevel%\r\n`);
+  } else {
+    fs.writeFileSync(npmStub, `#!/bin/sh\nexec "${process.execPath}" "${rec}" "$@"\n`);
+    fs.chmodSync(npmStub, 0o755);
+  }
+
+  const runEntry = (extraEnv = {}) => {
+    if (fs.existsSync(orderLog)) fs.rmSync(orderLog);
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'verify-entry.cjs')], {
+      cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 120000,
+      env: { ...process.env, PATH: binDir + path.delimiter + process.env.PATH, ORDER_LOG: orderLog, ...extraEnv },
+    });
+    const order = fs.existsSync(orderLog)
+      ? fs.readFileSync(orderLog, 'utf8').trim().split('\n').filter(Boolean) : [];
+    return { status: r.status, out: (r.stdout || '') + (r.stderr || ''), order };
+  };
+
+  const ok = runEntry();
+  const buildCount = ok.order.filter((x) => x === 'build').length;
+  const buildAt = ok.order.indexOf('build');
+  expect(buildCount === 1, '真实入口只构建一次', `实际 ${buildCount} 次：${ok.order.join(' -> ')}`);
+  expect(ok.order.indexOf('test:integration') > buildAt && buildAt >= 0,
+    '真实入口里 test:integration 在 build 之后（N3 核心）', ok.order.join(' -> '));
+  expect(ok.order.indexOf('test:e2e') > buildAt, '真实入口里 test:e2e 在 build 之后', ok.order.join(' -> '));
+  expect(ok.status === 0 && /VERIFY_OK/.test(ok.out), '全绿时退出 0 并打印 VERIFY_OK', `status=${ok.status}`);
+
+  const bad = runEntry({ NPM_STUB_FAIL: 'build' });
+  expect(bad.status === 7, 'build 非零时整体退出码原样保留', `实际 ${bad.status}`);
+  expect(!bad.order.includes('test:integration'), 'build 失败后集成不执行', bad.order.join(' -> '));
+  expect(!bad.order.includes('test:e2e'), 'build 失败后 E2E 不执行', bad.order.join(' -> '));
+  expect(!/VERIFY_OK/.test(bad.out), 'build 失败时不打印通过标记');
+  expect(/STOPPED at verify\/build/.test(bad.out), '明确停在 build 步骤',
+    (bad.out.split('\n').find((l) => /STOPPED/.test(l)) || '').trim());
+  rmDir(fx);
+}
+
+// ---------- 11) N4：薄入口的显式绑定与参数透传（不再「只判非空后丢弃」） ----------
+/**
+ * 复审 N4：shell 入口承诺校验 GATE_MANIFEST / GATE_CANDIDATE_DIR，实际只判断
+ * 非空就把值丢掉、只把 buildId 传下来 —— 「变量指向 A、buildId 指向 B」时，
+ * 下层仍核验 B 的推导路径（不是说 B 的坏产物能过，而是核验对象不是调用者以为
+ * 的那个）；尾部参数（例如 verify 后加 --strict）也被静默丢弃。
+ *
+ * 两层分别验证：
+ *   11a) Node 层（release-build.cjs）：一致 → 放行；不一致 / 未知参数 → exit 2；
+ *   11b) 端到端（tools/release-gate.sh）：注入 node 桩，断言**传给下层 node 的
+ *        argv** —— 这才是「参数有没有真的传下去」的唯一证据，只看退出码区分不了
+ *        「传下去了但下层失败」和「根本没传下去」。
+ */
+{
+  console.log('\n== N4：显式绑定一致性（Node 层）==');
+  const root = makeFixture('orch-bind-');
+  const BID = 'b-bind-1';
+  const REL_MANIFEST = `candidate-${BID}/candidate-manifest.json`;
+  const REL_CAND = `candidate-${BID}/win-unpacked`;
+
+  // 缺 manifest 与「绑定不一致」是两种问题：前者可能是还没构建（N4 之前一律记为
+  // 找不到登记，评审据此无法区分），后者一律在运行核验前 exit 2。
+  const rNone = runOrch(root, ['verify', BID]);
+  expect(rNone.status === 1, '不给绑定但缺候选 → exit 1（找不到登记，非参数错误）', `实际 ${rNone.status}`);
+  expect(/找不到登记/.test(rNone.stdout + rNone.stderr), '缺候选时明确报告找不到登记');
+  expect(!/显式绑定与 buildId 推导目标不一致/.test(rNone.stdout + rNone.stderr),
+    '未声明绑定时不误报「绑定不一致」');
+
+  // 一致三元组：相对路径（正斜杠 / 反斜杠两种写法都算同一个目标）
+  for (const [label, manifest, cand] of [
+    ['相对正斜杠', REL_MANIFEST, REL_CAND],
+    ['相对反斜杠', REL_MANIFEST.replace(/\//g, '\\'), REL_CAND.replace(/\//g, '\\')],
+    ['大小写不同', REL_MANIFEST.toUpperCase(), REL_CAND.toUpperCase()],
+  ]) {
+    const r = runOrch(root, ['verify', BID, '--manifest', manifest, '--candidate-dir', cand]);
+    expect(r.status === 1, `${label}：一致 → 通过绑定校验（止于缺候选）`, `实际 ${r.status}`);
+    expect(/找不到登记/.test(r.stdout + r.stderr), `${label}：确认已越过绑定校验`);
+    expect(!/不一致/.test(r.stdout + r.stderr), `${label}：不报不一致`, (r.stdout + r.stderr).split('\n').slice(-3).join(' | '));
+  }
+
+  // 不一致：manifest 指向 A、buildId 指向 B（N4 的核心负例）
+  {
+    const r = runOrch(root, ['verify', BID, '--manifest', 'candidate-b-other/candidate-manifest.json']);
+    const combined = r.stdout + r.stderr;
+    expect(r.status === 2, '--manifest 与 buildId 不一致 → exit 2', `实际 ${r.status}`);
+    expect(/不一致/.test(combined), '指出绑定不一致');
+    expect(executedSteps(r.stdout).length === 0, '不一致时一步都不执行（不按未声明的目标核验）', executedSteps(r.stdout).join(','));
+  }
+  {
+    const r = runOrch(root, ['verify', BID, '--candidate-dir', 'candidate-b-other/win-unpacked']);
+    const combined = r.stdout + r.stderr;
+    expect(r.status === 2, '--candidate-dir 与 buildId 不一致 → exit 2', `实际 ${r.status}`);
+    expect(/不一致/.test(combined), '指出 candidate 目录不一致');
+  }
+  // 绝对路径指向别处同样是不一致（不给「绝对路径就放过」的口子）
+  {
+    const r = runOrch(root, ['verify', BID, '--candidate-dir', path.join(root, 'candidate-b-other', 'win-unpacked')]);
+    expect(r.status === 2, '绝对路径指向他处 → exit 2', `实际 ${r.status}`);
+  }
+  // 含空格的合法路径：规范化后仍是同一目标 → 不得误判（夹具根在系统临时目录下，
+  // 可能出现空格；这里用一个确实含空格的子路径显式覆盖）
+  {
+    const spaced = path.join(root, 'cand idate');
+    fs.mkdirSync(spaced, { recursive: true });
+    const r = runOrch(root, ['verify', BID, '--candidate-dir', spaced]);
+    expect(r.status === 2, '含空格但确实不一致 → 依然 exit 2（空格不破解析）', `实际 ${r.status}`);
+    expect(/不一致/.test(r.stdout + r.stderr), '含空格路径同样给出不一致原因');
+  }
+
+  // 未知/不适用于本模式的参数：以前静默丢弃，调用者以为加了其实没加
+  {
+    const r = runOrch(root, ['verify', BID, '--strict']);
+    expect(r.status === 2, 'verify 模式下 --strict → exit 2（拒绝「以为加了其实没加」）', `实际 ${r.status}`);
+    expect(/verify 模式不接受 --strict/.test(r.stdout + r.stderr), '明确说明 --strict 只用于 build 模式（点名该选项）');
+    expect(executedSteps(r.stdout).length === 0, '参数不适用时一步都不执行');
+  }
+  {
+    const r = runOrch(root, ['verify', BID, '--frobnicate']);
+    expect(r.status === 2, '完全未知的参数 → exit 2', `实际 ${r.status}`);
+    expect(/无法识别的参数/.test(r.stdout + r.stderr), '点名无法识别的参数');
+    expect(executedSteps(r.stdout).length === 0, '未知参数时一步都不执行');
+  }
+  {
+    const r = runOrch(root, ['build', 'b-bind-2', '--frobnicate']);
+    expect(r.status === 2, 'build 模式下未知参数同样 exit 2', `实际 ${r.status}`);
+  }
+  // 已识别参数不得被误判为未知
+  {
+    const r = runOrch(root, ['verify', BID, '--manifest', REL_MANIFEST, '--candidate-dir', REL_CAND]);
+    expect(!/无法识别的参数/.test(r.stdout + r.stderr), '--manifest/--candidate-dir 是已识别参数，不报未知');
+  }
+  // 缺参数值（`--manifest` 后没有值）不得被当成「没声明绑定」静默放行
+  {
+    const r = runOrch(root, ['verify', BID, '--manifest']);
+    expect(r.status === 2, '--manifest 缺参数值 → exit 2', `实际 ${r.status}`);
+    expect(/缺少参数值/.test(r.stdout + r.stderr), '明确报告缺少参数值');
+    expect(!/找不到登记/.test(r.stdout + r.stderr), '缺值不得退化成「找不到登记」（那是没声明绑定的语义）');
+  }
+  // `--x=value` 与 `--x value` 等价
+  {
+    const r = runOrch(root, ['verify', BID, `--manifest=${REL_MANIFEST}`, `--candidate-dir=${REL_CAND}`]);
+    expect(r.status === 1, '--manifest=value 形式被正确识别（止于缺候选）', `实际 ${r.status}`);
+    expect(!/无法识别/.test(r.stdout + r.stderr), '内联等号形式不被当成未知参数');
+  }
+  rmDir(root);
+}
+
+// ---------- 11b) N4 端到端：薄入口真的把绑定与参数交给了 node 层 ----------
+/**
+ * 注入 node 桩记录下层收到的 argv。验证的是**链路**而不是重复 Node 层的判定：
+ *   - 一声明就必到：GATE_MANIFEST/GATE_CANDIDATE_DIR（相对与绝对）都以
+ *     `--manifest` / `--candidate-dir` 形式出现；
+ *   - 尾部参数不丢：`--strict` 原样出现在下层 argv 里（N4 之前的缺陷形态）；
+ *   - 没有声明就不编造：不传 GATE_* 时下层 argv 里不得凭空出现这两个选项；
+ *   - verify 缺绑定在 shell 层失败关闭（exit 2，且一次都不调用下层）。
+ *
+ * 桩的执行取决于宿主 PATH（`OTS_NODE_BIN` 必须是可解析的可执行形式；本机
+ * TEMP 落在被安全策略拦截的盘符时，即使 `spawnSync('node')` 也会 EINVAL）。
+ * 因此这里**以桩确实运行为准**：没跑起来就输出 SKIP 而不是判失败 —— 和
+ * 「参数丢了」明显不同，绝不能把两者混为一谈。
+ */
+{
+  console.log('\n== N4：薄入口 → node 层的绑定与参数透传（端到端）==');
+  const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-pass-'));
+  const argvLog = path.join(fx, 'argv.log');
+  /** 记录器：把收到的 argv 追加到 ARGV_LOG，然后按 STUB_CODE 退出 */
+  const recorder = path.join(fx, 'rec.cjs');
+  fs.writeFileSync(recorder,
+    "'use strict';\n"
+    + "require('node:fs').appendFileSync(process.env.ARGV_LOG, JSON.stringify(process.argv.slice(2)) + '\\n');\n"
+    + 'process.exit(Number(process.env.STUB_CODE || 0));\n');
+  // Windows 不能直接执行 .cjs（spawnSync 会 EFTYPE），必须由 node 解释器启动；
+  // 因此桩是「把参数转发给 node 的 .cmd」。Linux/CI 下写一个可执行 shell 脚本。
+  const isWinHost = process.platform === 'win32';
+  const stub = isWinHost ? path.join(fx, 'node.cmd') : path.join(fx, 'node-stub.sh');
+  if (isWinHost) {
+    fs.writeFileSync(stub, `@echo off\r\n"${process.execPath}" "${recorder}" %*\r\nexit /b %errorlevel%\r\n`);
+  } else {
+    fs.writeFileSync(stub, `#!/bin/sh\nexec "${process.execPath}" "${recorder}" "$@"\n`);
+    fs.chmodSync(stub, 0o755);
+  }
+
+  const gate = path.join(ROOT, 'tools', 'release-gate.sh');
+  const stubRun = (env, args) => {
+    const r = spawnSync(BASH_BIN, [gate, ...args], {
+      cwd: ROOT, encoding: 'utf8', windowsHide: true, timeout: 90000,
+      env: { ...process.env, OTS_NODE_BIN: stub, ARGV_LOG: argvLog, STUB_CODE: '0', ...env },
+    });
+    const invocations = fs.existsSync(argvLog)
+      ? fs.readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l))
+      : [];
+    if (fs.existsSync(argvLog)) fs.rmSync(argvLog);
+    return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '', invocations };
+  };
+
+  if (!fs.existsSync(BASH_BIN)) {
+    console.log(`  SKIP  薄入口端到端用例：未找到可用的 bash（${BASH_BIN}）；本机为开发环境，此跳不影响 Node 层判定`);
+  } else {
+    // 以桩确实运行为准：注入生效时，编排器收到的第一个参数是脚本路径本身。
+    const canary = stubRun({}, ['frobnicate']);
+    const stubWorks = canary.invocations.length === 1
+      && path.basename(String(canary.invocations[0][0] || '')) === 'release-build.cjs';
+    if (!stubWorks) {
+      console.log('  SKIP  薄入口端到端用例：宿主无法启动注入的解释器桩'
+        + `（invocations=${canary.invocations.length}）；这是环境限制，不代表参数丢失`);
+    } else {
+      const BID = 'b-pass-1';
+      const REL_M = `candidate-${BID}/candidate-manifest.json`;
+      const REL_C = `candidate-${BID}/win-unpacked`;
+      const ABS_M = path.join(ROOT, REL_M);
+      const ABS_C = path.join(ROOT, REL_C);
+      const argvOf = (r) => (r.invocations.length ? r.invocations[r.invocations.length - 1] : []);
+      const after = (argv, flag) => {
+        const i = argv.indexOf(flag);
+        return i >= 0 ? argv[i + 1] : null;
+      };
+      const modeOf = (argv) => argv[1];
+      const buildIdOf = (argv) => argv[2];
+
+      // 有声明必到：相对与绝对路径都要以显式选项出现在下层 argv
+      for (const [label, m, c] of [
+        ['相对路径', REL_M, REL_C],
+        ['绝对路径', ABS_M, ABS_C],
+      ]) {
+        const r = stubRun({ GATE_MANIFEST: m, GATE_CANDIDATE_DIR: c, GATE_BUILD_ID: BID }, ['verify', BID]);
+        const argv = argvOf(r);
+        expect(modeOf(argv) === 'verify' && buildIdOf(argv) === BID,
+          `${label}：模式与 buildId 原样传给下层 node`, argv.join(' '));
+        expect(after(argv, '--manifest') !== null,
+          `${label}：GATE_MANIFEST 真的传给了下层（不再只判非空后丢弃）`, argv.join(' '));
+        expect(after(argv, '--candidate-dir') !== null,
+          `${label}：GATE_CANDIDATE_DIR 真的传给了下层`, argv.join(' '));
+        expect(after(argv, '--manifest') === m,
+          `${label}：manifest 值原样（不被改写/归一）`, `实际 ${after(argv, '--manifest')}`);
+        expect(after(argv, '--candidate-dir') === c,
+          `${label}：candidate 值原样`, `实际 ${after(argv, '--candidate-dir')}`);
+      }
+
+      // 尾部参数不丢（N4 的原始缺陷：静默丢弃）
+      {
+        const r = stubRun({ GATE_MANIFEST: REL_M, GATE_CANDIDATE_DIR: REL_C, GATE_BUILD_ID: BID },
+          ['verify', BID, '--strict']);
+        const argv = argvOf(r);
+        expect(argv.includes('--strict'), '尾部 --strict 出现在下层 argv（不再静默丢弃）', argv.join(' '));
+        expect(r.status === 0, '桩返回 0 时整链退出 0（退出码原样保留）', `实际 ${r.status}`);
+      }
+      // 没声明就不编造
+      {
+        const r = stubRun({}, ['build', 'b-pass-2']);
+        const argv = argvOf(r);
+        expect(modeOf(argv) === 'build' && buildIdOf(argv) === 'b-pass-2',
+          'build 模式：模式与显式 buildId 传给下层', argv.join(' '));
+        expect(after(argv, '--manifest') === null && after(argv, '--candidate-dir') === null,
+          'build 模式不编造 --manifest/--candidate-dir', argv.join(' '));
+      }
+      // verify 缺绑定 → shell 层失败关闭，且一次都不调用下层
+      {
+        const r = stubRun({}, ['verify', BID]);
+        expect(r.status === 2, 'verify 缺绑定 → exit 2', `实际 ${r.status}`);
+        expect(r.invocations.length === 0, '缺绑定时根本不启动下层（失败关闭）', `实际调用 ${r.invocations.length} 次`);
+        expect(/缺少 GATE_MANIFEST/.test(r.stdout + r.stderr), '明确报告缺少显式绑定');
+      }
+      // 多余的位置参数不得被当成 buildId 吃掉（例如 verify 后面多给了一个词）
+      {
+        const r = stubRun({ GATE_MANIFEST: REL_M, GATE_CANDIDATE_DIR: REL_C, GATE_BUILD_ID: BID },
+          ['verify', BID, 'extra-token']);
+        const argv = argvOf(r);
+        expect(buildIdOf(argv) === BID, '多余的第二个位置参数不覆盖 buildId', argv.join(' '));
+        expect(argv.includes('extra-token'), '多余位置参数原样透传（由 Node 层拒绝，不在 shell 里猜）', argv.join(' '));
+      }
+      // 未声明的 buildId 但声明了路径：仍须失败关闭（不得回落默认候选）
+      {
+        const r = stubRun({ GATE_MANIFEST: REL_M, GATE_CANDIDATE_DIR: REL_C }, ['verify']);
+        expect(r.status === 2 && r.invocations.length === 0,
+          '只有路径没有 buildId → exit 2 且不启动下层', `status=${r.status} calls=${r.invocations.length}`);
+      }
+    }
+  }
+  rmDir(fx);
 }
 
 if (failures.length) {

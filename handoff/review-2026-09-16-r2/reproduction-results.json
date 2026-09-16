@@ -1,0 +1,36 @@
+{
+  "sourceSha256": {
+    "tools/verify-release.cjs": "f767c1729721190c1cd0808aeca94faeef64c4b021c8bcf4c4fde78fdd54f730",
+    "src/core/patch/pack.ts": "16ea2ed53df6e5d8d9ffdc735cdb6b1c9c6c3057767b6355cf2419ba4c17dd51"
+  },
+  "windowsDirectory": {
+    "match": [
+      "zip 内多出磁盘没有的条目：resources/"
+    ],
+    "deep": []
+  },
+  "corruptDeflate": {
+    "match": [],
+    "deep": []
+  },
+  "duplicateAlias": {
+    "match": [],
+    "deep": []
+  },
+  "traversalDeep": [],
+  "workerNonzero": {
+    "result": {
+      "success": true
+    },
+    "kills": 0,
+    "exitEmitted": true
+  },
+  "workerNoExitKillThrows": {
+    "result": {
+      "success": true
+    },
+    "kills": 1,
+    "exitEmitted": false
+  },
+  "inflateControl": "Z_DATA_ERROR"
+}

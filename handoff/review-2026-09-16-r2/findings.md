@@ -1,0 +1,5 @@
+# 发现
+
+HEAD85f6707，上轮归档并发/worker错误/verify入口/绑定问题已有提交；集成179通过为已有记录，需核对真实日志。发布链已到verify-release，新阻断记录为ZIP目录条目误判。worker回收超时是否仍返回成功需审查。
+
+独立夹具已证实：Windows目录误报；坏DEFLATE同时通过两道ZIP检查；混合分隔符重复名同样通过；deep独立检查漏掉反斜杠越界；worker成功消息后exit1仍成功，宽限期kill抛错也成功。smoke无条件--no-sandbox与main的sandbox:true不一致；E2E一次性innerText未等待异步发现。完整证据和实施顺序见REVIEW_AND_FIX_PLAN.md。

@@ -199,7 +199,7 @@ async function collectDiscoveryDiagnostics(): Promise<Record<string, string>> {
 }
 
 test.describe('图形界面闭环（先不碰用户安装）', () => {
-  test('窗口与渲染进程启动，且只看到临时目录里的合成安装', async (_fixtures, testInfo) => {
+  test('窗口与渲染进程启动，且只看到临时目录里的合成安装', async ({}, testInfo) => {
     await expect(page.locator('.topbar h1')).toHaveText('OpenCode 换肤助手');
 
     /*

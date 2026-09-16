@@ -50,8 +50,14 @@ export interface PackOptions {
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 
-/** 成功回执之后等待正常退出的上限：只用于「回收是否完成」的判定，不改变成功结论 */
+/**
+ * 成功回执之后等待正常退出的上限。到期仍不退出时**必须**主动终止并等待退出确认，
+ * 而不是把「没退出」当成成功——回收未确认就不该让下游操作同一批文件（R4）。
+ */
 const EXIT_GRACE_MS = 30_000;
+
+/** 请求终止后等待 exit 事件确认的上限：kill 成功 ≠ 进程已退出（R4） */
+const KILL_WAIT_MS = 5_000;
 
 interface WorkerReply {
   ok: boolean;
@@ -226,37 +232,92 @@ export async function packArchiveInWorker(job: PackJob, opts: PackOptions = {}):
       );
     }, timeoutMs);
 
-    // 成功消息已到、但进程迟迟不退出时的**有界等待**：不无限期挂着，
-    // 也不把「还没退出」当成失败——只是无法确认回收完成，如实记进恢复建议。
+    // 计时器统一登记：超时、成功退出宽限、终止后退出确认，结算时全部清掉
     const timers: NodeJS.Timeout[] = [timer];
 
+    /**
+     * 成功回执已到、进程却迟迟不退出：**不能**算成功（R4）。
+     * 先请求终止，再有界等待 exit 确认；终止失败即返回结构化失败并保留诊断。
+     */
     function armExitGrace(): void {
       const grace = setTimeout(() => {
         if (settled || exitSeen) return;
-        // 结果仍是成功：打包已回执完成。这里只说明「回收是否按时完成」，
-        // 不去改成功/失败的结论，也不把未退出当成失败。
-        settle(ok(undefined), { killWorker: true });
+        const killError = tryKillWorker();
+        if (killError) {
+          finish(
+            fail(
+              'STAGE_FAILED',
+              '打包工作进程未退出且无法终止：回收状态未确认，结果不可信',
+              '请关闭可能残留的打包进程后重试；安装未被修改。',
+              `worker=${workerPath}；终止请求失败：${killError.message}`,
+            ),
+            { killWorker: false },
+          );
+          return;
+        }
+        armExitConfirm();
       }, EXIT_GRACE_MS);
       grace.unref?.();
       timers.push(grace);
+    }
+
+    /** 终止请求之后的有界等待：必须真收到 exit 才算回收确认，否则失败关闭 */
+    function armExitConfirm(): void {
+      const confirm = setTimeout(() => {
+        if (settled || exitSeen) return;
+        finish(
+          fail(
+            'STAGE_FAILED',
+            '打包工作进程在终止请求后仍未退出：无法确认回收完成，结果不可信',
+            '请确认没有残留的打包进程占用准备区后重试；安装未被修改。',
+            `worker=${workerPath}；终止后等待 ${KILL_WAIT_MS}ms 仍未收到 exit 事件`,
+          ),
+          { killWorker: false },
+        );
+      }, KILL_WAIT_MS);
+      confirm.unref?.();
+      timers.push(confirm);
     }
 
     function clearTimers(): void {
       for (const t of timers) clearTimeout(t);
     }
 
+    /** 请求终止；失败不吞掉，交给结算路径转成结构化失败（R4） */
+    function tryKillWorker(): Error | null {
+      try {
+        handle?.kill();
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e : new Error(String(e));
+      }
+    }
+
     function settle(r: Result<void>, o: { killWorker: boolean }): void {
       if (settled) return;
       settled = true;
       clearTimers();
+      let result = r;
       if (o.killWorker) {
-        try {
-          handle?.kill();
-        } catch {
-          /* 已退出 */
+        const killError = tryKillWorker();
+        if (killError) {
+          // 终止失败 = 回收状态未知：即使拿到了成功回执也不能当成功交付
+          result = r.success
+            ? fail(
+                'STAGE_FAILED',
+                '打包工作进程无法终止：回收状态未确认，结果不可信',
+                '请关闭可能残留的打包进程后重试；安装未被修改。',
+                `worker=${workerPath}；终止请求失败：${killError.message}`,
+              )
+            : fail(
+                r.error.code,
+                r.error.message,
+                r.error.recoveryHint,
+                [r.error.detail, `终止请求失败：${killError.message}`].filter(Boolean).join('；'),
+              );
         }
       }
-      resolve(r);
+      resolve(result);
     }
 
     /** 失败路径：立即结算并回收进程 */
@@ -293,8 +354,21 @@ export async function packArchiveInWorker(job: PackJob, opts: PackOptions = {}):
     function onExit(code: number | null): void {
       exitSeen = true;
       if (successResult) {
-        // 正常退出 + 成功回执：不再 kill（进程已经没了），直接交付
-        settle(successResult, { killWorker: false });
+        if (code === 0) {
+          // 契约（R4）：成功回执 **且** 正常退出码 0，才交付成功；进程已退出，不再 kill
+          settle(successResult, { killWorker: false });
+          return;
+        }
+        // 回执说成功、进程却以非 0（或被信号终止的 null）退出：回收未正常完成，结果不可信
+        settle(
+          fail(
+            'STAGE_FAILED',
+            `打包工作进程在成功回执后异常退出（code=${String(code)}）：结果不可信`,
+            '请确认没有残留的打包进程占用准备区后重试；安装未被修改。',
+            `worker=${workerPath}`,
+          ),
+          { killWorker: false },
+        );
         return;
       }
       // 没有回消息就退出：一定是异常终止

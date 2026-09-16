@@ -186,20 +186,133 @@ describe('N2：打包工作进程的事件契约', () => {
     }
   });
 
-  it('成功消息后进程始终不退出：有界等待兜底，仍返回成功且回收进程', async () => {
+  it('成功回执 + 正常退出码 0 → 成功（唯一的成功路径）', async () => {
+    const h = makeHarness();
+    const p = packArchiveInWorker(JOB, h.opts);
+    h.emitMessage({ ok: true });
+    h.emitExit(0);
+    const r = await p;
+    expect(r.success).toBe(true);
+    // 正常退出路径不需要 kill
+    expect(h.child.killCalls).toBe(0);
+  });
+
+  it('成功回执后以非 0 退出（exit 1）→ 结构化失败，不报成功', async () => {
+    const h = makeHarness();
+    const p = packArchiveInWorker(JOB, h.opts);
+    h.emitMessage({ ok: true });
+    h.emitExit(1);
+    const r = await p;
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.message).toContain('成功回执后异常退出');
+    expect(r.error.recoveryHint).toContain('残留');
+    expect(h.child.killCalls).toBe(0);
+  });
+
+  it('成功回执后以 null 退出（被信号终止）→ 结构化失败', async () => {
+    const h = makeHarness();
+    const p = packArchiveInWorker(JOB, h.opts);
+    h.emitMessage({ ok: true });
+    h.emitExit(null);
+    const r = await p;
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.message).toContain('成功回执后异常退出');
+  });
+
+  it('成功回执后进程始终不退出：宽限届满请求终止，退出未确认 → 明确失败（不再报成功）', async () => {
     vi.useFakeTimers();
     try {
       const h = makeHarness();
       const p = packArchiveInWorker(JOB, { ...h.opts, timeoutMs: 10 * 60_000 });
       h.emitMessage({ ok: true });
-      // 退出迟迟不来：等到有界等待上限后应结算为成功（打包确已完成），并回收
-      await vi.advanceTimersByTimeAsync(31_000);
+      // 宽限期内：既不能结算，也不能 kill 一个仍在收尾的进程
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(h.child.killCalls).toBe(0);
+      // 宽限届满：请求终止，但 kill 成功 ≠ 已退出，必须继续等 exit
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(h.child.killCalls).toBe(1);
+      let settled = false;
+      void p.then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(settled).toBe(false);
+      // 终止后的有界等待到期：exit 始终没来 → 失败关闭而非成功
+      await vi.advanceTimersByTimeAsync(5_000);
       const r = await p;
-      expect(r.success).toBe(true);
+      expect(r.success).toBe(false);
+      if (r.success) return;
+      expect(r.error.message).toContain('仍未退出');
+      expect(r.error.recoveryHint).toContain('残留');
+      expect(r.error.detail).toContain('exit');
+      // 结算后计时器已清理：再推进时间不产生新副作用
+      await vi.advanceTimersByTimeAsync(60_000);
       expect(h.child.killCalls).toBe(1);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('终止请求抛错（kill 拒绝）→ 明确失败，且不吞掉 kill 错误', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness();
+      h.child.kill = () => {
+        h.child.killCalls += 1;
+        throw new Error('kill refused');
+      };
+      const p = packArchiveInWorker(JOB, { ...h.opts, timeoutMs: 10 * 60_000 });
+      h.emitMessage({ ok: true });
+      await vi.advanceTimersByTimeAsync(31_000);
+      const r = await p;
+      expect(r.success).toBe(false);
+      if (r.success) return;
+      expect(r.error.message).toContain('无法终止');
+      expect(r.error.detail).toContain('kill refused');
+      expect(h.child.killCalls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('终止请求之后进程自行以 0 退出 → 回收已确认，按契约成功', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness();
+      const p = packArchiveInWorker(JOB, { ...h.opts, timeoutMs: 10 * 60_000 });
+      h.emitMessage({ ok: true });
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(h.child.killCalls).toBe(1);
+      h.emitExit(0);
+      const r = await p;
+      expect(r.success).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('只结算一次：迟到/重复的消息与退出不改结论', async () => {
+    const h = makeHarness();
+    const p = packArchiveInWorker(JOB, h.opts);
+    h.emitMessage({ ok: true });
+    h.emitExit(0);
+    expect((await p).success).toBe(true);
+    // 迟到事件不得翻案
+    h.emitMessage({ ok: false, error: { code: 'STAGE_FAILED', message: 'late' } });
+    h.emitExit(1);
+    expect((await p).success).toBe(true);
+  });
+
+  it('失败先结算：后到的成功回执与 0 退出不翻案', async () => {
+    const h = makeHarness();
+    const p = packArchiveInWorker(JOB, h.opts);
+    h.emitExit(1);
+    expect((await p).success).toBe(false);
+    h.emitMessage({ ok: true });
+    h.emitExit(0);
+    expect((await p).success).toBe(false);
   });
 
   it('派生同步抛错时也转成结构化失败', async () => {

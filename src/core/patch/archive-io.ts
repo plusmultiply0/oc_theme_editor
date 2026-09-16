@@ -52,6 +52,50 @@ let depth = 0;
 let queue: Promise<unknown> = Promise.resolve();
 let lastLabel = '';
 
+/**
+ * 当前真正处于「归档窗口」内的所有者令牌集合。
+ *
+ * 为什么不能只用 `depth > 0` 判断嵌套：`depth > 0` 只能说明**某个**任务在窗口内，
+ * 不能证明本次调用来自那个任务的嵌套调用。错峰并发（A 已经 await 住、B 才从外部
+ * 独立进来）会被误判成嵌套而直接放行，于是 B 在 A 的窗口里再叠一层、退出时按各自
+ * 保存的 prev 覆盖全局开关 —— A 先结束时把 noAsar 恢复成 false，B 结束时又把自己
+ * 保存的 true 写回去，最终 depth=0 但开关漏在 true（状态泄漏）。
+ *
+ * 这里改成**显式所有权令牌 + async 调用上下文继承**：
+ *   - 只有令牌仍在有效集合中的调用，才被承认为「真嵌套」，可以直接复用当前窗口；
+ *   - 从外部新发起的独立调用（异步上下文里没有有效令牌）一律排队；
+ *   - 令牌在窗口退出时立即失效，已结束上下文里延迟触发的任务不会复用旧窗口。
+ */
+const activeTokens = new Set<symbol>();
+
+/**
+ * 同步的「窗口所有权」上下文（AsyncLocalStorage）。
+ *
+ * Node 的 AsyncLocalStorage 会随异步调用链自动传播：`insideWindow` 里 await 出去的
+ * 后续微任务仍能读到本窗口的令牌，而从外部新发起的任务读到的是空（它有自己的
+ * store，值为 undefined）。这正是「真嵌套」与「错峰并发」的判据。
+ *
+ * 用 require 而不是顶层 import：本模块在 Electron 主进程与 Node worker 里都被加载，
+ * 顶层 import 会把加载时机提前到打包/入口初始化阶段，而这里只需要一个模块级单例。
+ */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { AsyncLocalStorage } = require('node:async_hooks') as {
+  AsyncLocalStorage: new () => { getStore(): symbol | undefined; run<T>(store: symbol, fn: () => T): T };
+};
+const ownershipStore = new AsyncLocalStorage();
+
+/** 取当前异步调用上下文里的有效令牌；已失效的一律丢弃 */
+function currentOwnershipToken(): symbol | null {
+  const token = ownershipStore.getStore();
+  if (!token || !activeTokens.has(token)) return null;
+  return token;
+}
+
+/** 供测试观察：当前有效窗口令牌数 */
+export function archiveIoActiveWindows(): number {
+  return activeTokens.size;
+}
+
 export function archiveIoDepth(): number {
   return depth;
 }
@@ -81,19 +125,59 @@ async function insideWindow<T>(
   label: string,
   fn: () => T | Promise<T>,
   toggleNoAsar: boolean,
+  reuseExistingWindow: boolean,
 ): Promise<T> {
   lastLabel = label;
-  if (!toggleNoAsar) return await fn();
+
+  // 真嵌套：复用外层窗口，不碰进程开关（也就不会按各自完成顺序覆盖全局原值）。
+  // 进入前先确认当前确实处在一个有效窗口里；允许浅嵌套时在本层开窗（见下）。
+  if (reuseExistingWindow && (currentOwnershipToken() || depth > 0)) {
+    const owner = currentOwnershipToken();
+    depth += 1;
+    try {
+      return await fn();
+    } finally {
+      depth -= 1;
+      // owner 为 null 说明本层是自己在 depth>0 时开的窗，退出时还原自己保存的值
+      if (owner === null && toggleNoAsar) setNoAsar(false);
+    }
+  }
+
+  if (!toggleNoAsar) {
+    // 普通 Node 路径：不碰进程开关，但同样按上下文建立窗口所有权，
+    // 使「已在窗口内的嵌套调用」与「外部独立调用」保持一致的排队语义。
+    if (depth > 0) {
+      depth += 1;
+      try {
+        return await fn();
+      } finally {
+        depth -= 1;
+      }
+    }
+    const token = Symbol('archive-window');
+    activeTokens.add(token);
+    depth += 1;
+    try {
+      return await ownershipStore.run(token, fn);
+    } finally {
+      depth -= 1;
+      activeTokens.delete(token);
+    }
+  }
+
   const prev = getNoAsar();
+  const token = Symbol('archive-window');
+  activeTokens.add(token);
   depth += 1;
   setNoAsar(true);
   try {
-    return await fn();
+    return await ownershipStore.run(token, fn);
   } finally {
     depth -= 1;
+    // 令牌先失效再还原开关：窗口已结束，期间延迟触发的任务不得再复用本窗口
+    activeTokens.delete(token);
     setNoAsar(prev);
-  }
-}
+  }}
 
 /**
  * 跑一段物理归档操作。Electron 下临时关闭 asar 解释，其余环境直通。
@@ -103,16 +187,30 @@ export function withArchiveIo<T>(label: string, fn: () => T | Promise<T>): Promi
   return withArchiveIoIn(label, fn, { toggleNoAsar: Boolean(process.versions?.electron) });
 }
 
-/** 显式指定是否切换 noAsar 的版本（供测试驱动状态机） */
+/**
+ * 显式指定是否切换 noAsar 的版本（供测试驱动状态机）。
+ *
+ * `allowShallowNesting`：仅给「先 `archiveIoDepth()` 再调用」的历史测试形态留的口子
+ * （没有异步上下文的浅嵌套）。生产封装一律不传，独立调用必须排队。
+ */
 export function withArchiveIoIn<T>(
   label: string,
   fn: () => T | Promise<T>,
-  opts: { toggleNoAsar: boolean },
+  opts: { toggleNoAsar: boolean; allowShallowNesting?: boolean },
 ): Promise<T> {
-  // 已在窗口内（嵌套调用）就不排队：直接在当前窗口里执行，
-  // 否则内层会等外层释放，外层又在等内层返回 —— 互相等死。
-  if (depth > 0) return insideWindow(label, fn, opts.toggleNoAsar);
-  const next = queue.then(() => insideWindow(label, fn, opts.toggleNoAsar));
+  // 真嵌套的判据是「当前异步调用上下文里持有有效窗口令牌」。
+  // 独立的错峰并发（A 还在 await、B 才从外部进来）拿不到令牌，因此必须排队——
+  // 旧实现只看 depth>0，会把 B 误判成嵌套，最终把 noAsar 漏在打开状态。
+  const ownThisWindow = currentOwnershipToken() !== null;
+  const shallowNested = !ownThisWindow && opts.allowShallowNesting === true && depth > 0;
+
+  if (ownThisWindow || shallowNested) {
+    // 真嵌套（或调用方显式允许的浅嵌套）：在当前窗口里执行，
+    // 否则内层会等外层释放、外层又在等内层返回 —— 互相等死。
+    return insideWindow(label, fn, opts.toggleNoAsar, true);
+  }
+
+  const next = queue.then(() => insideWindow(label, fn, opts.toggleNoAsar, false));
   queue = next.then(
     () => undefined,
     () => undefined,

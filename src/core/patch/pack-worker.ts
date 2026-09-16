@@ -41,34 +41,47 @@ interface PackError {
  * 两种派生方式的通道不同：
  * - `child_process.fork`（普通 Node）→ process.send / process.on('message')
  * - Electron `utilityProcess.fork`    → process.parentPort.postMessage / .on('message')
+ *
+ * N2：不能「发出去就退出」。`process.send` 是异步的，通道尚未 flush 就 exit 会让
+ * 父进程收不到最终结果（表现为「异常退出」或超时），进而把一次成功的打包判成失败。
+ * 因此这里返回一个 Promise，成功回执要等发送完成回调；拿不到回调的实现
+ * （utilityProcess / 无 IPC 的直跑）按「已投递」处理，不制造假失败。
  */
 const parentPort = (process as unknown as {
   parentPort?: { postMessage: (m: unknown) => void; on: (e: string, l: (ev: { data: unknown }) => void) => void };
 }).parentPort;
 
-function reply(payload: { ok: true } | { ok: false; error: PackError }): void {
+function reply(payload: { ok: true } | { ok: false; error: PackError }): Promise<void> {
   if (parentPort) {
     parentPort.postMessage(payload);
-    return;
+    return Promise.resolve();
   }
   if (typeof process.send === 'function') {
-    process.send(payload);
-    return;
+    return new Promise<void>((resolve) => {
+      try {
+        process.send!(payload, () => resolve());
+      } catch {
+        resolve();
+      }
+    });
   }
   process.stdout.write(`${JSON.stringify(payload)}\n`);
+  return Promise.resolve();
 }
 
-function fail(code: string, message: string, detail?: string): never {
-  reply({ ok: false, error: { code, message, ...(detail ? { detail } : {}) } });
+async function fail(code: string, message: string, detail?: string): Promise<never> {
+  await reply({ ok: false, error: { code, message, ...(detail ? { detail } : {}) } });
   process.exit(1);
 }
 
 async function run(job: PackJob): Promise<void> {
   if (!job || typeof job.appDir !== 'string' || typeof job.stagedArchive !== 'string' || !Array.isArray(job.files)) {
-    fail('INVALID_PARAMS', '打包任务参数不合法', JSON.stringify(job).slice(0, 200));
+    await fail('INVALID_PARAMS', '打包任务参数不合法', JSON.stringify(job).slice(0, 200));
+    return;
   }
   if (!fs.existsSync(job.appDir)) {
-    fail('STAGE_FAILED', `解包根目录不存在：${job.appDir}`);
+    await fail('STAGE_FAILED', `解包根目录不存在：${job.appDir}`);
+    return;
   }
 
   // cwd 必须是解包根目录：这是本次修复的核心。
@@ -84,7 +97,7 @@ async function run(job: PackJob): Promise<void> {
   process.noAsar = true;
 
   const streams: unknown[] = [];
-  const walk = (current: string, prefix: string): void => {
+  const walk = async (current: string, prefix: string): Promise<void> => {
     const entries = fs.readdirSync(current, { withFileTypes: true });
     entries.sort((a, b) => (a.name < b.name ? -1 : 1));
     for (const e of entries) {
@@ -92,14 +105,15 @@ async function run(job: PackJob): Promise<void> {
       const abs = path.join(current, e.name);
       if (e.isDirectory()) {
         streams.push({ path: logical, type: 'directory', unpacked: false, stat: fs.statSync(abs) });
-        walk(abs, logical);
+        await walk(abs, logical);
         continue;
       }
       if (!e.isFile()) continue;
       const wanted = job.files.find((f) => f.path === logical);
       if (!wanted) {
         // 解包目录里出现了计划之外的条目：拒绝打包，而不是静默塞进去
-        fail('STAGE_FAILED', `解包目录出现计划外条目：${logical}`, '请重新准备后再打包。');
+        await fail('STAGE_FAILED', `解包目录出现计划外条目：${logical}`, '请重新准备后再打包。');
+        return;
       }
       streams.push({
         path: logical,
@@ -110,7 +124,7 @@ async function run(job: PackJob): Promise<void> {
       });
     }
   };
-  walk(job.appDir, '');
+  await walk(job.appDir, '');
 
   // 计划里的条目必须全部存在，少一个都说明解包结果与计划不一致
   const seen = new Set<string>();
@@ -119,7 +133,7 @@ async function run(job: PackJob): Promise<void> {
   }
   const missing = job.files.filter((f) => !seen.has(f.path)).map((f) => f.path);
   if (missing.length > 0) {
-    fail('STAGE_FAILED', `解包目录缺少计划条目：${missing.slice(0, 5).join('、')}`);
+    await fail('STAGE_FAILED', `解包目录缺少计划条目：${missing.slice(0, 5).join('、')}`);
   }
 
   await createPackageFromStreams(job.stagedArchive, streams);
@@ -127,9 +141,10 @@ async function run(job: PackJob): Promise<void> {
 
 function start(job: PackJob): void {
   run(job)
-    .then(() => {
-      reply({ ok: true });
-      // 专用进程，任务完成即退出；不等任何句柄
+    .then(async () => {
+      // N2：先把成功回执真正送出去，再退出。旧实现 reply 后立刻 process.exit(0)，
+      // 异步通道尚未 flush 时父进程收不到结果，会把成功判成「异常退出」。
+      await reply({ ok: true });
       process.exit(0);
     })
     .catch((e) => {

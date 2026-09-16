@@ -19,6 +19,7 @@ import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { mkTestTmp } from '../fixtures/test-tmp';
 
 interface OutEntry { bytes: number; sha256: string; error?: string }
@@ -39,6 +40,14 @@ interface BindingInput {
   headCommit?: string;
 }
 interface ZipEntry { name: string; crc32: number; size: number }
+interface ZipEntryRecord {
+  rawName: string;
+  name: string;
+  pathKey: string;
+  isDir: boolean;
+  method: number;
+  problems: string[];
+}
 interface VerifyReleaseApi {
   REQUIRED_MODULES: string[];
   OUT_PREFIX: string;
@@ -54,6 +63,9 @@ interface VerifyReleaseApi {
   readZipCentral: (zipPath: string) => ZipEntry[];
   checkZipMatchesDir: (zipPath: string, dir: string) => string[];
   deepVerifyZip: (zipPath: string) => string[];
+  listDirsRecursive: (dir: string) => string[];
+  normalizeZipEntryName: (raw: string) => { name: string; pathKey: string; isDir: boolean; problem: string | null };
+  parseZip: (zipPath: string) => { entries: ZipEntryRecord[]; problems: string[] };
 }
 
 // Bundler moduleResolution 下显式 .cjs 相对导入不走 .d.ts 映射（TS7016），
@@ -171,6 +183,76 @@ function makeStoredZip(files: Record<string, Buffer>): Buffer {
   eocd.writeUInt32LE(centralBuf.length, 12);
   eocd.writeUInt32LE(offset, 16);
   eocd.writeUInt16LE(0, 20);
+  return Buffer.concat([...parts, centralBuf, eocd]);
+}
+
+interface RawZipEntry {
+  name: string;
+  content?: Buffer;
+  /** 覆盖压缩数据（默认 store 用原内容、deflate 用 deflateRawSync(内容)） */
+  body?: Buffer;
+  /** 压缩方法；用例可以给 12 等「不支持的方法」 */
+  method?: number;
+  flags?: number;
+  /** 覆盖中央目录/本地头声明的 CRC 与大小（构造「声明与实际不符」） */
+  declaredCrc32?: number;
+  declaredSize?: number;
+  declaredCsize?: number;
+}
+
+/**
+ * 合成 zip（复审 R1–R3 夹具）：支持 store/deflate、任意条目名（含 `\` 与目录结尾）
+ * 以及声明值覆盖，用来构造「坏输入」；断言一律调用发布实际使用的
+ * checkZipMatchesDir / deepVerifyZip，不只测夹具生成器。
+ */
+function makeZip(entries: RawZipEntry[]): Buffer {
+  const parts: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const e of entries) {
+    const nameBuf = Buffer.from(e.name, 'utf8');
+    const content = e.content ?? Buffer.alloc(0);
+    const method = e.method ?? 0;
+    const isDir = e.name.endsWith('/') || e.name.endsWith('\\');
+    const body = isDir ? Buffer.alloc(0) : e.body ?? (method === 8 ? zlib.deflateRawSync(content) : content);
+    const crc = isDir ? 0 : e.declaredCrc32 ?? vr.crc32(content);
+    const usize = isDir ? 0 : e.declaredSize ?? content.length;
+    const csize = isDir ? 0 : e.declaredCsize ?? body.length;
+    const flags = e.flags ?? 0;
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(flags, 6);
+    local.writeUInt16LE(method, 8);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(csize, 18);
+    local.writeUInt32LE(usize, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+
+    const c = Buffer.alloc(46);
+    c.writeUInt32LE(0x02014b50, 0);
+    c.writeUInt16LE(20, 4);
+    c.writeUInt16LE(20, 6);
+    c.writeUInt16LE(flags, 8);
+    c.writeUInt16LE(method, 10);
+    c.writeUInt32LE(crc, 16);
+    c.writeUInt32LE(csize, 20);
+    c.writeUInt32LE(usize, 24);
+    c.writeUInt16LE(nameBuf.length, 28);
+    c.writeUInt32LE(offset, 42);
+
+    parts.push(local, nameBuf, body);
+    central.push(c, nameBuf);
+    offset += local.length + nameBuf.length + body.length;
+  }
+  const centralBuf = Buffer.concat(central);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
   return Buffer.concat([...parts, centralBuf, eocd]);
 }
 
@@ -517,5 +599,243 @@ describe('zip 一致性（负例3：zip 混旧 asar 被拒）', () => {
     const extra = writeZip('extra.zip', { ...dirFiles, 'stale-from-old-candidate.txt': Buffer.from('old') });
     const extraProblems = vr.checkZipMatchesDir(extra, cand);
     expect(extraProblems.some((p) => p.includes('多出') && p.includes('stale-from-old-candidate.txt'))).toBe(true);
+  });
+});
+
+/**
+ * 复审 R1（Windows 目录条目误判）：
+ *   旧实现「先按原始名判目录、后转分隔符」，于是 `resources\` 被当成文件参加比较，
+ *   合法候选必然报「多出」，发布被误判阻断。这里锁住修复后的目录策略。
+ */
+describe('ZIP 目录条目与隐式父目录（复审 R1）', () => {
+  const disk: Record<string, Buffer> = {
+    'resources/app.asar': Buffer.from('asar v2'),
+    'resources/app.asar.unpacked/node_modules/x.node': Buffer.from('native'),
+    'OpenCodeThemeSwitcher.exe': Buffer.alloc(48, 3),
+    'empty.txt': Buffer.alloc(0),
+  };
+  const asEntries = (sep: string): RawZipEntry[] =>
+    Object.entries(disk).map(([name, content]) => ({ name: name.split('/').join(sep), content }));
+
+  function setup(prefix: string, entries: RawZipEntry[]): { dir: string; zipPath: string } {
+    const base = mkTmp(prefix);
+    const dir = path.join(base, 'cand');
+    for (const [rel, buf] of Object.entries(disk)) writeFile(rel, buf, dir);
+    const zipPath = path.join(base, 'dist.zip');
+    fs.writeFileSync(zipPath, makeZip(entries));
+    return { dir, zipPath };
+  }
+
+  it('反斜杠目录条目（Compress-Archive 写 `resources\\`）不再被当成多余文件 → 通过', () => {
+    const { dir, zipPath } = setup('vr-r1-backslash-', [{ name: 'resources\\' }, ...asEntries('\\')]);
+    expect(vr.checkZipMatchesDir(zipPath, dir)).toEqual([]);
+    expect(vr.deepVerifyZip(zipPath)).toEqual([]);
+  });
+
+  it('正斜杠显式目录条目（含多层父目录）→ 通过', () => {
+    const { dir, zipPath } = setup('vr-r1-slash-dir-', [
+      ...asEntries('/'),
+      { name: 'resources/' },
+      { name: 'resources/app.asar.unpacked/' },
+      { name: 'resources/app.asar.unpacked/node_modules/' },
+    ]);
+    expect(vr.checkZipMatchesDir(zipPath, dir)).toEqual([]);
+  });
+
+  it('只用文件条目隐式表达父目录 → 通过（不得要求磁盘每个目录都显式出现）', () => {
+    const { dir, zipPath } = setup('vr-r1-implicit-', asEntries('/'));
+    expect(vr.checkZipMatchesDir(zipPath, dir)).toEqual([]);
+    expect(vr.parseZip(zipPath).problems).toEqual([]);
+  });
+
+  it('零字节普通文件仍参与比较，不因 size===0 被当成目录 → 通过', () => {
+    const withAll = setup('vr-r1-empty-ok-', asEntries('/'));
+    expect(vr.checkZipMatchesDir(withAll.zipPath, withAll.dir)).toEqual([]);
+
+    // 同一份磁盘 + 凭空多出的零字节文件 → 必须拒绝（证明零字节文件也在集合比较里）
+    const withGhost = setup('vr-r1-empty-ghost-', [...asEntries('/'), { name: 'ghost.txt', content: Buffer.alloc(0) }]);
+    const problems = vr.checkZipMatchesDir(withGhost.zipPath, withGhost.dir);
+    expect(problems.some((p) => p.includes('多出') && p.includes('ghost.txt'))).toBe(true);
+  });
+
+  it('zip 凭空多出的目录条目 → 拒绝并点名', () => {
+    const { dir, zipPath } = setup('vr-r1-ghost-dir-', [...asEntries('/'), { name: 'not-on-disk/' }]);
+    const problems = vr.checkZipMatchesDir(zipPath, dir);
+    expect(problems.some((p) => p.includes('多出') && p.includes('not-on-disk/'))).toBe(true);
+  });
+});
+
+/**
+ * 复审 R2（「深度校验」其实没验证压缩内容）：
+ *   旧实现对 method !== 0 只检查数据范围，不 inflate、不比对实际长度/CRC；
+ *   目录一致性检查也只信中央目录里的 CRC/大小，因此两道检查组合仍会放行坏流。
+ * 断言全部调用发布实际使用的 checkZipMatchesDir / deepVerifyZip。
+ */
+describe('ZIP 真实解压校验（复审 R2）', () => {
+  function zipWith(prefix: string, entries: RawZipEntry[], diskFiles: Record<string, Buffer> = {}) {
+    const base = mkTmp(prefix);
+    const dir = path.join(base, 'cand');
+    for (const [rel, buf] of Object.entries(diskFiles)) writeFile(rel, buf, dir);
+    const zipPath = path.join(base, 'dist.zip');
+    fs.writeFileSync(zipPath, makeZip(entries));
+    return {
+      dir,
+      zipPath,
+      match: (): string[] => vr.checkZipMatchesDir(zipPath, dir),
+      deep: (): string[] => vr.deepVerifyZip(zipPath),
+    };
+  }
+
+  it('有效 DEFLATE 条目 → 两道检查通过', () => {
+    const content = Buffer.from('hello deflate');
+    const z = zipWith('vr-r2-deflate-ok-', [{ name: 'a/b.txt', content, method: 8 }], { 'a/b.txt': content });
+    expect(z.match()).toEqual([]);
+    expect(z.deep()).toEqual([]);
+  });
+
+  it('store 与 DEFLATE 混合 → 通过（不因方法不同误报）', () => {
+    const a = Buffer.from('store content');
+    const b = Buffer.from('deflate content');
+    const z = zipWith('vr-r2-mixed-', [
+      { name: 'a.txt', content: a },
+      { name: 'b.txt', content: b, method: 8 },
+    ], { 'a.txt': a, 'b.txt': b });
+    expect(z.match()).toEqual([]);
+    expect(z.deep()).toEqual([]);
+  });
+
+  it('损坏的 DEFLATE 流（中央目录声明完全正确）→ 两道检查都拒绝', () => {
+    const content = Buffer.from('hello');
+    const z = zipWith(
+      'vr-r2-corrupt-',
+      [{ name: 'file.txt', content, method: 8, body: Buffer.from([7, 0, 0]) }],
+      { 'file.txt': content },
+    );
+    expect(z.match().some((p) => p.includes('DEFLATE 解压失败'))).toBe(true);
+    expect(z.deep().some((p) => p.includes('DEFLATE 解压失败'))).toBe(true);
+  });
+
+  it('未知压缩方法（method=12）→ 显式拒绝，不静默跳过', () => {
+    const content = Buffer.from('bz2?');
+    const z = zipWith('vr-r2-method-', [{ name: 'file.txt', content, method: 12 }], { 'file.txt': content });
+    expect(z.match().some((p) => p.includes('不支持的压缩方法'))).toBe(true);
+    expect(z.deep().some((p) => p.includes('不支持的压缩方法'))).toBe(true);
+  });
+
+  it('加密条目（flag bit0）→ 拒绝', () => {
+    const content = Buffer.from('secret');
+    const z = zipWith('vr-r2-encrypted-', [{ name: 'file.txt', content, flags: 0x1 }], { 'file.txt': content });
+    expect(z.match().some((p) => p.includes('加密'))).toBe(true);
+    expect(z.deep().some((p) => p.includes('加密'))).toBe(true);
+  });
+
+  it('压缩数据超出文件末尾（声明 csize 大于实际数据）→ 拒绝', () => {
+    const content = Buffer.from('hello');
+    const z = zipWith(
+      'vr-r2-bounds-',
+      [{ name: 'file.txt', content, declaredCsize: 4096 }],
+      { 'file.txt': content },
+    );
+    const all = [...z.match(), ...z.deep()].join('；');
+    expect(all).toMatch(/超出文件末尾|长度 .* 与声明大小/);
+  });
+
+  it('解压后实际长度与声明不符 → 拒绝', () => {
+    const content = Buffer.from('hello');
+    const z = zipWith('vr-r2-ulen-', [{ name: 'file.txt', content, method: 8, declaredSize: 99 }], { 'file.txt': content });
+    const all = [...z.match(), ...z.deep()].join('；');
+    expect(all).toMatch(/实际长度|长度/);
+  });
+
+  it('实读内容 CRC 与中央目录声明不符 → deepVerifyZip 拒绝', () => {
+    const content = Buffer.from('hello');
+    const z = zipWith('vr-r2-crc-', [{ name: 'file.txt', content, declaredCrc32: 0xdeadbeef }], { 'file.txt': content });
+    expect(z.deep().some((p) => p.includes('CRC') && p.includes('file.txt'))).toBe(true);
+  });
+});
+
+/**
+ * 复审 R3（路径规范化不统一）：重复别名、大小写冲突、正反斜杠越界、UNC/盘符、
+ * 文件与同名目录都必须有明确拒绝用例，且两道检查都走同一套规则。
+ */
+describe('ZIP 条目路径规范化（复审 R3）', () => {
+  function checks(prefix: string, entries: RawZipEntry[], diskFiles: Record<string, Buffer> = {}) {
+    const base = mkTmp(prefix);
+    const dir = path.join(base, 'cand');
+    for (const [rel, buf] of Object.entries(diskFiles)) writeFile(rel, buf, dir);
+    const zipPath = path.join(base, 'dist.zip');
+    fs.writeFileSync(zipPath, makeZip(entries));
+    return {
+      match: vr.checkZipMatchesDir(zipPath, dir),
+      deep: vr.deepVerifyZip(zipPath),
+      parsed: vr.parseZip(zipPath),
+    };
+  }
+
+  it('混合分隔符重复别名（a/b.txt 与 a\\b.txt）→ 两道检查都拒绝', () => {
+    const content = Buffer.from('hello');
+    const r = checks(
+      'vr-r3-alias-',
+      [{ name: 'a/b.txt', content }, { name: 'a\\b.txt', content }],
+      { 'a/b.txt': content },
+    );
+    expect(r.match.some((p) => p.includes('重复'))).toBe(true);
+    expect(r.deep.some((p) => p.includes('重复'))).toBe(true);
+  });
+
+  it('大小写冲突（A/x.txt 与 a/x.txt，Windows 下同一路径）→ 拒绝', () => {
+    const content = Buffer.from('hello');
+    const r = checks(
+      'vr-r3-case-',
+      [{ name: 'A/x.txt', content }, { name: 'a/x.txt', content }],
+      { 'A/x.txt': content },
+    );
+    expect(r.match.some((p) => p.includes('大小写冲突'))).toBe(true);
+    expect(r.deep.some((p) => p.includes('大小写冲突'))).toBe(true);
+  });
+
+  it('反斜杠越界（..\\escape.txt）→ 两道检查都拒绝，不只 deep', () => {
+    const r = checks('vr-r3-traversal-', [{ name: '..\\escape.txt', content: Buffer.from('x') }]);
+    expect(r.match.some((p) => p.includes('越界'))).toBe(true);
+    expect(r.deep.some((p) => p.includes('越界'))).toBe(true);
+  });
+
+  it('正斜杠越界（sub/../../escape.txt）与 UNC / 盘符 → 拒绝', () => {
+    const traversal = checks('vr-r3-traversal2-', [{ name: 'sub/../../escape.txt', content: Buffer.from('x') }]);
+    expect(traversal.match.join('；')).toContain('越界');
+
+    const drive = checks('vr-r3-drive-', [{ name: 'C:\\evil.txt', content: Buffer.from('x') }]);
+    expect(drive.match.join('；')).toContain('越界');
+    expect(drive.deep.join('；')).toContain('越界');
+
+    const unc = checks('vr-r3-unc-', [{ name: '\\\\server\\share\\x.txt', content: Buffer.from('x') }]);
+    expect(unc.match.join('；')).toContain('越界');
+    expect(unc.deep.join('；')).toContain('越界');
+  });
+
+  it('同名条目既是文件又是目录 → 拒绝（内容会互相覆盖）', () => {
+    const r = checks(
+      'vr-r3-file-dir-',
+      [{ name: 'a', content: Buffer.from('file') }, { name: 'a/b.txt', content: Buffer.from('inner') }],
+      { 'a/b.txt': Buffer.from('inner') },
+    );
+    expect(r.match.some((p) => p.includes('既是文件又是目录'))).toBe(true);
+    expect(r.deep.some((p) => p.includes('既是文件又是目录'))).toBe(true);
+  });
+
+  it('规范名解析：统一分隔符后再判目录，并保留原有越界判定', () => {
+    expect(vr.normalizeZipEntryName('resources\\')).toEqual({ name: 'resources/', pathKey: 'resources', isDir: true, problem: null });
+    expect(vr.normalizeZipEntryName('a\\b.txt')).toEqual({ name: 'a/b.txt', pathKey: 'a/b.txt', isDir: false, problem: null });
+    expect(vr.normalizeZipEntryName('CON.txt').problem).toContain('保留设备名');
+    expect(vr.normalizeZipEntryName('a//b.txt').problem).toContain('空路径段');
+    expect(vr.normalizeZipEntryName('a/b.txt ').problem).toContain('点或空格结尾');
+    expect(vr.normalizeZipEntryName('a/b?.txt').problem).toContain('非法字符');
+    expect(vr.normalizeZipEntryName('\\server\\share\\x.txt').problem).toContain('越界');
+  });
+
+  it('listDirsRecursive 只列目录（供显式目录条目核对）', () => {
+    const base = mkTmp('vr-r3-dirs-');
+    writeFile('a/b/c.txt', Buffer.from('x'), base);
+    expect(vr.listDirsRecursive(base).sort()).toEqual(['a', 'a/b']);
   });
 });

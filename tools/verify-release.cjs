@@ -16,8 +16,10 @@
  *      不能充当当前源码的唯一证据；
  *   6. 候选 asar 内 out/** 必须与 manifest.out 完全一致，且至少包含图片修复三模块
  *      （ImageStore / theme generate / image-probe）；
- *   7. zip 必须从同一候选目录打包：逐条目 CRC32+大小与磁盘一致，条目集合相等（缺/多都报告），
- *      zip hash 与登记一致；分发验收禁止 --no-identity（本工具无该开关）。
+ *   7. zip 必须从同一候选目录打包：条目名先统一分隔符（`\` → `/`）再做安全检查与文件/目录区分，
+ *      逐条目用**真实内容**（store 切片 / DEFLATE 实解压）比 sha256+大小，条目集合相等（缺/多都报告），
+ *      zip hash 与登记一致；显式目录必须存在于磁盘，但不要求磁盘所有目录都显式出现在 zip 中；
+ *      分发验收禁止 --no-identity（本工具无该开关）。
  *
  * 用法：node tools/verify-release.cjs --candidate-dir <候选目录> --build-id <本次构建ID> [--source-commit <sha>]
  * 退出码：0 时——发布级（--require-release-eligibility）打印 RELEASE_GREEN、
@@ -28,6 +30,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
 
 // --root 可在 main 中重新指向（夹具测试传夹具根）；默认为编排根
@@ -228,6 +231,19 @@ function listFilesRecursive(dir, base = dir) {
   return out;
 }
 
+/** 递归列出目录下所有子目录，返回相对路径（正斜杠）数组（不含 dir 自身） */
+function listDirsRecursive(dir, base = dir) {
+  const out = [];
+  if (!fs.existsSync(dir)) return out;
+  for (const name of fs.readdirSync(dir).sort()) {
+    const p = path.join(dir, name);
+    if (!fs.statSync(p).isDirectory()) continue;
+    out.push(path.relative(base, p).replace(/\\/g, '/'));
+    out.push(...listDirsRecursive(p, base));
+  }
+  return out;
+}
+
 const OUT_PREFIX = 'out/';
 
 /**
@@ -365,64 +381,326 @@ function checkSourceFreeze(porcelainOutput) {
   ];
 }
 
-// ---------- ZIP 中央目录 ----------
-/** 解析 zip 中央目录，返回文件条目 [{ name, crc32, size }]（目录条目 name 以 / 结尾，已过滤） */
-function readZipCentral(zipPath) {
-  const buf = fs.readFileSync(zipPath);
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
-    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+// ---------- ZIP 条目解析（R1–R3 共用一个解析模块，一套规则） ----------
+/*
+ * Windows 名称限制（目标平台是 Windows）：
+ *   - 保留设备名（CON/PRN/AUX/NUL/COM1-9/LPT1-9）在任何目录下都不可用；
+ *   - `< > : " | ? *` 与控制字符在 Windows 上是非法字符；
+ *   - 段尾的点或空格会被 Windows 静默去掉，使两个条目落到同一路径。
+ */
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+const WINDOWS_ILLEGAL_CHARS = /[<>:"|?*\u0000-\u001f]/;
+
+/** 支持的压缩方法：只认 store(0) 与 deflate(8)，其余（含加密、ZIP64）在解析期显式拒绝 */
+const ZIP_SUPPORTED_METHODS = new Map([[0, 'store'], [8, 'deflate']]);
+/** 单条条目解压上限（防止「只信声明大小」把内存吃光） */
+const ZIP_MAX_ENTRY_BYTES = 1024 * 1024 * 1024;
+/** 整包累计解压预算（超过即失败并给出可诊断原因） */
+const ZIP_MAX_TOTAL_BYTES = 4 * 1024 * 1024 * 1024;
+
+/**
+ * 规范 ZIP 条目名（**所有 ZIP 检查的唯一入口**）：先统一分隔符，再判目录，最后做安全检查。
+ *
+ * 旧实现顺序是「先按原始名 `endsWith('/')` 排除目录，再把 `\` 转成 `/`」——
+ * PowerShell 5.1 的 Compress-Archive 写的 `resources\` 因此被当成**文件**参加比较，
+ * 而磁盘侧只枚举文件，必然报「zip 内多出磁盘没有的条目」，把合法候选误判为发布阻断（R1）。
+ *
+ * @returns {{name: string, pathKey: string, isDir: boolean, problem: string|null}}
+ *   name 为规范化名（目录带结尾 `/`）；problem 非空表示该条目不可用于比较，调用方必须失败关闭。
+ */
+function normalizeZipEntryName(rawName) {
+  const raw = typeof rawName === 'string' ? rawName : '';
+  if (!raw) return { name: '', pathKey: '', isDir: false, problem: 'zip 条目名为空' };
+  // 1) 统一分隔符（zip 规范是 `/`；Windows 常态工具会写 `\`）
+  const name = raw.replace(/\\/g, '/');
+  // 2) 规范化**之后**才判定目录：`resources\` → `resources/`，这才是目录
+  const isDir = name.endsWith('/');
+  const pathKey = isDir ? name.slice(0, -1) : name;
+  const bad = (why) => ({ name, pathKey, isDir, problem: `zip 条目路径越界或不可用（${why}）：${name}` });
+  if (!pathKey) return bad('空路径');
+  if (pathKey.startsWith('/')) return bad('绝对路径或 UNC 前缀');
+  if (/^[A-Za-z]:/.test(pathKey)) return bad('含盘符');
+  for (const seg of pathKey.split('/')) {
+    if (seg === '') return bad('含空路径段');
+    if (seg === '.' || seg === '..') return bad('含 . / .. 段（目录逃逸）');
+    if (WINDOWS_ILLEGAL_CHARS.test(seg)) return bad('含 Windows 非法字符');
+    if (WINDOWS_RESERVED_NAME.test(seg)) return bad('使用 Windows 保留设备名');
+    if (/[ .]$/.test(seg)) return bad('路径段以点或空格结尾（Windows 下会落到别的路径）');
   }
+  return { name, pathKey, isDir, problem: null };
+}
+
+/** ZIP64 扩展字段（0x0001）判定：暂不支持，必须显式拒绝而不是静默跳过 */
+function hasZip64Extra(extra) {
+  let o = 0;
+  while (o + 4 <= extra.length) {
+    if (extra.readUInt16LE(o) === 0x0001) return true;
+    o += 4 + extra.readUInt16LE(o + 2);
+  }
+  return false;
+}
+
+/** 从 EOCD 反查中央目录起点；找不到返回 -1 */
+function findZipEocd(buf) {
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) return i;
+  }
+  return -1;
+}
+
+/**
+ * 解析整包：规范化每个条目名并做安全检查，再核对本地头↔中央目录与数据边界。
+ * 结构性损坏（EOCD/中央目录签名）抛错；条目级问题收集进 problems（条目自身也记一份，
+ * 便于后续跳过无效条目）。目录的「显式条目」与「由文件路径隐含的父目录」分开记录：
+ * 合法 ZIP 可以只用文件条目隐式表达父目录，**不得**要求磁盘每个目录都在 ZIP 中显式出现。
+ * @returns {{buf: Buffer, entries: object[], problems: string[], explicitDirs: Set<string>}}
+ */
+function parseZip(zipPath) {
+  const buf = fs.readFileSync(zipPath);
+  const eocd = findZipEocd(buf);
   if (eocd < 0) throw new Error('找不到 zip EOCD，不是 zip 文件');
   const count = buf.readUInt16LE(eocd + 10);
   let off = buf.readUInt32LE(eocd + 16);
   const entries = [];
+  const problems = [];
+  const flag = (entry, message) => {
+    entry.problems.push(message);
+    problems.push(message);
+  };
+
   for (let i = 0; i < count; i++) {
     if (off + 46 > buf.length || buf.readUInt32LE(off) !== 0x02014b50) {
       throw new Error(`zip 中央目录第 ${i} 项签名错误`);
     }
+    const flags = buf.readUInt16LE(off + 8);
+    const method = buf.readUInt16LE(off + 10);
     const crc = buf.readUInt32LE(off + 16);
-    const size = buf.readUInt32LE(off + 24);
+    const csize = buf.readUInt32LE(off + 20);
+    const usize = buf.readUInt32LE(off + 24);
     const nameLen = buf.readUInt16LE(off + 28);
     const extraLen = buf.readUInt16LE(off + 30);
     const commentLen = buf.readUInt16LE(off + 32);
-    const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
-    if (!name.endsWith('/')) entries.push({ name, crc32: crc, size });
+    const localOffset = buf.readUInt32LE(off + 42);
+    const rawName = buf.toString('utf8', off + 46, off + 46 + nameLen);
+    const extra = buf.subarray(off + 46 + nameLen, off + 46 + nameLen + extraLen);
     off += 46 + nameLen + extraLen + commentLen;
+
+    const norm = normalizeZipEntryName(rawName);
+    const entry = {
+      rawName, name: norm.name, pathKey: norm.pathKey, isDir: norm.isDir,
+      flags, method, crc32: crc, csize, usize, localOffset, dataStart: 0,
+      dataDescriptor: (flags & 0x8) !== 0,
+      problems: [],
+    };
+    entries.push(entry);
+    if (norm.problem) flag(entry, norm.problem);
+    if (norm.isDir) continue;
+    if (flags & 0x1) flag(entry, `zip 条目已加密，无法核验内容：${entry.name}`);
+    if (!ZIP_SUPPORTED_METHODS.has(method)) {
+      flag(entry, `不支持的压缩方法 method=${method}（只支持 store=0 / deflate=8）：${entry.name}`);
+    }
+    if (csize === 0xffffffff || usize === 0xffffffff || localOffset === 0xffffffff || hasZip64Extra(extra)) {
+      flag(entry, `暂不支持 ZIP64 条目：${entry.name}`);
+    }
   }
-  return entries;
+
+  // 重复 / 大小写冲突：Windows 下两个条目会落到同一路径（R3）
+  const seenExact = new Map();
+  const seenLower = new Map();
+  for (const e of entries) {
+    if (!e.pathKey) continue;
+    if (seenExact.has(e.pathKey)) {
+      flag(e, `zip 内重复条目（规范化后同一路径）：${e.pathKey}`);
+      continue;
+    }
+    seenExact.set(e.pathKey, e);
+    const lower = e.pathKey.toLowerCase();
+    const prev = seenLower.get(lower);
+    if (prev) flag(e, `zip 条目大小写冲突（Windows 下会落到同一路径）：${prev.pathKey} / ${e.pathKey}`);
+    seenLower.set(lower, e);
+  }
+
+  // 文件 / 目录冲突：同名条目既是文件又是目录（父目录可由文件路径隐含）
+  const fileKeys = new Set();
+  const explicitDirs = new Set();
+  const allDirs = new Set();
+  for (const e of entries) {
+    if (!e.pathKey) continue;
+    if (e.isDir) {
+      explicitDirs.add(e.pathKey);
+      allDirs.add(e.pathKey);
+    } else {
+      fileKeys.add(e.pathKey);
+    }
+  }
+  for (const k of fileKeys) {
+    const segs = k.split('/');
+    for (let i = 1; i < segs.length; i++) allDirs.add(segs.slice(0, i).join('/'));
+  }
+  for (const k of fileKeys) {
+    if (allDirs.has(k)) problems.push(`zip 内同名条目既是文件又是目录（内容会互相覆盖）：${k}`);
+  }
+
+  // 本地文件头 ↔ 中央目录一致性 + 数据边界
+  for (const e of entries) {
+    if (e.problems.length) continue;
+    if (e.localOffset + 30 > buf.length || buf.readUInt32LE(e.localOffset) !== 0x04034b50) {
+      flag(e, `本地文件头签名错误：${e.name}`);
+      continue;
+    }
+    const lFlags = buf.readUInt16LE(e.localOffset + 6);
+    const lMethod = buf.readUInt16LE(e.localOffset + 8);
+    const lNameLen = buf.readUInt16LE(e.localOffset + 26);
+    const lExtraLen = buf.readUInt16LE(e.localOffset + 28);
+    const lName = buf.toString('utf8', e.localOffset + 30, e.localOffset + 30 + lNameLen);
+    e.dataStart = e.localOffset + 30 + lNameLen + lExtraLen;
+    if (lName !== e.rawName) flag(e, `本地文件头名称与中央目录不一致：${e.name}`);
+    if (lMethod !== e.method) {
+      flag(e, `本地文件头压缩方法与中央目录不一致（${lMethod} ≠ ${e.method}）：${e.name}`);
+    }
+    if (lFlags !== e.flags) {
+      flag(e, `本地文件头标志与中央目录不一致（0x${lFlags.toString(16)} ≠ 0x${e.flags.toString(16)}）：${e.name}`);
+    }
+    // data descriptor（bit 3）时本地头的 CRC/大小按 ZIP 语义是零占位，不能逐字比较
+    if (!e.dataDescriptor && !e.isDir) {
+      const lCrc = buf.readUInt32LE(e.localOffset + 14);
+      const lCsize = buf.readUInt32LE(e.localOffset + 18);
+      const lUsize = buf.readUInt32LE(e.localOffset + 22);
+      if (lCrc !== e.crc32 || lCsize !== e.csize || lUsize !== e.usize) {
+        flag(e, `本地文件头 CRC/大小与中央目录不一致：${e.name}`);
+      }
+    }
+    if (e.dataStart + e.csize > buf.length) flag(e, `条目数据超出文件末尾（截断或边界异常）：${e.name}`);
+  }
+
+  return { buf, entries, problems, explicitDirs };
 }
 
 /**
- * zip 与候选目录一致性：条目集合相等，逐条目 CRC32+大小与磁盘文件一致。
- * 返回问题列表（空 = 通过）。这正是「zip hash 相符 ≠ zip 内部就是所检目录」缺的那环。
+ * 读取条目**真实内容**（R2）：store 直接切片，DEFLATE 用 Node zlib 真实解压。
+ * 输出以声明大小封顶并计入累计预算，避免「只信声明大小」造成的无界内存分配；
+ * 未知方法/加密/ZIP64 已在解析期拒绝，这里不再静默跳过压缩内容。
+ * @returns {{content: Buffer|null, problem: string|null}}
+ */
+function readZipEntryContent(entry, buf, budget) {
+  if (entry.problems.length) return { content: null, problem: entry.problems[0] };
+  const declared = entry.usize;
+  if (declared > ZIP_MAX_ENTRY_BYTES) {
+    return {
+      content: null,
+      problem: `条目声明解压后 ${declared} 字节，超过单条上限 ${ZIP_MAX_ENTRY_BYTES}：${entry.name}`,
+    };
+  }
+  if (declared > budget.remaining) {
+    return {
+      content: null,
+      problem: `累计解压预算不足（上限 ${ZIP_MAX_TOTAL_BYTES} 字节），拒绝继续解压：${entry.name}`,
+    };
+  }
+  if (entry.dataStart + entry.csize > buf.length) {
+    return { content: null, problem: `条目数据超出文件末尾（截断或边界异常）：${entry.name}` };
+  }
+  const raw = buf.subarray(entry.dataStart, entry.dataStart + entry.csize);
+  budget.remaining -= declared;
+  if (entry.method === 0) {
+    if (raw.length !== declared) {
+      return {
+        content: null,
+        problem: `store 条目数据长度 ${raw.length} 与声明大小 ${declared} 不符：${entry.name}`,
+      };
+    }
+    return { content: raw, problem: null };
+  }
+  let out;
+  try {
+    out = zlib.inflateRawSync(raw, { maxOutputLength: Math.max(declared, 1) });
+  } catch (e) {
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : String(e);
+    return {
+      content: null,
+      problem: `DEFLATE 解压失败（压缩数据损坏/截断，或实际输出超出声明大小）：${entry.name} | ${code}`,
+    };
+  }
+  if (out.length !== declared) {
+    return { content: null, problem: `解压后实际长度 ${out.length} 与声明 ${declared} 不符：${entry.name}` };
+  }
+  return { content: out, problem: null };
+}
+
+/**
+ * 解析 zip 中央目录，返回文件条目 [{ name, crc32, size }]（目录条目在**规范化之后**过滤）。
+ * 名称先经 normalizeZipEntryName（统一分隔符 + 安全检查），再区分文件/目录；
+ * 任何不可安全解释的条目都抛错——调用方必须失败关闭，不得跳过。
+ */
+function readZipCentral(zipPath) {
+  const parsed = parseZip(zipPath);
+  if (parsed.problems.length) throw new Error(parsed.problems[0]);
+  return parsed.entries
+    .filter((e) => !e.isDir)
+    .map((e) => ({ name: e.name, crc32: e.crc32, size: e.usize }));
+}
+
+/**
+ * zip 与候选目录一致性（R1/R2/R3）：条目集合相等，且逐条目用**真实内容**（store 切片 /
+ * DEFLATE 实解压）的 sha256 + 大小与磁盘文件比对——不再只信中央目录声明的 CRC/大小。
+ *
+ * 目录条目策略：显式目录必须确实存在于磁盘（凭空多出的目录拒绝）；但**不**要求磁盘每个
+ * 目录都在 zip 中显式出现——合法 zip 可以只用文件条目隐式表达父目录。
+ * 返回问题列表（空 = 通过）。
  */
 function checkZipMatchesDir(zipPath, dir) {
-  const problems = [];
-  const diskFiles = listFilesRecursive(dir);
-  const diskMap = new Map();
-  for (const rel of diskFiles) {
-    const buf = fs.readFileSync(path.join(dir, ...rel.split('/')));
-    diskMap.set(rel, { size: buf.length, crc32: crc32(buf) });
-  }
-  let zipEntries;
+  let parsed;
   try {
-    zipEntries = readZipCentral(zipPath);
+    parsed = parseZip(zipPath);
   } catch (e) {
     return [`zip 无法解析：${e.message}`];
   }
-  // 条目名规范化：zip 规范用 `/`，但 Windows PowerShell 5.1 的 Compress-Archive
-  // 会写 `\`（本仓库 makeZip 即用它）——比较前统一为 `/`，否则整目录假不一致
-  const zipMap = new Map(zipEntries.map((e) => [e.name.replace(/\\/g, '/'), e]));
-  for (const [name, e] of zipMap) {
+  // 越界/重复/大小写冲突/文件目录冲突/未知方法等已在解析期统一判定
+  const problems = [...parsed.problems];
+  const diskMap = new Map();
+  for (const rel of listFilesRecursive(dir)) {
+    const buf = fs.readFileSync(path.join(dir, ...rel.split('/')));
+    diskMap.set(rel, { size: buf.length, sha256: sha256Buf(buf) });
+  }
+  const diskDirs = new Set(listDirsRecursive(dir));
+
+  const zipFiles = new Map();
+  for (const e of parsed.entries) {
+    if (e.isDir) {
+      // 显式目录条目必须先过安全检查（已在解析期），再要求磁盘上确有该目录
+      if (!e.problems.length && !diskDirs.has(e.pathKey)) {
+        problems.push(`zip 内多出磁盘没有的目录条目：${e.name}`);
+      }
+      continue;
+    }
+    if (e.problems.length) continue; // 无效条目已在解析期报过，不重复计入集合
+    if (zipFiles.has(e.name)) continue;
+    zipFiles.set(e.name, e);
+  }
+
+  const budget = { remaining: ZIP_MAX_TOTAL_BYTES };
+  for (const [name, e] of zipFiles) {
     const d = diskMap.get(name);
-    if (!d) { problems.push(`zip 内多出磁盘没有的条目：${name}`); continue; }
-    if (d.crc32 !== e.crc32 || d.size !== e.size) {
-      problems.push(`zip 条目与磁盘内容不一致（疑似混入旧文件）：${name}（zip crc=${e.crc32.toString(16)} size=${e.size}，磁盘 crc=${d.crc32.toString(16)} size=${d.size}）`);
+    if (!d) {
+      problems.push(`zip 内多出磁盘没有的条目：${name}`);
+      continue;
+    }
+    const read = readZipEntryContent(e, parsed.buf, budget);
+    if (read.problem) {
+      problems.push(read.problem);
+      continue;
+    }
+    const content = read.content;
+    if (content.length !== d.size) {
+      problems.push(`zip 条目与磁盘大小不一致（疑似混入旧文件）：${name}（zip ${content.length}，磁盘 ${d.size}）`);
+      continue;
+    }
+    if (sha256Buf(content) !== d.sha256) {
+      problems.push(`zip 条目与磁盘内容不一致（疑似混入旧文件）：${name}（实解压内容 sha256 与磁盘不符）`);
     }
   }
   for (const rel of diskMap.keys()) {
-    if (!zipMap.has(rel)) problems.push(`zip 缺少候选目录中的文件：${rel}`);
+    if (!zipFiles.has(rel)) problems.push(`zip 缺少候选目录中的文件：${rel}`);
   }
   return problems;
 }
@@ -447,60 +725,31 @@ function parseArgs(argv) {
 }
 
 /**
- * zip 深度完整性验证（P3）：按本地文件头逐条真实解压读取，验证声明 CRC 与
- * 实读内容一致，并拒绝越界/重复/目录逃逸条目。仅信中央目录是不够的——
- * 声明与实际内容可以不一致。
- * 返回问题列表。不解压到磁盘，全部在内存比对，且强制条目路径不越出根。
+ * zip 深度完整性验证（R1/R2/R3）：按统一解析结果逐条读取**真实内容**——
+ * store 直接切片、DEFLATE 用 Node zlib 真实解压（声明大小封顶 + 累计预算），
+ * 再比对实读内容 CRC 与声明；越界/重复/大小写冲突/文件目录冲突/未知方法/ZIP64
+ * 一律由共享解析入口拒绝。仅信中央目录是不够的：声明与实际内容可以不一致。
+ * 返回问题列表。不解压到磁盘，全部在内存比对，条目路径不越出根。
  */
 function deepVerifyZip(zipPath) {
-  const problems = [];
-  const buf = fs.readFileSync(zipPath);
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
-    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  let parsed;
+  try {
+    parsed = parseZip(zipPath);
+  } catch (e) {
+    return [`zip 无法解析：${e.message}`];
   }
-  if (eocd < 0) return ['zip 找不到 EOCD'];
-  const count = buf.readUInt16LE(eocd + 10);
-  let off = buf.readUInt32LE(eocd + 16);
-  const seen = new Set();
-  for (let i = 0; i < count; i++) {
-    if (off + 46 > buf.length || buf.readUInt32LE(off) !== 0x02014b50) {
-      problems.push(`中央目录第 ${i} 项签名错误`);
-      break;
-    }
-    const method = buf.readUInt16LE(off + 10);
-    const crc = buf.readUInt32LE(off + 16);
-    const csize = buf.readUInt32LE(off + 20);
-    const usize = buf.readUInt32LE(off + 24);
-    const nameLen = buf.readUInt16LE(off + 28);
-    const extraLen = buf.readUInt16LE(off + 30);
-    const commentLen = buf.readUInt16LE(off + 32);
-    const localOff = buf.readUInt32LE(off + 42);
-    const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
-    off += 46 + nameLen + extraLen + commentLen;
-    if (name.endsWith('/')) continue;
-    if (seen.has(name)) { problems.push(`zip 内重复条目：${name}`); continue; }
-    seen.add(name);
-    // 目录逃逸 / 绝对路径
-    if (name.startsWith('/') || /^[A-Za-z]:/.test(name) || name.split('/').includes('..')) {
-      problems.push(`zip 条目路径越界（疑似目录逃逸）：${name}`); continue;
-    }
-    // 本地文件头校验（数据起点）
-    if (localOff + 30 > buf.length || buf.readUInt32LE(localOff) !== 0x04034b50) {
-      problems.push(`本地文件头签名错误：${name}`); continue;
-    }
-    const lNameLen = buf.readUInt16LE(localOff + 26);
-    const lExtraLen = buf.readUInt16LE(localOff + 28);
-    const dataStart = localOff + 30 + lNameLen + lExtraLen;
-    if (method !== 0) {
-      // 非 store：只校验范围不越界（压缩解压由系统 unzip 语义保证，这里不重造 inflate）
-      if (dataStart + csize > buf.length) problems.push(`条目数据超出文件末尾：${name}`);
+  const problems = [...parsed.problems];
+  const budget = { remaining: ZIP_MAX_TOTAL_BYTES };
+  for (const e of parsed.entries) {
+    if (e.isDir || e.problems.length) continue;
+    const read = readZipEntryContent(e, parsed.buf, budget);
+    if (read.problem) {
+      problems.push(read.problem);
       continue;
     }
-    if (dataStart + usize > buf.length) { problems.push(`条目数据超出文件末尾：${name}`); continue; }
-    const content = buf.subarray(dataStart, dataStart + usize);
-    if (content.length !== usize) { problems.push(`条目实际长度与声明不符：${name}`); continue; }
-    if (crc32(content) !== crc) problems.push(`条目实读内容 CRC 与声明不符：${name}`);
+    if (crc32(read.content) !== e.crc32) {
+      problems.push(`条目实读内容 CRC 与声明不符：${e.name}`);
+    }
   }
   return problems;
 }
@@ -726,11 +975,16 @@ module.exports = {
   asarEntries,
   readAsarEntryBuf,
   listFilesRecursive,
+  listDirsRecursive,
   outManifestOfDir,
   outManifestOfAsar,
   diffOutManifest,
   checkBinding,
   checkSourceFreeze,
+  normalizeZipEntryName,
+  parseZip,
+  readZipEntryContent,
+  ZIP_SUPPORTED_METHODS,
   readZipCentral,
   checkZipMatchesDir,
   deepVerifyZip,

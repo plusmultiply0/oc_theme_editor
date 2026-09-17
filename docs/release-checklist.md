@@ -5,23 +5,71 @@ Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件�
 
 ## 1. 当前候选（Alpha）
 
-版本 **`0.1.0-alpha.1`**（Windows x64）。分发前请核对 zip 的 SHA256：
+版本 **`0.1.0-alpha.1`**（Windows x64），由 `npm run release:build` 的正式发布链产出
+（`packMethod: electron-builder`，**可重复构建**）。
 
-| 文件 | 大小 | SHA256 |
+下面这段是本文件的**唯一权威入口**，由 `tools/doc-candidate-entry.cjs` 从选中
+manifest 加磁盘实算生成：
+
+<!-- CURRENT-CANDIDATE:BEGIN -->
+buildId: 20260916114818-8b3b8f8-f4e1c6
+sourceCommit: 8b3b8f88f91df20ed2438388bd7270b9b7532e69
+schema: candidate-manifest/3
+packMethod: electron-builder
+manifest: candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json
+candidateDir: candidate-20260916114818-8b3b8f8-f4e1c6/win-unpacked
+zip: candidate-20260916114818-8b3b8f8-f4e1c6.zip
+zipSha256: 1df4c69765ee91e92b8bde46a2bb331aa45c63f3de0376423be83caef070c739
+exeSha256: ed8ee97cddb8afadd7d3c9975aa661a4dfebc9bbe9e27fa7165b92c158426cba
+asarSha256: e79cd599cbc1c6f66b23b6d80a9b666fffcc2c8e897ca108a835ae0379670a95
+<!-- CURRENT-CANDIDATE:END -->
+
+| 文件 | 大小 | 说明 |
 |---|---|---|
-| `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip` | 131 MB | `9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c` |
-| ├ `OpenCodeThemeSwitcher.exe` | 193.3 MB | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
-| └ `resources/app.asar` | 17.0 MB | `7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8` |
+| `candidate-20260916114818-8b3b8f8-f4e1c6.zip` | 127.2 MB | 分发以 zip 为准（79 条目，整目录压缩） |
+| ├ `OpenCodeThemeSwitcher.exe` | 193.3 MB | 未签名 |
+| └ `resources/app.asar` | 17.7 MB | 965 条目 / unpacked 7 |
 
-归档 967 条目 / unpacked 7。**未签名**；RunAsNode 等加固 fuse 均为 Electron 默认值（未加固）。
-本轮为修复打包缺陷重封过，重封记录见 `docs/alpha-acceptance.md`「A4 之后发现并修复的三个打包缺陷」；
-分发以 zip 为准（旧 `win-unpacked` 目录已废弃，其中文件被外部进程占用，无法删除）。
-逐项验收与包内抽查见 `docs/alpha-acceptance.md`；校验和清单随包分发。
+候选身份由 `release-receipt/1` 与 `build-record/2` 绑定同一 buildId 与源码提交；
+`build-record` 的 12 项必检（`typecheck`、`lint`、`test:unit`、`test:integration`、
+`build`、`test:e2e`、`test:e2e:electron`、`audit`、`dist`、`smoke:gui`、
+`verify-package`、`zip`）全部 `passed`，`releaseEligible=true`。
+
+**核对方式（不靠人眼比对）**：
+
+```bash
+node tools/doc-candidate-entry.cjs \
+  --manifest candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json --check
+```
+
+该命令把「文档块 / manifest 登记 / 磁盘实算哈希」三方对齐；任一不符即非 0 退出。
+**重封或重建后必须换掉上面的 buildId 与哈希，而不是沿用旧块。**
 
 **分发要求**：整个 `win-unpacked` 一起发（zip），不能只发 exe；
 zip 的 SHA256 必须与上表一致。
 
 ## 2. 历史构建（全部过期，不要用于验证或分发）
+
+### 2.1 历史候选：手工重封 alpha 包（`manual-repack-20260912`）
+
+**不作为本次发布候选，仅供历史追溯。** 该包早于 R1–R6 / S1–S6 全部源码修复，
+其 manifest、hash 与 receipt 原样保留，未做任何改写：
+
+| 项 | 值 |
+|---|---|
+| 候选版本 | `0.1.0-alpha.1` |
+| 来源提交 | `871703da2bd775a2af1a9eb464b813a57e6fb8ae` |
+| 登记 | `candidate-manifest.json`（schema `candidate-manifest/1`，buildId `manual-repack-20260912`，`manual-repack`，**不可重复构建**） |
+| 分发 zip | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip` |
+| zip SHA256 | `9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c` |
+| exe SHA256 | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f` |
+| app.asar SHA256 | `7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8` |
+| 备注 | 归档 967 条目 / unpacked 7；旧 `win-unpacked` 目录中 `app.asar` 曾被外部进程占用，无法删除 |
+
+历史候选的命令与结果记录保留在 `docs/acceptance.md`
+与 `docs/alpha-acceptance.md`「历史候选」小节，**不作为当前入口**。
+
+### 2.2 早期目录构建
 
 | 目录 | 构建时间 | 内容 | 状态 |
 |---|---|---|---|
@@ -31,33 +79,54 @@ zip 的 SHA256 必须与上表一致。
 | `release4/` | 2026-09-12 | 事故 F1–F4 修复前 | 过期 |
 | `release5/` | 2026-09-12 | 背景事故 F1–F4 | 过期 |
 | `release6/` | 2026-09-12 | 真机验收发现的三处修复 | 过期 |
-| `release7/` | 2026-09-12 | 第一批 JPEG 别名支持 | 当前基准（见第 1 节） |
+| `release7/` | 2026-09-12 | 第一批 JPEG 别名支持 | 过期（曾是手工重封候选的基准，现已被第 1 节取代） |
 
 旧的 `app.asar` 曾被安全软件占用（环境的安全删除包装器对 `.asar` 回收失败），
 因此每轮只能递进一个新目录，旧的删不掉。锁释放后在资源管理器手动删除即可。
 
-## 3. 当前门禁结果（Alpha 候选 0.1.0-alpha.1）
+## 3. 当前门禁结果（buildId `20260916114818-8b3b8f8-f4e1c6`）
 
-| 命令 | 退出码 | 结果 |
-|---|---|---|
-| `npm run typecheck` | 0 | 通过 |
-| `npm run lint` | 0 | 通过 |
-| `npm run test:unit` | 0 | 135 项（9 文件） |
-| `npm run test:integration` | 0 | 138 项（12 文件） |
-| `npm run test:e2e` | 0 | 16 项真实窗口闭环 |
-| `npm run test:e2e:electron` | 0 | 35 项真实 Electron 主进程闭环 |
-| `npm run audit` | 0 | 通过 |
-| `npm run dist` | 0 | 产出候选包（其后因打包缺陷重封） |
-| `npm run verify:package` | 0 | 30 项（967 条目） |
+以下数字**只属于第 1 节那一个候选**，取自其 `build-record.json`；
+包有改动必须重建并更新第 1 节哈希，旧数字不作数。
 
-一条命令跑全链：`bash tools/release-gate.sh`（任一步非 0 即停，逐条打印退出码与耗时）。
-S3 起发布门禁最后一步为 `tools/verify-release.cjs`（`npm run verify:release`），必须显式绑定
-**本次构建**登记：`GATE_CANDIDATE_DIR=<候选目录> GATE_BUILD_ID=<唯一构建ID> bash tools/release-gate.sh`；
-缺绑定在构建前即失败关闭（exit 2），不回落 candidate-manifest.json 默认候选。
-`npm run verify:package` 只是**旧候选身份核验**（磁盘与登记一致），通过它不代表当前源码已通过发布验收。
+| 命令 | 退出码 | 耗时 | 结果 |
+|---|---|---|---|
+| `npm run typecheck` | 0 | 5.5s | 通过 |
+| `npm run lint` | 0 | 5.5s | 通过 |
+| `npm run test:unit` | 0 | 6.2s | 通过（见下注） |
+| `npm run build` | 0 | 7.1s | 通过 |
+| `npm run test:integration` | 0 | 130.4s | 通过（见下注） |
+| `npm run test:e2e` | 0 | 37.7s | 通过 |
+| `npm run test:e2e:electron` | 0 | 5.0s | 通过 |
+| `npm run audit` | 0 | 14.3s | FAIL 0 / WARN 0 |
+| `npm run dist` | 0 | 127.2s | 通过 |
+| `npm run smoke:gui` | 0 | 26.1s | 通过 |
+| `npm run verify-package` | 0 | 1.6s | 通过 |
+
+注：上表「结果」只记通过与否，**具体测试数量以该次构建的原始日志为准**，
+不在本文另抄一份（抄写必然滞后，正是本文件此前出错的成因）。
+
+另有 2026-09-17 的独立只读发布核验（`handoff/review-2026-09-17/`）：绑定同一
+buildId 的 `verify:release` **18 项 0 失败，`RELEASE_GREEN`**。该核验只读、未重跑构建步骤。
+
+一条命令跑全链（`bash tools/release-gate.sh` 是薄入口，任一步非 0 即停）：
+
+```bash
+# 全链构建 + 打包 + 登记 + 核验（buildId 省略时自动生成）
+bash tools/release-gate.sh build
+
+# 只读核验既有候选：必须显式绑定 manifest 与候选目录，且须与 buildId 推导一致
+GATE_MANIFEST=candidate-<buildId>/candidate-manifest.json \
+GATE_CANDIDATE_DIR=candidate-<buildId>/win-unpacked \
+GATE_BUILD_ID=<buildId> bash tools/release-gate.sh verify
+```
+
+缺绑定或绑定与 buildId 推导不一致时**在核验前即失败关闭（exit 2）**，
+**不回落根目录 `candidate-manifest.json`**。
+`npm run verify:package` 只是**旧候选身份核验**（磁盘与登记一致），
+通过它不代表当前源码已通过发布验收。
 `npm run verify` 不含 `test:e2e:electron` / `audit` / `dist` / `verify:release` ——
-**不能只跑 verify** 就宣称全部门禁通过。这些数字属于本候选包那一次构建；
-包有改动必须重跑并更新第 1 节哈希。
+**不能只跑 verify** 就宣称全部门禁通过。
 
 ## 4. 文档索引
 

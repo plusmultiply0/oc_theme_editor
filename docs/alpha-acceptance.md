@@ -13,19 +13,34 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 
 ## 0. 候选标识
 
+### 0.1 当前候选
+
 | 项 | 值 |
 |---|---|
 | 候选版本 | **`0.1.0-alpha.1`**（package.json / package-lock.json 已同步；`private: true` 保留） |
-| 提交（来源） | `871703da2bd775a2af1a9eb464b813a57e6fb8ae`「候选包重封：修复三个让包跑不起来的打包缺陷，并加固包校验」——以 `candidate-manifest.json` 登记为准；**后续源码修复提交不改变本候选的内容** |
-| 候选身份登记 | `candidate-manifest.json`（schema `candidate-manifest/1`，buildId `manual-repack-20260912`，packMethod `manual-repack`，**不可重复构建**） |
-| 包目录 | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked.new`（verify 默认绑定 manifest 指定候选，不回退旧目录）。<br>注：同级的 `win-unpacked` 是上一轮产物，其中 `app.asar` 被外部进程长期占用、无法改名或删除，故本轮重封落在新目录；`win-unpacked` 与 `win-unpacked-fresh` 仅取证留存，**禁止分发**；**分发以 zip 为准** |
-| exe SHA256 | `99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f`（193.3 MB） |
-| app.asar SHA256 | `7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8`（17.0 MB，967 条目，unpacked 7） |
-| 分发 zip SHA256 | `9212617177fa9bb7c8f46b5bd313f7c76484f26e2c646d5e9e9de598c7e81c6c`（131 MB，84 条目，整目录压缩；含 `locales/zh-CN.pak` 与 11 个 unpacked 条目） |
-| 平台 | Windows x64（本次仅此一项；未在 Windows 11 上实测） |
+| buildId | **`20260916114818-8b3b8f8-f4e1c6`** |
+| 提交（来源） | `8b3b8f88f91df20ed2438388bd7270b9b7532e69`「fix(e2e): 修 R6 引入的 Playwright 首参写法（回归）」 |
+| 候选身份登记 | `candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json`（schema `candidate-manifest/3`，`packMethod: electron-builder`，`reproducibleBuild: true`） |
+| 完成回执 | `candidate-20260916114818-8b3b8f8-f4e1c6/release-receipt.json`（schema `release-receipt/1`，绑定同一 buildId 与源码提交） |
+| 包目录 | `candidate-20260916114818-8b3b8f8-f4e1c6/win-unpacked` |
+| 平台 | Windows x64（仅开发机；未在 Windows 11 上实测） |
 | 目标 | OpenCode Desktop 1.18.29，用户级安装（未为了匹配白名单降级 OpenCode） |
 | 签名 | 未签名（如实声明） |
-| 校验和清单 | `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.sha256.txt`（本地，随包分发） |
+| zip / exe / app.asar SHA256 | 见 `docs/release-checklist.md` 第 1 节的机器可核对块（**不在本文件重复抄写**） |
+
+哈希**只在一处维护**：`docs/release-checklist.md` 的候选块由
+`tools/doc-candidate-entry.cjs` 从 manifest 加磁盘实算生成并可机器核对。
+本文件重复抄写会重演「重封后只更新一处」的漂移，因此只登记身份、不抄哈希。
+
+### 0.2 历史候选（保留，不作为当前候选）
+
+`manual-repack-20260912`（源 `871703da2bd775a2af1a9eb464b813a57e6fb8ae`，
+schema `candidate-manifest/1`，手工重封，**不可重复构建**）早于 R1–R6 / S1–S6
+全部源码修复。其 manifest、hash、receipt 原样保留、未改写，
+身份细节与哈希见 `docs/release-checklist.md` 第 2.1 节。
+
+**本文件第 5 节以下的 A4/A7 等既有结论，均属该历史候选**；
+它们不能当作 0.1 节新候选的成功证据。
 
 ## 1. 基线（A0）
 
@@ -93,6 +108,41 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
   `<link>` + 标记，并用「单行 / 多行 HTML 各连续注入三次」回归锁住。
 
 ## 5. A4 全量回归与候选冻结
+
+### 5.1 当前候选（buildId `20260916114818-8b3b8f8-f4e1c6`）
+
+证据为**该候选自己的** `build-record.json`（`build-record/2`），
+12 项必检全部 `passed`、`releaseEligible=true`、`missingRequiredSteps` 为空：
+
+| 步骤 | 退出码 | 耗时 |
+|---|---|---|
+| `typecheck` | 0 | 5.5s |
+| `lint` | 0 | 5.5s |
+| `test:unit` | 0 | 6.2s |
+| `build` | 0 | 7.1s |
+| `test:integration` | 0 | 130.4s |
+| `test:e2e` | 0 | 37.7s |
+| `test:e2e:electron` | 0 | 5.0s |
+| `audit` | 0 | 14.3s |
+| `dist` | 0 | 127.2s |
+| `smoke:gui` | 0 | 26.1s |
+| `verify-package` | 0 | 1.6s |
+| `zip` | 0 | 0s |
+
+另有 2026-09-17 独立复审的**只读**发布核验，绑定同一 buildId
+（`handoff/review-2026-09-17/verify.summary.json`，`status: 0`）：
+`verify:release --require-release-eligibility` **18 项 0 失败，`RELEASE_GREEN`**。
+该次核验未重跑构建步骤，也未改动任何产物。
+
+**未执行**：本候选的真实安装闭环（A5）与干净环境验证（A6）——见第 6、7 节，
+状态仍为「待执行 / 用户决定跳过」，**没有把它们预填成新候选的成功**。
+
+### 5.2 历史候选（`manual-repack-20260912`）——以下第 5 节其余内容与 R/S 小节均为历史记录
+
+> 本小节及其后「A4 之后发现并修复的三个打包缺陷」「R1–R5」「S1–S6」记载的是
+> **历史候选**（zip `92126171…`，源 `871703d`）的时间线，其中的
+> 「当前候选不包含这些修复」在 5.1 候选上已不再成立——新候选包含 R/S 全部修复。
+> 保留原文以维持过程可追溯。
 
 | 命令 | 退出码 | 测试数 | 结论 | 证据 |
 |---|---|---|---|---|
@@ -228,19 +278,27 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
 
 ## 9. A8 GO/NO-GO
 
+下表**逐项标注证据属于哪个候选**；历史候选的结论不自动继承给 5.1 的当前候选。
+
 | 条件 | 结论 |
 |---|---|
-| A1 文档与 UI/恢复逻辑一致，无错误「原版」承诺 | 待执行 |
+| A1 文档与 UI/恢复逻辑一致，无错误「原版」承诺 | 待执行（`docs/release-checklist.md` 的当前入口已于 2026-09-17 修正为 5.1 候选，其余条目仍未逐项核对） |
 | A2 预览/应用绑定同一图像；异常不写安装；动画范围明确 | 待执行 |
-| A3 完整图片核验与 HTML 边界通过 | **通过**（见第 4 节） |
-| A4 门禁全绿、候选版本与 hash 固定 | **通过**（见第 5 节；其后的 R1–R5 修复未改变候选，重封前需重跑门禁） |
+| A3 完整图片核验与 HTML 边界通过 | **通过（历史候选）**（见第 4 节）；当前候选的对应实现由 A4 自动化测试覆盖，但该人工核对**未在新候选上重做** |
+| A4 门禁全绿、候选版本与 hash 固定 | **通过**——当前候选 12 项必检全过（见 5.1）；历史候选的 A4 见 5.2 |
 | A5 真实安装闭环完成 | 待执行（等用户保存退出并确认；不引用历史授权） |
 | A6 干净环境验证 | **用户决定跳过——未验证，按已知风险处理** |
-| A7 分发材料与公开范围检查完成 | **通过**（演示素材未拍摄为遗留项；隐私处置清单待 jc 确认） |
+| A7 分发材料与公开范围检查完成 | **通过（历史候选）**（见第 8 节）；当前候选的包内是否含 `LICENSE` 未核验，演示素材仍未拍摄，隐私处置清单待 jc 确认 |
 | 无启动失败/归档损坏/恢复失败/静默写错图 | 待执行（依赖 A5） |
 | 用户明确批准发布目标、版本与内容 | 待执行 |
 
-**当前建议**：NO-GO。理由：A5 未执行（缺真实安装闭环证据）；A6 已按用户决定跳过
-（干净环境与异常路径无直接证据，平台声明收窄至开发机）；当前候选早于 R1–R5 修复，
-重新分发前需重封并重跑门禁。
+**当前建议**：仍为 **NO-GO**。理由分三类，不要混为一谈：
+
+1. **缺证据**：A5 未执行——没有当前候选对应的真实安装→重启→视觉检查→恢复证据；
+   A6 已按用户决定跳过（平台声明收窄至开发机）。
+2. **待修的已知问题**（见 `handoff/review-2026-09-17/REVIEW_AND_FIX_PLAN.md`）：
+   F2/F3 冒烟配置与错误监听时序、F4 ZIP 结构边界。它们**不表示当前候选包本身有问题**
+   （当前候选已通过只读发布核验），但表示现有绿色证据的覆盖面有缺口。
+3. **历史结论不可继承**：A3/A7 的「通过」绑定历史候选，不能直接套给新候选。
+
 仅可先做受控展示或内部测试，不得标注为稳定版。

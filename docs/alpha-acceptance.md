@@ -134,6 +134,13 @@ schema `candidate-manifest/1`，手工重封，**不可重复构建**）早于 R
 `verify:release --require-release-eligibility` **18 项 0 失败，`RELEASE_GREEN`**。
 该次核验未重跑构建步骤，也未改动任何产物。
 
+> **`smoke:gui` 一条的语义提醒**：上表该条由**整改前**的冒烟工具跑出
+> （默认带 GPU workaround），只证明「关掉 GPU 相关子进程后能起窗口」。
+> 整改后默认参数为空（与双击等价），已对同一候选独立复测通过，
+> 但**未**回写 build-record。详见
+> `handoff/review-2026-09-17/evidence/f2-f3-smoke.md` 与
+> `docs/release-checklist.md` 第 3 节。
+
 **未执行**：本候选的真实安装闭环（A5）与干净环境验证（A6）——见第 6、7 节，
 状态仍为「待执行 / 用户决定跳过」，**没有把它们预填成新候选的成功**。
 

@@ -398,6 +398,13 @@ const ZIP_MAX_ENTRY_BYTES = 1024 * 1024 * 1024;
 /** 整包累计解压预算（超过即失败并给出可诊断原因） */
 const ZIP_MAX_TOTAL_BYTES = 4 * 1024 * 1024 * 1024;
 
+/* ZIP 结构签名（F4：边界校验需要的魔数，集中一处避免散落） */
+const ZIP_SIG_LOCAL = 0x04034b50; // 本地文件头
+const ZIP_SIG_CENTRAL = 0x02014b50; // 中央目录条目
+const ZIP_SIG_EOCD = 0x06054b50; // 中央目录结束记录
+const ZIP_SIG_DATA_DESCRIPTOR = 0x08074b50; // 数据描述符（可选）
+const ZIP_SIG_ZIP64_EOCD_LOCATOR = 0x07064b50; // ZIP64 定位器（紧邻 EOCD 之前）
+
 /**
  * 规范 ZIP 条目名（**所有 ZIP 检查的唯一入口**）：先统一分隔符，再判目录，最后做安全检查。
  *
@@ -443,9 +450,47 @@ function hasZip64Extra(extra) {
 /** 从 EOCD 反查中央目录起点；找不到返回 -1 */
 function findZipEocd(buf) {
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
-    if (buf.readUInt32LE(i) === 0x06054b50) return i;
+    if (buf.readUInt32LE(i) === ZIP_SIG_EOCD) return i;
   }
   return -1;
+}
+
+/**
+ * 校验 data descriptor（F4）。
+ *
+ * 中央目录里有真实的 CRC 与大小，而 bit 3 开启时**本地头**按 ZIP 语义是零占位，
+ * 因此本地字段不能逐字比较（旧实现据此整段跳过）。但「跳过本地字段」不等于
+ * 「这段数据不用核」——描述符本身必须存在、落在文件内、且与中央目录一致。
+ * 兼容有签名（0x08074b50 + 12 字节）与无签名（12 字节）两种合法形式。
+ *
+ * @returns {string|null} 问题描述；null 表示通过
+ */
+function checkDataDescriptor(buf, e) {
+  const p = e.dataStart + e.csize;
+  if (p + 12 > buf.length) {
+    return `声明了 data descriptor（bit 3）但描述符缺失或截断：${e.name}`;
+  }
+  const at = (off) =>
+    off + 12 > buf.length
+      ? null
+      : {
+          crc: buf.readUInt32LE(off),
+          csize: buf.readUInt32LE(off + 4),
+          usize: buf.readUInt32LE(off + 8),
+        };
+  const matches = (d) => !!d && d.crc === e.crc32 && d.csize === e.csize && d.usize === e.usize;
+  // 有签名形式：签名后跟 crc/csize/usize；无签名形式：三字段直接开始。
+  // 两种都试，任一对得上即通过（避免 crc 恰好等于签名值时误判）。
+  const withSig = buf.readUInt32LE(p) === ZIP_SIG_DATA_DESCRIPTOR ? at(p + 4) : null;
+  const noSig = at(p);
+  if (matches(withSig) || matches(noSig)) return null;
+  const seen = noSig
+    ? `crc=0x${noSig.crc.toString(16)} csize=${noSig.csize} usize=${noSig.usize}`
+    : '不足 12 字节';
+  return (
+    `data descriptor 与中央目录声明不符：${e.name}` +
+    `（描述符 ${seen}；中央目录 crc=0x${e.crc32.toString(16)} csize=${e.csize} usize=${e.usize}）`
+  );
 }
 
 /**
@@ -459,8 +504,41 @@ function parseZip(zipPath) {
   const buf = fs.readFileSync(zipPath);
   const eocd = findZipEocd(buf);
   if (eocd < 0) throw new Error('找不到 zip EOCD，不是 zip 文件');
+  if (eocd + 22 > buf.length) throw new Error('EOCD 记录超出文件末尾（截断）');
+
+  // F4：ZIP64 定位器紧邻 EOCD 之前（20 字节）——不支持，显式拒绝而不是当下标读完
+  if (eocd >= 20 && buf.readUInt32LE(eocd - 20) === ZIP_SIG_ZIP64_EOCD_LOCATOR) {
+    throw new Error('暂不支持 ZIP64（发现 ZIP64 EOCD locator）');
+  }
+
+  const diskNum = buf.readUInt16LE(eocd + 4);
+  const cdStartDisk = buf.readUInt16LE(eocd + 6);
+  const entriesThisDisk = buf.readUInt16LE(eocd + 8);
   const count = buf.readUInt16LE(eocd + 10);
-  let off = buf.readUInt32LE(eocd + 16);
+  const cdSize = buf.readUInt32LE(eocd + 12);
+  const cdOffset = buf.readUInt32LE(eocd + 16);
+  const eocdCommentLen = buf.readUInt16LE(eocd + 20);
+
+  // F4：EOCD 的磁盘/计数/范围自洽性——旧实现只取 count 与 cdOffset 就直接开遍历，
+  // 声明与真实布局不符时会在越界处静默读到别的东西。
+  if (diskNum !== 0 || cdStartDisk !== 0) {
+    throw new Error(`不支持分卷 zip（disk=${diskNum}，中央目录起始盘=${cdStartDisk}）`);
+  }
+  if (entriesThisDisk !== count) {
+    throw new Error(`EOCD 条目计数不自洽（本盘 ${entriesThisDisk} ≠ 总计 ${count}）`);
+  }
+  if (cdOffset + cdSize > buf.length) {
+    throw new Error(`中央目录范围超出文件末尾（offset=${cdOffset} size=${cdSize}，文件 ${buf.length} 字节）`);
+  }
+  if (cdOffset + cdSize > eocd) {
+    throw new Error(`中央目录范围与 EOCD 重叠（中央目录末尾 ${cdOffset + cdSize} > EOCD ${eocd}）`);
+  }
+  if (eocd + 22 + eocdCommentLen > buf.length) {
+    throw new Error(`EOCD 注释长度 ${eocdCommentLen} 超出文件末尾（声明与实际不符）`);
+  }
+
+  const cdEnd = cdOffset + cdSize;
+  let off = cdOffset;
   const entries = [];
   const problems = [];
   const flag = (entry, message) => {
@@ -469,7 +547,10 @@ function parseZip(zipPath) {
   };
 
   for (let i = 0; i < count; i++) {
-    if (off + 46 > buf.length || buf.readUInt32LE(off) !== 0x02014b50) {
+    if (off + 46 > cdEnd) {
+      throw new Error(`中央目录第 ${i} 项超出中央目录范围（声明 cdSize=${cdSize}）`);
+    }
+    if (buf.readUInt32LE(off) !== ZIP_SIG_CENTRAL) {
       throw new Error(`zip 中央目录第 ${i} 项签名错误`);
     }
     const flags = buf.readUInt16LE(off + 8);
@@ -481,6 +562,17 @@ function parseZip(zipPath) {
     const extraLen = buf.readUInt16LE(off + 30);
     const commentLen = buf.readUInt16LE(off + 32);
     const localOffset = buf.readUInt32LE(off + 42);
+    // F4：变长字段必须完整落在中央目录范围内。
+    // 旧实现直接 `off += 46 + nameLen + extraLen + commentLen`：最后一项声明
+    // commentLen=65535 而实际没有注释时，遍历会越出中央目录去读后续字节，
+    // 反而「两个检查都无问题」。
+    if (off + 46 + nameLen + extraLen + commentLen > cdEnd) {
+      throw new Error(
+        `中央目录第 ${i} 项的变长字段（name/extra/comment）越出中央目录范围` +
+          `（需要 ${46 + nameLen + extraLen + commentLen} 字节，`
+          + `剩余 ${cdEnd - off}：声明与实际不符）`,
+      );
+    }
     const rawName = buf.toString('utf8', off + 46, off + 46 + nameLen);
     const extra = buf.subarray(off + 46 + nameLen, off + 46 + nameLen + extraLen);
     off += 46 + nameLen + extraLen + commentLen;
@@ -494,7 +586,12 @@ function parseZip(zipPath) {
     };
     entries.push(entry);
     if (norm.problem) flag(entry, norm.problem);
-    if (norm.isDir) continue;
+    /*
+     * F4：目录条目**不再提前 continue**。
+     * 旧实现 `if (norm.isDir) continue;` 让目录条目整段跳过加密/压缩方法/ZIP64 检查，
+     * 于是「异常元信息挂在目录条目上」就查不出来了。校验的宽严应当只看字段是否适用，
+     * 而不是看条目是不是目录。
+     */
     if (flags & 0x1) flag(entry, `zip 条目已加密，无法核验内容：${entry.name}`);
     if (!ZIP_SUPPORTED_METHODS.has(method)) {
       flag(entry, `不支持的压缩方法 method=${method}（只支持 store=0 / deflate=8）：${entry.name}`);
@@ -502,6 +599,14 @@ function parseZip(zipPath) {
     if (csize === 0xffffffff || usize === 0xffffffff || localOffset === 0xffffffff || hasZip64Extra(extra)) {
       flag(entry, `暂不支持 ZIP64 条目：${entry.name}`);
     }
+  }
+
+  // F4：遍历结束位置必须与 EOCD 声明的中央目录范围一致
+  if (off !== cdEnd) {
+    throw new Error(
+      `中央目录遍历结束于 ${off}，与声明范围末尾 ${cdEnd} 不一致` +
+        `（声明 cdSize=${cdSize}，${count} 项；中央目录长度或条目数与实际不符）`,
+    );
   }
 
   // 重复 / 大小写冲突：Windows 下两个条目会落到同一路径（R3）
@@ -520,31 +625,50 @@ function parseZip(zipPath) {
     seenLower.set(lower, e);
   }
 
-  // 文件 / 目录冲突：同名条目既是文件又是目录（父目录可由文件路径隐含）
+  /*
+   * 文件 / 目录冲突（F4）：必须用 **Windows 冲突键**（小写）比较。
+   *
+   * 旧实现用区分大小写的 Set，于是 `a`（文件）与 `A/file.txt`（文件，隐含父目录 `A`）
+   * 被当成两条互不相干的合法条目——而 Windows 上 `a` 与 `A` 是同一个名字，
+   * 这个包解压时必然冲突。
+   */
   const fileKeys = new Set();
+  const fileKeysLower = new Map();
   const explicitDirs = new Set();
-  const allDirs = new Set();
+  const allDirsLower = new Map();
+  const addDir = (key) => {
+    const low = key.toLowerCase();
+    if (!allDirsLower.has(low)) allDirsLower.set(low, key);
+  };
   for (const e of entries) {
     if (!e.pathKey) continue;
     if (e.isDir) {
       explicitDirs.add(e.pathKey);
-      allDirs.add(e.pathKey);
+      addDir(e.pathKey);
     } else {
       fileKeys.add(e.pathKey);
+      if (!fileKeysLower.has(e.pathKey.toLowerCase())) fileKeysLower.set(e.pathKey.toLowerCase(), e.pathKey);
     }
   }
   for (const k of fileKeys) {
     const segs = k.split('/');
-    for (let i = 1; i < segs.length; i++) allDirs.add(segs.slice(0, i).join('/'));
+    for (let i = 1; i < segs.length; i++) addDir(segs.slice(0, i).join('/'));
   }
   for (const k of fileKeys) {
-    if (allDirs.has(k)) problems.push(`zip 内同名条目既是文件又是目录（内容会互相覆盖）：${k}`);
+    const asDir = allDirsLower.get(k.toLowerCase());
+    if (asDir) {
+      problems.push(
+        asDir === k
+          ? `zip 内同名条目既是文件又是目录（内容会互相覆盖）：${k}`
+          : `zip 内文件与目录大小写别名冲突（Windows 下会落到同一路径）：文件 ${k} / 目录 ${asDir}`,
+      );
+    }
   }
 
   // 本地文件头 ↔ 中央目录一致性 + 数据边界
   for (const e of entries) {
     if (e.problems.length) continue;
-    if (e.localOffset + 30 > buf.length || buf.readUInt32LE(e.localOffset) !== 0x04034b50) {
+    if (e.localOffset + 30 > buf.length || buf.readUInt32LE(e.localOffset) !== ZIP_SIG_LOCAL) {
       flag(e, `本地文件头签名错误：${e.name}`);
       continue;
     }
@@ -561,8 +685,12 @@ function parseZip(zipPath) {
     if (lFlags !== e.flags) {
       flag(e, `本地文件头标志与中央目录不一致（0x${lFlags.toString(16)} ≠ 0x${e.flags.toString(16)}）：${e.name}`);
     }
-    // data descriptor（bit 3）时本地头的 CRC/大小按 ZIP 语义是零占位，不能逐字比较
-    if (!e.dataDescriptor && !e.isDir) {
+    // data descriptor（bit 3）时本地头的 CRC/大小按 ZIP 语义是零占位，不能逐字比较；
+    // 但描述符本身必须存在且与中央目录一致（F4），否则「跳过本地字段」= 整段不核。
+    if (e.dataDescriptor && !e.isDir) {
+      const dd = checkDataDescriptor(buf, e);
+      if (dd) flag(e, dd);
+    } else if (!e.isDir) {
       const lCrc = buf.readUInt32LE(e.localOffset + 14);
       const lCsize = buf.readUInt32LE(e.localOffset + 18);
       const lUsize = buf.readUInt32LE(e.localOffset + 22);
@@ -985,6 +1113,14 @@ module.exports = {
   parseZip,
   readZipEntryContent,
   ZIP_SUPPORTED_METHODS,
+  /* F4：ZIP 结构边界校验需要的签名与描述符检查，导出供夹具单测直接调用 */
+  ZIP_SIG_LOCAL,
+  ZIP_SIG_CENTRAL,
+  ZIP_SIG_EOCD,
+  ZIP_SIG_DATA_DESCRIPTOR,
+  ZIP_SIG_ZIP64_EOCD_LOCATOR,
+  findZipEocd,
+  checkDataDescriptor,
   readZipCentral,
   checkZipMatchesDir,
   deepVerifyZip,

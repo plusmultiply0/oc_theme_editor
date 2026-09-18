@@ -1481,6 +1481,83 @@ for (const name of FAIL_STEPS) {
   expect(cats.cleanup_only === r.cleanupOnly.length, '仅清理数量与清单一致');
 }
 
+// ---------- 13) G2：e2e 步骤必须拿到 testEnv() 的 TEMP，而不是继承外层 ----------
+/**
+ * 复审 G2：unit/integration 传 env: testEnv()，e2e 两步曾经不传 → runStep 回退到
+ * 外层 process.env.TEMP。取证 tools/e2e-chain-repro.cjs（2026-09-16）。
+ *
+ * 这里做**行为断言**而非文本比对：夹具里除两个 e2e 步骤外全部步骤桩 0，
+ * PATH 前置 npm 桩记录「脚本名 + 当时进程环境里的 TEMP」。外层 TEMP 特意设成
+ * 哨兵目录——若编排器漏传 env，桩记录到的就是哨兵，断言立即失败。
+ */
+{
+  console.log('\n== G2：test:e2e/test:e2e:electron 注入 testEnv()（端到端捕获 TEMP）==');
+  const root = makeFixture('orch-g2-e2eenv-');
+  const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'g2-e2eenv-'));
+  const envLog = path.join(fx, 'npm-env.log');
+  const sentinel = path.join(fx, 'outer-TEMP-must-NOT-be-used');
+  const tmpBase = path.join(root, 'ots-tmp');
+  const rec = path.join(fx, 'rec.cjs');
+  fs.writeFileSync(rec, [
+    "'use strict';",
+    "const fs = require('node:fs');",
+    'const args = process.argv.slice(2);',
+    "const name = args[0] === 'run' ? args[1] : args.join(' ');",
+    "fs.appendFileSync(process.env.G2_ENV_LOG, name + '\\t' + (process.env.TEMP || '') + '\\n');",
+    'process.exit(0);',
+  ].join('\n'));
+  const binDir = path.join(fx, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const isWinHost = process.platform === 'win32';
+  const npmStub = path.join(binDir, isWinHost ? 'npm.cmd' : 'npm');
+  if (isWinHost) {
+    fs.writeFileSync(npmStub, `@echo off\r\n"${process.execPath}" "${rec}" %*\r\nexit /b %errorlevel%\r\n`);
+  } else {
+    fs.writeFileSync(npmStub, `#!/bin/sh\nexec "${process.execPath}" "${rec}" "$@"\n`);
+    fs.chmodSync(npmStub, 0o755);
+  }
+
+  // 两个 e2e 步骤**不桩**（走真实 runStep → npm 桩），其余步骤桩 0
+  const stub = {};
+  for (const s of STEP_ORDER) if (s !== 'test:e2e' && s !== 'test:e2e:electron') stub[s] = 0;
+  const r = runOrch(root, ['build', 'b-g2'], {
+    stepStub: stub,
+    PATH: binDir + path.delimiter + process.env.PATH,
+    G2_ENV_LOG: envLog,
+    TEMP: sentinel,
+    TMP: sentinel,
+    OTS_TEST_TMP: tmpBase,
+  });
+  expect(r.status === 0, '链整体退出 0（npm 桩恒成功）', `实际 ${r.status}\n${(r.stdout + r.stderr).split('\n').slice(-8).join('\n')}`);
+  const lines = fs.existsSync(envLog)
+    ? fs.readFileSync(envLog, 'utf8').trim().split(/\r?\n/).filter(Boolean) : [];
+  const byName = {};
+  for (const l of lines) {
+    const [name, temp] = l.split('\t');
+    byName[name] = temp;
+  }
+  for (const name of ['test:e2e', 'test:e2e:electron']) {
+    const temp = byName[name] || '';
+    expect(Boolean(temp), `${name} 步骤真实派生了 npm 子进程（未被桩吞掉）`, lines.join(' | '));
+    expect(temp !== sentinel, `${name} 不得继承外层 TEMP（G2 原始缺陷形态）`, `实际 TEMP=${temp}`);
+    expect(temp.startsWith(tmpBase + path.sep), `${name} 的 TEMP 在受控临时根之下`, `实际 TEMP=${temp}`);
+    expect(/^ots-/.test(path.basename(temp)), `${name} 的运行目录为 ots-* 独立子目录`, `实际 TEMP=${temp}`);
+  }
+  expect(byName['test:e2e'] !== byName['test:e2e:electron'],
+    '两个 e2e 步骤各自独立运行目录（与 unit/integration 同策略）', `${byName['test:e2e']} vs ${byName['test:e2e:electron']}`);
+
+  // 交叉核对（静态）：两个 e2e 调用点显式携带 env: testEnv()。
+  // unit/integration 不在此列——它们的调用点夹着多行注释，文本比对脆弱；
+  // 且它们的注入由「链首失败传播」等既有场景间接覆盖。
+  const src = fs.readFileSync(BUILD, 'utf8');
+  for (const name of ['test:e2e', 'test:e2e:electron']) {
+    const re = new RegExp(`step\\('${name}', npmBin, \\['run', '${name}'\\], \\{ env: testEnv\\(\\) \\}\\)`);
+    expect(re.test(src), `release-build.cjs 的 ${name} 步骤传 env: testEnv()`, '未在源码中找到该步骤的 testEnv 注入');
+  }
+  rmDir(root);
+  rmDir(fx);
+}
+
 if (failures.length) {
   console.error(`\n${failures.length} 项断言失败`);
   process.exit(1);

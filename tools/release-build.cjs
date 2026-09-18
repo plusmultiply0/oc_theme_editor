@@ -523,9 +523,12 @@ function runBuild(buildId, opts) {
   );
 
   // 5) 运行期测试
+  //    G2：与 unit/integration 同策略注入 testEnv()——不传时 runStep 会用外层
+  //    process.env 的 TEMP（e2e-chain-repro.cjs 已取证），fixture 的 mkdtemp 因此
+  //    落在调用方环境里，与项目盘 TEMP 已知坑同源；两处行为不一致没有成立的理由。
   if (!opts.skipE2e) {
-    step('test:e2e', npmBin, ['run', 'test:e2e']);
-    step('test:e2e:electron', npmBin, ['run', 'test:e2e:electron']);
+    step('test:e2e', npmBin, ['run', 'test:e2e'], { env: testEnv() });
+    step('test:e2e:electron', npmBin, ['run', 'test:e2e:electron'], { env: testEnv() });
   }
   step('audit', npmBin, ['run', 'audit']);
 

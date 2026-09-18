@@ -1,30 +1,21 @@
 /**
- * 复刻发布链 test:e2e 失败：按 release-build.cjs 的真实调用方式重跑前缀。
+ * 复刻发布链前缀的步骤顺序，逐步打印它实际拿到的 TEMP（G2 取证复跑）。
  *
- * 关键差异（已从 release-build.cjs 读出）：
- *   test:unit      -> env = testEnv()（TEMP 重定向到项目盘 runDir）
- *   test:integration -> env = testEnv()（另一次重定向，另一个 runDir）
- *   test:e2e       -> 不传 env，runStep 用 opts.env || process.env
- *                     => e2e 继承的是外层 shell 的 process.env（系统 Temp）
- *
- * 因此 e2e 之前的 integration 会在「项目盘 runDir」里制造大量文件，
- * 而 e2e / Electron 走的是系统 Temp。本脚本复刻该顺序，
- * 并对每一步打印它实际拿到的 TEMP。
+ * 2026-09-16 首版取证到的缺陷：test:e2e 不传 env，继承外层 TEMP。
+ * G2（2026-09-18 复审）已修：e2e 两步与 unit/integration 同样注入 testEnv()。
+ * 本工具现在**直接 require 编排器的真实 testEnv**（不再本地复刻——复刻本身
+ * 就是文档漂移源），预期结论：四步各自拿到独立的 `ots-*` 运行目录，
+ * 且默认都位于同一临时根（OTS_TEST_TMP 或系统临时目录）之下。
  */
 /* eslint-disable no-console */
-const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const nodeBin = process.execPath;
 
-function testEnv() {
-  const tmpRoot = process.env.OTS_TEST_TMP || path.join(ROOT, 'node_modules', '.cache', 'ots-test-tmp');
-  const runDir = path.join(tmpRoot, `run-${process.pid}-${Date.now()}`);
-  fs.mkdirSync(runDir, { recursive: true });
-  return { ...process.env, TEMP: runDir, TMP: runDir };
-}
+// 真实实现，与 release-build.cjs 完全同源（G2 修的就是「复刻与本体不一致」）
+const { testEnv } = require('./release-build.cjs');
 
 function step(name, cmd, args, opts = {}) {
   const env = opts.env || process.env;
@@ -78,6 +69,7 @@ if (mode === 'full' || mode === 'integration') {
   );
 }
 if (mode === 'full' || mode === 'e2e') {
-  // 与 release-build.cjs 一致：不传 env
-  step('test:e2e', 'npm.cmd', ['run', 'test:e2e'], {});
+  // 与 release-build.cjs 一致（G2 修复后）：e2e 两步同样注入 testEnv()
+  step('test:e2e', 'npm.cmd', ['run', 'test:e2e'], { env: testEnv() });
+  step('test:e2e:electron', 'npm.cmd', ['run', 'test:e2e:electron'], { env: testEnv() });
 }

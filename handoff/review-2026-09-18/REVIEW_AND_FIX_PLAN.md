@@ -199,4 +199,5 @@ grep -n "ots-test-tmp" tools/r5-run-suite.cjs tools/release-build.cjs   # G3
 | 核对 | `git diff 8b3b8f8..HEAD -- src/` 为 0 行（9.1 声明属实）；F1 机器核对 `DOC_ENTRY_OK` 复跑通过；本次更新未执行任何新验证、未改任何候选产物 |
 | 8.4 步 2（A5 执行） | **当日完成并通过**（jc 当轮授权「全程继续」）：取证 `handoff/alpha-release-evidence/a5-round-20260918.md`——A/B/C 三轮应用+哈希一致、同 C no-op、恢复演练（含预期失败关闭）、启动检查通过；最终保持无主题（jc 决定）。遗留：P3 外观色块一处、逐区截图与 DOM 探针未做、一次过程偏差（裸 restore）如实登记 |
 | 8.4 步 3（A8 GO → 分发） | 证据侧缺口已清零，仅剩「用户明确批准发布目标、版本与内容」签核；签核前需对 A1/A2 人工核对补做或豁免（见 alpha-acceptance 9.2） |
+| A1/A2 补做（jc 指令「本机，人工核对」） | **当日完成**：A1 十项只读核对全过（修正 README:50 单位 20 MB→20 MiB）；A2 八项经合成运行根行为探针 11/11 通过（不触碰真机）。证据 `handoff/alpha-release-evidence/a1a2-manual-20260918.md`（私有）；alpha-acceptance 第 2/3 节落账、A8 表两行转通过、9.2 改「全部证据条件满足，待用户签核」 |
 | 8.4 步 4（重建加 LICENSE / T65 / 素材） | 需有显示会话的机器，本机暂缓 |

@@ -216,3 +216,32 @@ npx electron-builder --win --dir
 **未完成**：OpenCode 启动后的肉眼验收（首页/会话/侧栏/输入/菜单/旧新布局、
 主题与明暗切换、重启后是否保留、Portal 与终端）——必须由 jc 亲自看。
 未做真机 DOM 探针，未截真实窗口图。
+
+---
+
+## 8. 本机环境前提与不可验证项（2026-09-18，复审 G1 登记）
+
+**环境前提（结构性，非产品缺陷）**：本机当前会话无可用独立 GPU 进程。
+已证事实（取证见 `handoff/review-2026-09-17/evidence/f4-candidate-attempt.md`）：
+新旧候选以空参数 spawn 同样以 0x80000003（GPU FATAL）崩溃；仅带
+`--in-process-gpu` 系参数能起窗口。
+
+由此得出**不可验证项**：
+
+| 项 | 状态 |
+|---|---|
+| `smoke:gui`（发布链默认参数，等价真实双击） | 本机**不可验证**——空参数在本机必然失败，属环境限制；不判产品通过，也不判产品失败 |
+| GUI 正常配置的真机验收（含 T65 干净环境核对） | **待执行**——移到有显示会话的机器上与 T65 合并一次跑完 |
+
+**诊断模式与发布资格的边界**：`--in-process-gpu` 只是已文档化的**诊断模式前提**
+（`tools/smoke-packaged.cjs --diagnostic-gpu` / `--diagnostic-degraded`），其结果
+不构成发布资格（退出码非 0）；该参数**不得**进入 `DEFAULT_ARGS`（现为空数组，
+F2 修正；机器核对在 `tests/unit/smoke-packaged.test.ts`——「DEFAULT_ARGS 本身为空」
+与「含 --in-process-gpu → 不构成发布资格」两条断言）。把 workaround 塞回默认参数
+等于重演 F2 要修的错误。
+
+**候选 `20260918013040-b43dc44-a0a453` 现状**：测试链全绿（unit/integration/
+e2e/e2e:electron/audit/dist），停在 smoke:gui；只到 `win-unpacked`，未 zip、未登记，
+`ALL_GREEN` 未产出（也不应人为补上）。处置待用户决策：在有显示会话的机器重跑
+完整链产出真实 `ALL_GREEN`（推荐），或本机 `--skip-gui` 跑 `DEV_BUILD_COMPLETE`
+（仅验证链路，不可发布、不更新当前候选入口）。

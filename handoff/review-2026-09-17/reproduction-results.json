@@ -1,0 +1,72 @@
+{
+  "baseline": {
+    "match": [],
+    "deep": []
+  },
+  "fixedWindowsDir": {
+    "match": [],
+    "deep": []
+  },
+  "fixedCorruptDeflate": {
+    "match": [
+      "DEFLATE 解压失败（压缩数据损坏/截断，或实际输出超出声明大小）：file.txt | Z_DATA_ERROR"
+    ],
+    "deep": [
+      "DEFLATE 解压失败（压缩数据损坏/截断，或实际输出超出声明大小）：file.txt | Z_DATA_ERROR"
+    ]
+  },
+  "fixedAlias": {
+    "match": [
+      "zip 内重复条目（规范化后同一路径）：a/file.txt"
+    ],
+    "deep": [
+      "zip 内重复条目（规范化后同一路径）：a/file.txt"
+    ]
+  },
+  "fixedWorkerNonzero": {
+    "result": {
+      "success": false,
+      "error": {
+        "code": "STAGE_FAILED",
+        "message": "打包工作进程在成功回执后异常退出（code=1）：结果不可信"
+      }
+    },
+    "kills": 0,
+    "exitEmitted": true
+  },
+  "fixedWorkerKillThrows": {
+    "result": {
+      "success": false,
+      "error": {
+        "code": "STAGE_FAILED",
+        "message": "打包工作进程未退出且无法终止：回收状态未确认，结果不可信"
+      }
+    },
+    "kills": 1,
+    "exitEmitted": false
+  },
+  "oversizedCentralComment": {
+    "deep": [],
+    "match": []
+  },
+  "missingDataDescriptor": {
+    "deep": [],
+    "match": []
+  },
+  "implicitParentCaseConflictDeep": [],
+  "smokeMissedEarlyError": {
+    "judgeBeforeLateError": [],
+    "judgeAfterLateError": [
+      "渲染进程错误 1 条：late initialization failure"
+    ]
+  },
+  "smokeDefaultQualification": [],
+  "smokeDefaultArgs": [
+    "--disable-gpu",
+    "--disable-gpu-compositing",
+    "--disable-software-rasterizer",
+    "--disable-dev-shm-usage"
+  ],
+  "playwrightVersion": "1.63.0",
+  "note": "Playwright auto no-sandbox branch is Linux-only in local coreBundle.js; do not attribute it to this Windows candidate."
+}

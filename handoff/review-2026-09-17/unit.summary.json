@@ -1,0 +1,39 @@
+{
+  "mode": "unit",
+  "args": [
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/unit/verify-release.test.ts",
+    "tests/unit/pack-worker-lifecycle.test.ts",
+    "tests/unit/smoke-packaged.test.ts",
+    "tests/unit/encoding.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--reporter=json"
+  ],
+  "status": 0,
+  "signal": null,
+  "success": true,
+  "total": 80,
+  "passed": 80,
+  "failed": 0,
+  "pending": 0,
+  "files": [
+    {
+      "name": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/unit/encoding.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/unit/pack-worker-lifecycle.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/unit/smoke-packaged.test.ts",
+      "status": "passed"
+    },
+    {
+      "name": "D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/tests/unit/verify-release.test.ts",
+      "status": "passed"
+    }
+  ]
+}

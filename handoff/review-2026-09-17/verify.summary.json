@@ -1,0 +1,17 @@
+{
+  "mode": "verify",
+  "args": [
+    "tools/verify-release.cjs",
+    "--candidate-dir",
+    "candidate-20260916114818-8b3b8f8-f4e1c6/win-unpacked",
+    "--manifest",
+    "candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json",
+    "--build-id",
+    "20260916114818-8b3b8f8-f4e1c6",
+    "--source-commit",
+    "8b3b8f88f91df20ed2438388bd7270b9b7532e69",
+    "--require-release-eligibility"
+  ],
+  "status": 0,
+  "signal": null
+}

@@ -378,11 +378,13 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
 
 - **tag**：`v0.1.0-alpha.1`（带注释，指向 `49c69d0`，注释含 buildId 与 zip SHA256），
   已推送 `origin`（`* [new tag]`）。
-- **Release**：jc 在 GitHub 网页手动创建并发布，
+- **Release**：jc 在 GitHub 网页手动创建并发布，标记 **pre-release**，
   `https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v0.1.0-alpha.1`。
-  附件：`candidate-20260916114818-8b3b8f8-f4e1c6.zip` + 同名 `.zip.sha256.txt`。
-- **上传过程如实记录**：新建草稿页上传 127 MiB zip 一次无进度失败（assets 只剩
-  `.sha256.txt` 与自动源码头两分钟即成）；改走草稿 Edit 页重传后完成。
+  附件：`candidate-20260916114818-8b3b8f8-f4e1c6.zip` + 同名 `.zip.sha256.txt`
+  （两件均已在页面 Assets 可见，jc 回执确认）。
+- **上传过程如实记录**：新建草稿页时 `.sha256.txt`（528 B）先传成功，127 MiB zip
+  一次上传进度条无进展、失败（GitHub 自动附加的 Source code 两件不算本次上传物）；
+  改在草稿 Edit 页重传 zip 后成功（jc 回执）。
 - **核验边界**：仓库为**私有**，wb 侧匿名抓取 Release 页返回 404（预期），
   远程可见性以 jc 页面回执为准；本地上传前复算 zip SHA256 ==
   `1df4c697…070c739`（与权威块一致）。

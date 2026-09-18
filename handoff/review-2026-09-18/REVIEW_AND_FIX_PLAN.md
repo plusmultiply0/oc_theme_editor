@@ -134,3 +134,16 @@ grep -n "ots-test-tmp" tools/r5-run-suite.cjs tools/release-build.cjs   # G3
 ```
 
 报告基线 `acdd659`；G2/G3/G4 修复后基线前移，本文件结论不随之改写，只追加。
+
+## 七、执行记录（2026-09-18 当日实施）
+
+| 项 | 提交 | 验收结果 |
+|---|---|---|
+| G3 | `f52b244` | 默认根改 `os.tmpdir()/ots-<runId>`；wrapper 导出 `resolveTmpRoot` 并补单测；不设任何环境变量实跑 unit 314 全绿、12s 正常退出 |
+| G2 | `30a0a2d` | e2e 两步补 `env: testEnv()`；`e2e-chain-repro.cjs` 改为复用真实 `testEnv`；门禁新增场景 13（npm 桩端到端捕获 TEMP，断言不继承外层哨兵值）；完整取证链 unit/integration/e2e/e2e:electron 全 0，四步同根不同 `ots-*` 目录 |
+| G4 | `6a8c6b8` | `build.directories.output=release-dev` + `.gitignore` + README 标注；历史 zip/sha256 清单加 `-archived-20260918` 后缀，根 manifest 同步 zip 路径并追加迁移登记；exe/asar/zip 哈希改名前后复算一致。**挂起**：目录本体改名 EPERM（锁定叶子为各 `resources/app.asar`，安全软件持久锁，属第四节环境类）——收尾命令见 `handoff/review-2026-09-18/evidence/g4-archive-migration.md` §3；`npm run dist` 按「检查输出路径」方式核验，实跑因当轮自动化策略未执行 |
+| G1 | `1905fc4` | `docs/acceptance.md` 新增第 8 节；措辞无「已验证」；`DEFAULT_ARGS` 仍为空数组；F1 机器核对 `DOC_ENTRY_OK` 复跑通过 |
+| G5 | — | 按计划保持低优先，未实施（e2e 间歇失败未再现） |
+
+**待用户决策（G1.3）**：候选 `20260918013040-b43dc44-a0a453` 的处置二选一
+（有显示会话机器重跑完整链 / 本机 `--skip-gui` 开发构建）。决策前保持其未登记现状。

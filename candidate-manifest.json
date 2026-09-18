@@ -7,9 +7,9 @@
   "registeredAt": "2026-09-13T04:46:29.011Z",
   "packMethod": "manual-repack",
   "reproducibleBuild": false,
-  "notes": "手工重封候选（内容对应重封提交 871703d；electron-builder 被外部进程占用中断后以 @electron/asar API 带 unpack 规则重封并补齐依赖）。普通 dist 通过不代表此候选/zip 的生成证据；win-unpacked 与 win-unpacked-fresh 为取证留存，禁止分发。",
+  "notes": "手工重封候选（内容对应重封提交 871703d；electron-builder 被外部进程占用中断后以 @electron/asar API 带 unpack 规则重封并补齐依赖）。普通 dist 通过不代表此候选/zip 的生成证据；win-unpacked 与 win-unpacked-fresh 为取证留存，禁止分发。 [迁移登记 2026-09-18/G4] zip 已改名加 -archived-20260918 后缀并同步本字段；目录本体改名因本机安全软件持久锁 *.asar 暂未完成（哈希未变，取证见 handoff/review-2026-09-18/evidence/g4-archive-migration.md）。",
   "candidateDir": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/win-unpacked.new",
-  "zip": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1.zip",
+  "zip": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1-archived-20260918.zip",
   "hashes": {
     "exe": "99c02d6796bc2df00d7b16f8135ae9052b11bfb08384ee502b5044961756f46f",
     "app.asar": "7ca56cc52318ce49193fe32100e195a4885aaac7681660846a180daab4efdce8",

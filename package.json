@@ -13,7 +13,7 @@
     "appId": "com.local.opencode-theme-switcher",
     "productName": "OpenCodeThemeSwitcher",
     "directories": {
-      "output": "candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1"
+      "output": "release-dev"
     },
     "files": [
       "out/**",

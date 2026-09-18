@@ -244,9 +244,13 @@ npm run test:e2e:electron   # 主进程闭环（不建窗口，无显示会话�
 npm run verify         # 类型 + lint + 单测 + 集成 + 构建 + E2E
 npm run build          # 构建主进程与界面到 out/
 npm run audit          # 交付前自检：路径/凭证/产物/许可/IPC
-npm run dist           # 便携包（dir 目标，见下方镜像说明）
+npm run dist           # 仅开发自用：便携包落 release-dev/（见下方镜像说明）
 npm start              # 用已构建的 out/ 启动（开发用）
 ```
+
+> **候选包一律走 `npm run release:build`**（唯一目录 + 登记 + 核验）。
+> `npm run dist` 只做本地开发验证，产物写入中性的 `release-dev/`，
+> 不进入、也不得覆盖任何 `candidate-*` 历史证据目录（复审 G4）。
 
 `npm run dist` 需要下载 Electron 发行包与 electron-builder 二进制，直连 GitHub 可能超时，可用镜像：
 

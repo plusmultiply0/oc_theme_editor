@@ -9,7 +9,7 @@
  * 传新目录、dist 仍写旧目录），登记又在打包前生成——manifest 记录的是
  * 「打包前」的 out 清单，无法证明 zip 与候选同源。本脚本把顺序固定为：
  *
- *   冻结源码 → 类型/lint/单元（注入项目临时目录策略）
+ *   冻结源码 → 类型/lint/单元（注入系统临时目录策略）
  *   → 干净构建（唯一一次，R4 提前）→ out 快照（R4）
  *   → 集成/GUI/运行期测试（共用同一份新构建产物）
  *   → 打包前 out 复核（R4：测试期间被更改则拒绝）→ 打包到唯一目录（唯一一次）
@@ -44,6 +44,7 @@
 'use strict';
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 // 编码：PowerShell 子进程统一走 ps-run 入口（stdout 钉成 UTF-8），避免中文乱码
@@ -83,14 +84,16 @@ function sha256File(f) {
 const INTEGRATION_CONCURRENCY_ARGS = ['--pool=forks', '--maxWorkers=1', '--no-file-parallelism'];
 
 /**
- * 项目临时目录策略（R5/S5；任务 B 改为**每次运行独立**子目录）：
- * 把 TEMP/TMP 指向项目盘安全根下的唯一运行目录，避免 %TEMP% 下新建的 *.asar
- * 被安全进程持久锁住，同时让 safe-delete-shim 的 rmSync 获得临时目录豁免，
- * 且不同运行之间不互相干扰。根可用 OTS_TEST_TMP 覆盖，不硬编码个人路径。
+ * 测试临时目录策略（R5/S5；G3 改为**系统临时目录**下的独立运行子目录）：
+ * 把 TEMP/TMP 指向 `os.tmpdir()`（或 `OTS_TEST_TMP` 覆盖的根）下唯一运行目录
+ * `ots-<pid>-<ts>`，避免 *.asar 被安全进程持久锁住，同时让 safe-delete-shim 的
+ * rmSync 获得临时目录豁免，且不同运行之间不互相干扰。
+ * **默认不得回到项目盘**：本机实测 TEMP 落项目盘 → vitest 跑完不退出、
+ * 稳定触顶 9 分钟超时（复审 G3，2026-09-18）；根可用 OTS_TEST_TMP 覆盖。
  */
 function testEnv() {
-  const tmpRoot = process.env.OTS_TEST_TMP || path.join(ROOT, 'node_modules', '.cache', 'ots-test-tmp');
-  const runDir = path.join(tmpRoot, `run-${process.pid}-${Date.now()}`);
+  const tmpRoot = process.env.OTS_TEST_TMP || os.tmpdir();
+  const runDir = path.join(tmpRoot, `ots-${process.pid}-${Date.now()}`);
   fs.mkdirSync(runDir, { recursive: true });
   return { ...process.env, TEMP: runDir, TMP: runDir };
 }
@@ -469,7 +472,7 @@ function runBuild(buildId, opts) {
   step('typecheck', npmBin, ['run', 'typecheck']);
   step('lint', npmBin, ['run', 'lint']);
 
-  // 2) 测试（注入项目临时目录策略，不直接调不带策略的 npm run test:integration）
+  // 2) 测试（注入系统临时目录策略，不直接调不带策略的 npm run test:integration）
   //    R3：--strict-completeness 让包装器做「完成集合相等」机器校验
   //    （预期集合=同配置 vitest list；JSON 结果绑定本次 runId；缺失/解析失败一律失败关闭）；
   //    --expect-no-skip：发布链不允许未批准的 skipped/todo（当前测试库无 skip/todo）。

@@ -9,6 +9,7 @@
  *    即使进程自称退出 0 也不得放行（防止 RPC 错误被吞成绿）。
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import { testTmpRoot } from '../fixtures/test-tmp';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -45,8 +46,9 @@ interface SuiteOptions {
   completeness?: { expectedFiles?: number; expectNoSkip?: boolean };
 }
 const requireCjs = createRequire(import.meta.url);
-const { runSuite } = requireCjs('../../tools/r5-run-suite.cjs') as {
+const { runSuite, resolveTmpRoot } = requireCjs('../../tools/r5-run-suite.cjs') as {
   runSuite: (opts?: SuiteOptions) => SuiteResult;
+  resolveTmpRoot: (args: { tmpRoot?: string; env?: Record<string, string | undefined> }) => string;
 };
 
 /** 真实 vitest 成功输出的最小可用子集（含汇总行，供完整性检查判读）。 */
@@ -83,12 +85,23 @@ describe('r5-run-suite 包装层（S5）', () => {
       },
     });
     expect(r.exitCode).toBe(0);
-    // 任务 B：运行目录在根之下，且是独立子目录（形如 <root>/run-<id>）
+    // 任务 B/G3：运行目录在根之下，且是独立子目录（形如 <root>/ots-<id>）
     expect(capturedEnv?.TEMP?.startsWith(opts.tmpRoot + path.sep)).toBe(true);
     expect(capturedEnv?.TMP?.startsWith(opts.tmpRoot + path.sep)).toBe(true);
     expect(capturedEnv?.TEMP).toBe(capturedEnv?.TMP);
-    expect(path.basename(capturedEnv?.TEMP ?? '')).toMatch(/^run-/);
+    expect(path.basename(capturedEnv?.TEMP ?? '')).toMatch(/^ots-/);
     expect(r.runTmp).toBe(capturedEnv?.TEMP);
+  });
+
+  it('默认临时根推导（G3）：显式根 > OTS_TEST_TMP > 系统临时目录，默认不落项目盘', () => {
+    // 显式根最优先
+    expect(resolveTmpRoot({ tmpRoot: 'X:\\explicit', env: { OTS_TEST_TMP: 'X:\\envroot' } })).toBe('X:\\explicit');
+    // 其次 OTS_TEST_TMP
+    expect(resolveTmpRoot({ env: { OTS_TEST_TMP: 'X:\\envroot' } })).toBe('X:\\envroot');
+    // 默认 = 系统临时目录（不是仓库/node_modules 项目盘路径）
+    const dflt = resolveTmpRoot({ env: {} });
+    expect(dflt).toBe(os.tmpdir());
+    expect(dflt).not.toContain(path.join('node_modules', '.cache'));
   });
 
   it('普通失败（status 23）退出 23，不吞成 0', () => {

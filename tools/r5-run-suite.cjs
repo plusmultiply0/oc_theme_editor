@@ -3,11 +3,12 @@
  * R3 升级：**完成集合相等** 的机器可读完整性检查）。
  *
  * 做四件事：
- *  1. 把 TEMP/TMP 注入项目内**本次运行独立**的安全子目录再派生 vitest——本机安全进程
- *     会持久锁 %TEMP% 下新建的 *.asar（见 tests/fixtures/test-tmp.ts 头注释）；
- *     safe-delete-shim 对临时目录路径的 rmSync 有豁免，删除护栏不被误触。
- *     每次运行分配独立子目录（`<root>/run-<runId>`），避免不同运行互相干扰/互锁；
- *     `OTS_TEST_TMP` 或 `--tmp` 改变的是**根**，运行目录仍在其下。
+ *  1. 把 TEMP/TMP 注入**本次运行独立**的安全子目录再派生 vitest——根默认为系统临时目录
+ *     （`os.tmpdir()`），运行目录形如 `<root>/ots-<runId>`；可用 `OTS_TEST_TMP` 或
+ *     `--tmp` 覆盖根。**不要**把默认根放回项目盘：本机实测 TEMP 落项目盘会让
+ *     vitest 跑完不退出、稳定触顶超时（复审 G3，2026-09-18）。
+ *     同时避开 %TEMP% 下新建 *.asar 被安全进程持久锁住的问题，且让
+ *     safe-delete-shim 的 rmSync 获得临时目录豁免；不同运行之间不互相干扰。
  *  2. 受控并发：**发布模式**必须传 `--pool=forks --maxWorkers=1 --no-file-parallelism`，
  *     避免并行资源竞争造成假失败。
  *  3. **R3 严格完整性（--strict-completeness）**：
@@ -38,7 +39,18 @@
 const { spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+
+/**
+ * 临时根推导（G3）：显式 `--tmp`/options > `OTS_TEST_TMP` > **系统临时目录**。
+ * 默认曾是 `<repo>/node_modules/.cache/ots-test-tmp`（项目盘）——本机实测 TEMP 落
+ * 项目盘会让 vitest 跑完不退出、稳定触顶 9 分钟超时，故默认改为 os.tmpdir()。
+ * 纯函数导出，便于单测覆盖优先级推导而不触碰真实目录。
+ */
+function resolveTmpRoot({ tmpRoot, env = process.env } = {}) {
+  return tmpRoot || env.OTS_TEST_TMP || os.tmpdir();
+}
 
 /** 文本摘要兜底解析：只扫尾部（否则正文里夹带的 vitest 样式文本会带偏解析）。 */
 const SUMMARY_TAIL_LINES = 40;
@@ -385,15 +397,12 @@ function runSuite(options = {}) {
   const repo = options.repo || path.resolve(__dirname, '..');
   const spawn = options.spawn || spawnSync;
   const vitestArgs = options.vitestArgs || ['run'];
-  const tmpRoot =
-    options.tmpRoot ||
-    process.env.OTS_TEST_TMP ||
-    path.join(repo, 'node_modules', '.cache', 'ots-test-tmp');
+  const tmpRoot = resolveTmpRoot({ tmpRoot: options.tmpRoot });
   const logDir = options.logDir || path.join(repo, 'node_modules', '.cache', 'ots-test-logs');
 
   // 本次运行独立的临时子目录（根可配置，运行目录不共用）
   const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${crypto.randomBytes(2).toString('hex')}`;
-  const runTmp = path.join(tmpRoot, `run-${runId}`);
+  const runTmp = path.join(tmpRoot, `ots-${runId}`);
   fs.mkdirSync(runTmp, { recursive: true });
   fs.mkdirSync(logDir, { recursive: true });
 
@@ -620,6 +629,7 @@ function parseCliArgs(argv) {
 
 module.exports = {
   runSuite,
+  resolveTmpRoot,
   checkCompleteness,
   parseVitestSummary,
   checkStrictCompleteness,

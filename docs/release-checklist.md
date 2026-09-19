@@ -111,9 +111,9 @@ alpha.2（第 1 节）取代它成为唯一入口；其 manifest、hash 与 rece
 - 另有 2026-09-17 的独立只读发布核验（`handoff/review-2026-09-17/`）：绑定同一
   buildId 的 `verify:release` **18 项 0 失败，`RELEASE_GREEN`**。该核验只读、未重跑构建步骤。
 
-另有 2026-09-19 两个**未登记、不可发布**的废弃候选目录：
-`candidate-20260919054303-6154fc0-ebedb9/`（test:unit 拦停）与
-`candidate-20260919054633-7eff0b6-7b9983/`（verify-package 拦停）。
+另有 2026-09-19 两次**未登记、不可发布**的拦停轮：第 1 轮 buildId
+`20260919054303-6154fc0-ebedb9`（test:unit 拦停，停在 `dist` 前，未生成候选目录）；
+第 2 轮 `candidate-20260919054633-7eff0b6-7b9983/`（verify-package 拦停，目录在盘）。
 两者无 manifest 登记与 receipt，仅作排障现场，处置前不得被误认为候选。
 
 ## 3. 当前门禁结果（buildId `20260919055321-f8bb4fb-e00e50`）

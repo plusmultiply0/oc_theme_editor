@@ -139,11 +139,11 @@ if (fs.existsSync(asar)) {
     const t = f.split('/')[0];
     tops[t] = (tops[t] || 0) + 1;
   }
-  const allowed = new Set(['node_modules', 'out', 'package.json']);
+  const allowed = new Set(['node_modules', 'out', 'package.json', 'LICENSE']);
   const unexpected = Object.keys(tops).filter((t) => !allowed.has(t));
   check(
     unexpected.length === 0,
-    '归档顶层只允许 node_modules / out / package.json',
+    '归档顶层只允许 node_modules / out / package.json / LICENSE',
     `实际：${Object.keys(tops).join('、')}`,
   );
   const leaked = files.filter((f) => /^(src|tests|handoff|docs)\//i.test(f));

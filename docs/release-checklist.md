@@ -84,38 +84,71 @@ zip 的 SHA256 必须与上表一致。
 旧的 `app.asar` 曾被安全软件占用（环境的安全删除包装器对 `.asar` 回收失败），
 因此每轮只能递进一个新目录，旧的删不掉。锁释放后在资源管理器手动删除即可。
 
-## 3. 当前门禁结果（buildId `20260916114818-8b3b8f8-f4e1c6`）
+### 2.3 历史候选：v0.1.0-alpha.1 正式包（electron-builder，已对外发布）
+
+2026-09-16 由正式链产出、当时曾作为第 1 节当前候选的包。已打 tag `v0.1.0-alpha.1`
+并发布到私有仓库 Release（登记见 `docs/acceptance.md` 9.4）。**自 2026-09-19 起转为历史**：
+alpha.2（第 1 节）取代它成为唯一入口；其 manifest、hash 与 receipt 原样保留，未做任何改写。
+
+| 项 | 值 |
+|---|---|
+| 候选版本 | `0.1.0-alpha.1` |
+| buildId | `20260916114818-8b3b8f8-f4e1c6` |
+| 来源提交 | `8b3b8f88f91df20ed2438388bd7270b9b7532e69` |
+| 分发 zip | `candidate-20260916114818-8b3b8f8-f4e1c6.zip` |
+| zip SHA256 | `1df4c69765ee91e92b8bde46a2bb331aa45c63f3de0376423be83caef070c739` |
+| exe SHA256 | `ed8ee97cddb8afadd7d3c9975aa661a4dfebc9bbe9e27fa7165b92c158426cba` |
+| app.asar SHA256 | `e79cd599cbc1c6f66b23b6d80a9b666fffcc2c8e897ca108a835ae0379670a95` |
+
+该候选当时的两条记录随本节一并保留（原载于第 3 节）：
+
+- 注（`smoke:gui` 一条的语义）：该条由**整改前**的冒烟工具跑出——当时默认带
+  `--disable-gpu` 等 GPU workaround，证明的是「关掉 GPU 相关子进程后能起窗口」，
+  **不等于**默认配置可启动。2026-09-17 已把默认参数改为**空**（与双击等价），
+  并用整改后的默认配置对同一候选独立复测通过（`SMOKE_OK`，args=[]）。
+  该复测**未**回写 build-record（回写等于篡改历史记录）；
+  详见 `handoff/review-2026-09-17/evidence/f2-f3-smoke.md`。
+- 另有 2026-09-17 的独立只读发布核验（`handoff/review-2026-09-17/`）：绑定同一
+  buildId 的 `verify:release` **18 项 0 失败，`RELEASE_GREEN`**。该核验只读、未重跑构建步骤。
+
+另有 2026-09-19 两个**未登记、不可发布**的废弃候选目录：
+`candidate-20260919054303-6154fc0-ebedb9/`（test:unit 拦停）与
+`candidate-20260919054633-7eff0b6-7b9983/`（verify-package 拦停）。
+两者无 manifest 登记与 receipt，仅作排障现场，处置前不得被误认为候选。
+
+## 3. 当前门禁结果（buildId `20260919055321-f8bb4fb-e00e50`）
 
 以下数字**只属于第 1 节那一个候选**，取自其 `build-record.json`；
 包有改动必须重建并更新第 1 节哈希，旧数字不作数。
 
 | 命令 | 退出码 | 耗时 | 结果 |
 |---|---|---|---|
-| `npm run typecheck` | 0 | 5.5s | 通过 |
-| `npm run lint` | 0 | 5.5s | 通过 |
-| `npm run test:unit` | 0 | 6.2s | 通过（见下注） |
-| `npm run build` | 0 | 7.1s | 通过 |
-| `npm run test:integration` | 0 | 130.4s | 通过（见下注） |
-| `npm run test:e2e` | 0 | 37.7s | 通过 |
-| `npm run test:e2e:electron` | 0 | 5.0s | 通过 |
-| `npm run audit` | 0 | 14.3s | FAIL 0 / WARN 0 |
-| `npm run dist` | 0 | 127.2s | 通过 |
-| `npm run smoke:gui` | 0 | 26.1s | 通过 |
-| `npm run verify-package` | 0 | 1.6s | 通过 |
+| `npm run typecheck` | 0 | 6.9s | 通过 |
+| `npm run lint` | 0 | 7.1s | 通过 |
+| `npm run test:unit` | 0 | 7.3s | 通过（见文末偏差注） |
+| `npm run build` | 0 | 9.4s | 通过 |
+| `npm run test:integration` | 0 | 65.1s | 通过 |
+| `npm run test:e2e` | 0 | 39.2s | 通过 |
+| `npm run test:e2e:electron` | 0 | 4.6s | 通过 |
+| `npm run audit` | 0 | 1.3s | FAIL 0 / WARN 0 |
+| `npm run dist` | 0 | 34.4s | 通过 |
+| `npm run smoke:gui` | 0 | 21.1s | 通过 |
+| `npm run verify-package` | 0 | 1.9s | 通过 |
+| `zip`（链内步骤） | 0 | <1s | 通过 |
 
 注：上表「结果」只记通过与否，**具体测试数量以该次构建的原始日志为准**，
 不在本文另抄一份（抄写必然滞后，正是本文件此前出错的成因）。
 
-注（`smoke:gui` 一条的语义）：该条由**整改前**的冒烟工具跑出——当时默认带
-`--disable-gpu` 等 GPU workaround，证明的是「关掉 GPU 相关子进程后能起窗口」，
-**不等于**默认配置可启动。2026-09-17 已把默认参数改为**空**（与双击等价），
-并用整改后的默认配置对同一候选独立复测通过（`SMOKE_OK`，args=[]）。
-该复测**未**回写 build-record（回写等于篡改历史记录）；
-详见 `handoff/review-2026-09-17/evidence/f2-f3-smoke.md`。
-若要让候选的构建记录自身反映默认配置，需重建新候选（新 buildId）。
+注（`smoke:gui` 一条的语义，2026-09-19 修订）：该条由 **jc 在桌面 cmd 会话手动运行
+整条 `npm run release:build`** 产出，默认参数为空（与双击等价），`SMOKE_OK`。
+此前 G1 登记的「本机起窗口必崩」经本轮实证修订为：**仅 agent 自动化会话**
+（无独立 GPU 进程，空参数 spawn 即 `0x80000003` 崩溃）不可跑该步，
+桌面会话可正常通过——**不需要换机**。详见 `docs/acceptance.md` §8 追加修订。
 
-另有 2026-09-17 的独立只读发布核验（`handoff/review-2026-09-17/`）：绑定同一
-buildId 的 `verify:release` **18 项 0 失败，`RELEASE_GREEN`**。该核验只读、未重跑构建步骤。
+注（本轮过程偏差）：同一链在前两轮分别于 `test:unit`（编码自检误扫 `release-dev/`
+下的 Chromium 第三方许可文件，修复 `7eff0b6`）与 `verify-package`
+（归档顶层白名单缺 `LICENSE`，与 A2-1 包内 LICENSE 决定冲突，修复 `f8bb4fb`）拦停；
+两处均为「自己人拦自己人」的工具缺陷，修复后全链重跑，上表属重跑轮。
 
 一条命令跑全链（`bash tools/release-gate.sh` 是薄入口，任一步非 0 即停）：
 

@@ -1,0 +1,69 @@
+{
+  "probe": "version-probe/1",
+  "reports": [
+    {
+      "root": "C:\\Users\\ylzho\\AppData\\Local\\Programs\\@opencode-aidesktop",
+      "startedAt": "2026-09-19T07:04:30.305Z",
+      "finishedAt": "2026-09-19T07:04:30.791Z",
+      "adapterId": "opencode-desktop-win-asar",
+      "version": "1.18.29",
+      "fingerprint16": "1c53ca2472698a9e",
+      "support": "supported",
+      "checks": [
+        {
+          "id": 1,
+          "name": "结构定位",
+          "status": "PASS",
+          "basis": "adapter.layout：exe + resources/app.asar 齐全",
+          "detail": "exe 存在（OpenCode.exe）；归档 存在（resources/app.asar）"
+        },
+        {
+          "id": 2,
+          "name": "包名",
+          "status": "PASS",
+          "basis": "adapter.matches(pkg)（归档 package.json）",
+          "detail": "包名 @opencode-ai/desktop 与已适配目标一致"
+        },
+        {
+          "id": 3,
+          "name": "版本与指纹",
+          "status": "PASS",
+          "basis": "readAsar 快照（size + SHA256）",
+          "detail": "版本 1.18.29；指纹 1c53ca2472698a9e…；归档 152395856 字节"
+        },
+        {
+          "id": 4,
+          "name": "注入锚点",
+          "status": "PASS",
+          "basis": "统计「</head>」出现次数",
+          "detail": "恰好 1 次，注入位置唯一"
+        },
+        {
+          "id": 5,
+          "name": "变更集合冲突",
+          "status": "PASS",
+          "basis": "listAsarFiles 查 cssFile/imageFile",
+          "detail": "两文件均不存在（干净）；归档共 6994 条目"
+        },
+        {
+          "id": 6,
+          "name": "unpacked 完整性（信息项）",
+          "status": "PASS",
+          "basis": "resources/app.asar.unpacked 存在与条目数",
+          "detail": "存在，47 个文件"
+        },
+        {
+          "id": 7,
+          "name": "白名单比对（信息项）",
+          "status": "PASS",
+          "basis": "adapter.supportedVersions",
+          "detail": "版本 1.18.29 在已验证名单（supported）"
+        }
+      ],
+      "conclusion": "PASS",
+      "exitCode": 0,
+      "nextStep": "全部 PASS：可安排一轮真机闭环（导入→应用→重启→视觉→恢复）后再决策进白名单。"
+    }
+  ],
+  "exitCode": 0
+}

@@ -437,7 +437,15 @@ export default function App() {
             {previewUrl ? (
               <img className="thumb" src={previewUrl} alt="已选择的背景图片缩略图" />
             ) : (
-              <p className="muted">把图片拖到这里，或点击下面的按钮选择</p>
+              <div className="dropzone-hint">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2.5" />
+                  <circle cx="9" cy="10" r="1.8" />
+                  <path d="M4.5 17.5l4.2-4.2a1.5 1.5 0 0 1 2.1 0l6 6" />
+                  <path d="M14.5 16l2.2-2.2a1.5 1.5 0 0 1 2.1 0l.7.7" />
+                </svg>
+                <p className="muted">把图片拖到这里，或点击下面的按钮选择</p>
+              </div>
             )}
           </div>
 
@@ -532,6 +540,7 @@ export default function App() {
         </section>
 
         <section className="panel preview-panel">
+          <h2>模拟预览</h2>
           {result ? (
             <Preview tokens={result.tokens} imageUrl={previewUrl} spec={spec} />
           ) : (

@@ -446,3 +446,24 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
   与 A8 的 alpha 口径一致；若转公开仓库，A7 隐私处置清单（10 个含本机路径的
   跟踪文件、个人邮箱提交历史）**必须先执行**，届时重评。
 - 至此 8.4 步 3（GO → 分发）闭环。剩余非阻塞项见 9.3 末条。
+
+### 9.5 发布执行记录（2026-09-19，alpha.2，渠道：GitHub 私有仓库 Release）
+
+- **签核**：jc 2026-09-19 指令「提交 A2-4 的 tag 和 Release 三件套」（A2-3 复验通过后）。
+- **tag**：`v0.1.0-alpha.2`（带注释，指向登记 HEAD `f7abd2f`，注释含 buildId
+  `20260919055321-f8bb4fb-e00e50`、zip SHA256、已知限制含 P2 占位符缺陷），
+  已推送 `origin`（`* [new tag]`）。与 alpha.1 先例一致：tag 打在登记提交上，非源提交。
+- **上传前复算**：zip SHA256 == `68e47fd1…0e46eaf`（133,373,796 B），与侧车
+  `.zip.sha256.txt`、`docs/release-checklist.md` §1 权威块三方一致；侧车**先于上传**已在盘
+  （A2-2 登记时生成，纠正 alpha.1「引用不存在随附文件」偏差）。
+- **Release**：本机无 gh CLI（alpha.1 轮亦网页手动），jc 在 GitHub 网页发布，
+  标记 pre-release，`https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v0.1.0-alpha.2`，
+  附件两件：`candidate-20260919055321-f8bb4fb-e00e50.zip` + 同名 `.zip.sha256.txt`；
+  说明正文为 `docs/release-notes-0.1.0-alpha.2.md` 全文。
+- **核验边界**：私有仓库，wb 侧无匿名核验通道（与 alpha.1 同口径），
+  远程可见性以 jc 页面回执「已发布」为准。
+- **发布范围口径**：同 9.4——受控分发；转公开前 A7 隐私处置清单必须先执行。
+- 至此 A2-4 与 alpha.2 发布轮（PLAN 2026-09-19）全部四步闭环。
+  遗留非阻塞项：P2 占位符缺陷修复轮、live-cli takeover 参数（工具面）、
+  历史候选目录处置、演示素材、A7 隐私处置待 jc。
+

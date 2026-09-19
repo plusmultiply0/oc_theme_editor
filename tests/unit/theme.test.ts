@@ -420,4 +420,12 @@ describe('token 映射与输出一致性（R3、R5）', () => {
     // 不存在不分 variant 的粗放规则
     expect(css).not.toMatch(/\[data-component="button"\]\s*\{/);
   });
+
+  it('占位文字稀释混向不透明的次要文字色，不再混向 transparent（P2 回归）', () => {
+    const css = generateCss(tokens, makeSpec());
+    // 官方预置的形状是 50% 混向 transparent（浅输入底上实测只剩 2.07:1）；
+    // 我们的覆盖必须是 50% 混向本主题的 muted，且整表不得再出现 transparent 稀释
+    expect(css).toContain(`::placeholder {\n  color: color-mix(in oklab, currentcolor 50%, ${tokens.muted});\n}`);
+    expect(css).not.toContain('currentcolor 50%, transparent');
+  });
 });

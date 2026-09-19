@@ -632,6 +632,11 @@ a:focus-visible {
   min-width: 0;
 }
 
+/* 预览与生成 CSS（css.ts ::placeholder）同一口径：稀释混向次要文字色而非 transparent */
+.input::placeholder {
+  color: color-mix(in oklab, currentcolor 50%, var(--p-muted));
+}
+
 .msg-row {
   display: flex;
   gap: 0.5rem;

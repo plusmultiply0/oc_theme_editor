@@ -222,6 +222,20 @@ ${renderTokenCss(tokens, spec)}
   outline-offset: 1px;
 }
 
+/*
+ * 输入框占位文字（P2，2026-09-19 真机坐实）：官方 Tailwind 预置把占位色定义为
+ * 「currentcolor 与 transparent 各 50% 的 oklab 混合」。
+ * 50% 透明稀释把次要文字色（#585e63）打到浅输入底（rgba(228,233,236,0.86)）上
+ * 只剩 2.07:1——报告按未稀释的 muted 计量所以「通过」，真机却近乎不可读。
+ * 这里保留官方的稀释形状，但把 transparent 换成主题自身的次要文字色：
+ * 弱色占位恢复为 muted 原色，正文色占位混向 muted，均为不透明可读结果，
+ * 也让 report.ts 的「输入占位文字」条目与实际渲染回到同一口径。
+ * 本表不在 @layer 内，无层声明压过官方层内预置，不需要 important。
+ */
+::placeholder {
+  color: color-mix(in oklab, currentcolor 50%, ${tokens.muted});
+}
+
 ::selection {
   background: ${rgba(tokens.selection, 0.9)};
   color: ${tokens.text};

@@ -32,6 +32,11 @@
 
 ### A2-2（显示会话机器）：重建候选 + 完整门禁
 
+> **2026-09-19 修订**：「显示会话机器 = 另一台机器」的前提被实证推翻——崩溃仅属
+> agent 自动化会话，jc 本机**桌面 cmd 会话**即可跑全链。A2-2 已按本节要求在本机
+> 完成（`ALL_GREEN buildId=20260919055321-f8bb4fb-e00e50`，空参数 smoke:gui 真过），
+> 证据见 `handoff/alpha2-release-evidence/`。下文保留原文以维持计划可追溯。
+
 1. 同步仓库到 A2-1 提交（clone 或打包工作树，排除 `node_modules`/`out`/`release*`，
    目标机 `npm ci` + `npm run build`）；
 2. 按 `docs/release-checklist.md` 跑完整链：typecheck → lint → unit → build →
@@ -91,6 +96,6 @@ A2-1 准备 ───────────→  A2-2 重建+门禁 ──→ A
 | 项 | 提交 | 结果 |
 |---|---|---|
 | A2-1 | `f37b10c` | 本机完成：version→`0.1.0-alpha.2`（lock 同步）；`build.files` 加 `LICENSE`，对照构建坐实 asar 顶层条目 1061→1062 恰 +1、包内文本哈希前缀与仓库 LICENSE 一致（069e1cf1…）；release notes 草稿落 `docs/release-notes-0.1.0-alpha.2.md`（哈希块留待 A2-2 生成）。验收：typecheck/lint 0、unit 321/321、`dist --dir` 正常出包 |
-| A2-2 | 本次提交 | 换机窗口准备完成：`MACHINE-WINDOW.md`（目标机一条龙：机器要求→同步基线→`npm run release:build` 全链含空参数 smoke:gui→zip 侧车 `.sha256.txt` 先生成→doc 入口 `--check`→红线处置）。发布链本体**仍待**有显示会话的 Windows 机器执行 |
-| A2-3 | — | 与 A2-2 同窗口 |
-| A2-4 | — | 待 A2-2 全绿 + A2-3 通过 + jc 签核 |
+| A2-2 | `6154fc0`（准备）→ `7eff0b6`/`f8bb4fb`（拦停修复）→ `ca90e48`+`a607e72`+`76cd056`+`2c0188a`+`4fd7e5f`（落账） | **本机完成，换机取消**。准备物：`MACHINE-WINDOW.md` 一条龙清单。执行：jc 桌面 cmd 会话手动跑 `npm run release:build`，三轮——第 1 轮停 `test:unit`（编码自检误扫 `release-dev/LICENSES.chromium.html`，修 `7eff0b6`）、第 2 轮停 `verify-package`（顶层白名单缺 LICENSE，修 `f8bb4fb`）、第 3 轮 `ALL_GREEN buildId=20260919055321-f8bb4fb-e00e50`（空参数 smoke:gui 真过 21.1s；登记后 `RELEASE_GREEN`、`publishable=true`；侧车先生成）。落账：doc 入口 `--check` 通过、release-checklist §1/§2.3/§3、alpha-acceptance §5.0、acceptance §8.1 G1 修订、证据归档 `handoff/alpha2-release-evidence/` |
+| A2-3 | — | **改到本机桌面会话执行**（换机不再必要），待 jc 当次授权且 OpenCode 完全退出 |
+| A2-4 | — | 待 A2-3 通过 + jc 签核（A2-2 已全绿） |

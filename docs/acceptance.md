@@ -245,3 +245,23 @@ e2e/e2e:electron/audit/dist），停在 smoke:gui；只到 `win-unpacked`，未 
 `ALL_GREEN` 未产出（也不应人为补上）。处置待用户决策：在有显示会话的机器重跑
 完整链产出真实 `ALL_GREEN`（推荐），或本机 `--skip-gui` 跑 `DEV_BUILD_COMPLETE`
 （仅验证链路，不可发布、不更新当前候选入口）。
+
+### 8.1 修订追加（2026-09-19，alpha.2 跑链实证）
+
+上节「本机不可验证」的结论**范围过宽，现予修订**：崩溃并非本机结构性不能跑 GUI，
+而是**会话类型**差异——
+
+- **agent 自动化会话**：无独立 GPU 进程可派生，空参数 spawn 必然 0x80000003 崩溃
+  （上节取证在该类会话中做出，结论对其仍然成立）。
+- **桌面交互会话**：2026-09-19 jc 本人在桌面 cmd 会话手动运行整条
+  `npm run release:build`，12 步全绿，其中 `smoke:gui` 以**默认空参数**（与双击等价）
+  真实通过（`SMOKE_OK`，21.1s），末行 `ALL_GREEN buildId=20260919055321-f8bb4fb-e00e50`。
+  先例佐证：A5 轮（`handoff/alpha-release-evidence/a5-round-20260918.md`）jc 双击
+  候选 exe 成功。
+
+**修订后的可操作结论**：`smoke:gui` 与 GUI 真机项**不需要换机**，本机由 jc 在
+桌面会话手动执行即可；agent 只可做只读核验与诊断模式跑（不构成发布资格）。
+上节候选 `20260918013040-b43dc44-a0a453` 的处置选项随之变化：换机不再是必要项，
+该候选仍停在 smoke:gui、未登记不可发布，是否弃用并入 alpha.2 线待用户决策。
+三条过程偏差与新候选登记详见 `docs/alpha-acceptance.md` §5.0 与
+`docs/release-checklist.md` §2.3/§3。

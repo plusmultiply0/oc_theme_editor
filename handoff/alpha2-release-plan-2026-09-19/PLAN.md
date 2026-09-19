@@ -91,6 +91,6 @@ A2-1 准备 ───────────→  A2-2 重建+门禁 ──→ A
 | 项 | 提交 | 结果 |
 |---|---|---|
 | A2-1 | `f37b10c` | 本机完成：version→`0.1.0-alpha.2`（lock 同步）；`build.files` 加 `LICENSE`，对照构建坐实 asar 顶层条目 1061→1062 恰 +1、包内文本哈希前缀与仓库 LICENSE 一致（069e1cf1…）；release notes 草稿落 `docs/release-notes-0.1.0-alpha.2.md`（哈希块留待 A2-2 生成）。验收：typecheck/lint 0、unit 321/321、`dist --dir` 正常出包 |
-| A2-2 | — | 待有显示会话的 Windows 机器窗口 |
+| A2-2 | 本次提交 | 换机窗口准备完成：`MACHINE-WINDOW.md`（目标机一条龙：机器要求→同步基线→`npm run release:build` 全链含空参数 smoke:gui→zip 侧车 `.sha256.txt` 先生成→doc 入口 `--check`→红线处置）。发布链本体**仍待**有显示会话的 Windows 机器执行 |
 | A2-3 | — | 与 A2-2 同窗口 |
 | A2-4 | — | 待 A2-2 全绿 + A2-3 通过 + jc 签核 |

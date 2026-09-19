@@ -124,3 +124,27 @@ P0 已完成盘点与验证，**但存在必须由用户拍板的分叉**：
 | 指纹 | 运行时读取归档 SHA256，不硬编码 |
 
 未实现：真实的归档改写与事务提交（P3b）。当前代码只做只读识别与环境预检。
+
+## 更新（2026-09-19）：新版本适配流程（version-probe 落地，计划 V3）
+
+只读探测脚本 `tools/version-probe.cjs` 已就位（V1 `9821928`，单测 V2 `2e27f68`）。
+它回答「补丁机制在某个 OpenCode 版本上能不能用、哪里变了」，**不回答**「能不能发布」。
+
+```
+OpenCode 出新版 →
+1. 装新版（或更新后）→ node tools/version-probe.cjs --discover
+2. 全 PASS → 跑一轮真机闭环（导入→应用→重启→视觉→恢复，授权后执行）
+3. 通过 → adapters/opencode-desktop.ts 的 supportedVersions 加版本号，提交
+4. 任一 FAIL/WARN → 不改代码，按报告定位结构变化，先评估再动手
+```
+
+**硬性口径**：
+
+- **probe PASS 本身不构成发布资格**——白名单更新必须带真机闭环证据，
+  与 alpha 验收（`docs/alpha-acceptance.md` A5）同一标准。
+- probe 只读：不写安装目录、不启动 GUI；其输出也**不自动**改变 `supportedVersions`。
+- 检查判据与生产代码同源（`out/` 里的 `readAsar` 系与 adapter 声明），
+  脚本内禁止重抄布局/锚点定义。
+- 对**已挂本工具主题**的安装，检查 5（变更集合冲突）会如实 FAIL 并提示先恢复——
+  新版本适配探测应在未挂主题的安装上跑，或对已挂主题的安装先走恢复流程。
+- 真机验证报告归档：`handoff/version-probe-plan-2026-09-19/evidence/probe-real-20260919.md`。

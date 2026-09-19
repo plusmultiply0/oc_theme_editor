@@ -17,13 +17,13 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 
 | 项 | 值 |
 |---|---|
-| 候选版本 | **`0.1.0-alpha.1`**（package.json / package-lock.json 已同步；`private: true` 保留） |
-| buildId | **`20260916114818-8b3b8f8-f4e1c6`** |
-| 提交（来源） | `8b3b8f88f91df20ed2438388bd7270b9b7532e69`「fix(e2e): 修 R6 引入的 Playwright 首参写法（回归）」 |
-| 候选身份登记 | `candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json`（schema `candidate-manifest/3`，`packMethod: electron-builder`，`reproducibleBuild: true`） |
-| 完成回执 | `candidate-20260916114818-8b3b8f8-f4e1c6/release-receipt.json`（schema `release-receipt/1`，绑定同一 buildId 与源码提交） |
-| 包目录 | `candidate-20260916114818-8b3b8f8-f4e1c6/win-unpacked` |
-| 平台 | Windows x64（仅开发机；未在 Windows 11 上实测） |
+| 候选版本 | **`0.1.0-alpha.2`**（package.json / package-lock.json 已同步；`private: true` 保留） |
+| buildId | **`20260919055321-f8bb4fb-e00e50`** |
+| 提交（来源） | `f8bb4fb0cc2a485856dc7c8d72f32ae7fff1e5de`「fix(verify): 归档顶层白名单补 LICENSE——与 A2-1 包内 LICENSE 决定同步」 |
+| 候选身份登记 | `candidate-20260919055321-f8bb4fb-e00e50/candidate-manifest.json`（schema `candidate-manifest/3`，`packMethod: electron-builder`，`reproducibleBuild: true`） |
+| 完成回执 | `candidate-20260919055321-f8bb4fb-e00e50/release-receipt.json`（schema `release-receipt/1`，绑定同一 buildId 与源码提交） |
+| 包目录 | `candidate-20260919055321-f8bb4fb-e00e50/win-unpacked` |
+| 平台 | Windows x64（仅开发机；未在 Windows 11 上实测）。**构建执行方式**：由 jc 在**桌面 cmd 会话**手动运行 `npm run release:build`——agent 自动化会话无独立 GPU 进程、`smoke:gui` 必崩（`docs/acceptance.md` §8，2026-09-19 修订补充） |
 | 目标 | OpenCode Desktop 1.18.29，用户级安装（未为了匹配白名单降级 OpenCode） |
 | 签名 | 未签名（如实声明） |
 | zip / exe / app.asar SHA256 | 见 `docs/release-checklist.md` 第 1 节的机器可核对块（**不在本文件重复抄写**） |
@@ -41,6 +41,11 @@ schema `candidate-manifest/1`，手工重封，**不可重复构建**）早于 R
 
 **本文件第 5 节以下的 A4/A7 等既有结论，均属该历史候选**；
 它们不能当作 0.1 节新候选的成功证据。
+
+追加（2026-09-19）：`20260916114818-8b3b8f8-f4e1c6`（源 `8b3b8f8`）为**已发布的
+`v0.1.0-alpha.1` 候选**（tag + 私有仓库 Release，见第 9.4 节），自 0.1.0-alpha.2
+候选登记后不再是当前候选；其 manifest、build-record、receipt 与哈希原样保留。
+本文件第 5–9 节中凡引用该 buildId 的记录均为历史事实，不随本轮改写。
 
 ## 1. 基线（A0）
 
@@ -115,6 +120,46 @@ ImageStore 编译产物，**不触碰真机安装与真实运行数据目录**�
   `<link>` + 标记，并用「单行 / 多行 HTML 各连续注入三次」回归锁住。
 
 ## 5. A4 全量回归与候选冻结
+
+### 5.0 当前候选（`0.1.0-alpha.2`，buildId `20260919055321-f8bb4fb-e00e50`）
+
+构建于 2026-09-19，由 jc 在**桌面 cmd 会话**手动运行 `npm run release:build`。
+完整链 12 项全部 `passed`（取自该候选 `build-record.json`）：
+
+| 步骤 | 退出码 | 耗时 |
+|---|---|---|
+| `typecheck` | 0 | 6.9s |
+| `lint` | 0 | 7.1s |
+| `test:unit` | 0 | 7.3s（18/18 文件、321/321 用例） |
+| `build` | 0 | 9.4s |
+| `test:integration` | 0 | 65.1s（15/15 文件、179/179 用例） |
+| `test:e2e` | 0 | 39.2s（16 项） |
+| `test:e2e:electron` | 0 | 4.6s（38/38） |
+| `audit` | 0 | 1.3s（FAIL 0 / WARN 0） |
+| `dist` | 0 | 34.4s |
+| `smoke:gui` | 0 | 21.1s（**空参数默认配置 `SMOKE_OK`**，与双击等价） |
+| `verify-package` | 0 | 1.9s（30 项 0 失败） |
+| `zip` | 0 | — |
+
+登记后核验：`verify:release` core 16 项 0 失败 → 发布级终检 **18 项 0 失败，
+`RELEASE_GREEN`，`publishable=true`**，末行 `ALL_GREEN buildId=20260919055321-f8bb4fb-e00e50`。
+侧车 `candidate-20260919055321-f8bb4fb-e00e50.zip.sha256.txt` 已于登记后、分发前生成（exe/asar/zip 三行）。
+
+**过程偏差登记（本轮拦停两次，均如实）**：
+1. 第 1 轮停在 `test:unit`：编码自检的构建目录豁免正则漏配 `release-dev`（G4 改名后遗留），
+   误扫 Chromium 官方 `LICENSES.chromium.html`（其本身含非 UTF-8 字节，非仓库文本问题）。
+   修复 `7eff0b6`（豁免正则），仓库自身文本全绿。
+2. 第 2 轮停在 `verify-package`：A2-1 决定把 `LICENSE` 打进包，但归档顶层白名单未同步。
+   修复 `f8bb4fb`（白名单 + 文案），即本候选来源提交。
+3. 两个中途废弃的候选目录 `candidate-20260919054303-6154fc0-ebedb9`、
+   `candidate-20260919054633-7eff0b6-7b9983`：均未登记、不可发布、不应被引用；
+   处置（删除）待锁释放后人工执行。
+
+**G1 结论修订（重要）**：`smoke:gui` 空参数在本机**桌面会话**真实通过 → 「本机不可验证」
+的范围收窄为「**agent 自动化会话**不可验证」；详见 `docs/acceptance.md` §8 追加。
+
+> 以下 5.1 / 5.2 小节为**历史记录**（分别属 `20260916114818-8b3b8f8-f4e1c6`
+> 与 `manual-repack-20260912`），原文保留不改写。
 
 ### 5.1 当前候选（buildId `20260916114818-8b3b8f8-f4e1c6`）
 

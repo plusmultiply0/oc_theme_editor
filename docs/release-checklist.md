@@ -5,30 +5,30 @@ Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件�
 
 ## 1. 当前候选（Alpha）
 
-版本 **`0.1.0-alpha.1`**（Windows x64），由 `npm run release:build` 的正式发布链产出
+版本 **`0.1.0-alpha.2`**（Windows x64），由 `npm run release:build` 的正式发布链产出
 （`packMethod: electron-builder`，**可重复构建**）。
 
 下面这段是本文件的**唯一权威入口**，由 `tools/doc-candidate-entry.cjs` 从选中
 manifest 加磁盘实算生成：
 
 <!-- CURRENT-CANDIDATE:BEGIN -->
-buildId: 20260916114818-8b3b8f8-f4e1c6
-sourceCommit: 8b3b8f88f91df20ed2438388bd7270b9b7532e69
+buildId: 20260919055321-f8bb4fb-e00e50
+sourceCommit: f8bb4fb0cc2a485856dc7c8d72f32ae7fff1e5de
 schema: candidate-manifest/3
 packMethod: electron-builder
-manifest: candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json
-candidateDir: candidate-20260916114818-8b3b8f8-f4e1c6/win-unpacked
-zip: candidate-20260916114818-8b3b8f8-f4e1c6.zip
-zipSha256: 1df4c69765ee91e92b8bde46a2bb331aa45c63f3de0376423be83caef070c739
-exeSha256: ed8ee97cddb8afadd7d3c9975aa661a4dfebc9bbe9e27fa7165b92c158426cba
-asarSha256: e79cd599cbc1c6f66b23b6d80a9b666fffcc2c8e897ca108a835ae0379670a95
+manifest: candidate-20260919055321-f8bb4fb-e00e50/candidate-manifest.json
+candidateDir: candidate-20260919055321-f8bb4fb-e00e50/win-unpacked
+zip: candidate-20260919055321-f8bb4fb-e00e50.zip
+zipSha256: 68e47fd18f200621f5f12c6af7f6b9b8075cd4347545ba7ae1992e1fb0e46eaf
+exeSha256: c60b32d008783fed18f48c51dccae06c34ea845a14a646a1948aff57ad3f4fae
+asarSha256: 1399191aee072d16c5f7f601a37fcce30976068b204744ee2fefd24ab1dd5d46
 <!-- CURRENT-CANDIDATE:END -->
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `candidate-20260916114818-8b3b8f8-f4e1c6.zip` | 127.2 MB | 分发以 zip 为准（79 条目，整目录压缩） |
+| `candidate-20260919055321-f8bb4fb-e00e50.zip` | 127.2 MB | 分发以 zip 为准（82 条目，整目录压缩） |
 | ├ `OpenCodeThemeSwitcher.exe` | 193.3 MB | 未签名 |
-| └ `resources/app.asar` | 17.7 MB | 965 条目 / unpacked 7 |
+| └ `resources/app.asar` | 17.7 MB | 966 条目 / unpacked 7 |
 
 候选身份由 `release-receipt/1` 与 `build-record/2` 绑定同一 buildId 与源码提交；
 `build-record` 的 12 项必检（`typecheck`、`lint`、`test:unit`、`test:integration`、
@@ -39,7 +39,7 @@ asarSha256: e79cd599cbc1c6f66b23b6d80a9b666fffcc2c8e897ca108a835ae0379670a95
 
 ```bash
 node tools/doc-candidate-entry.cjs \
-  --manifest candidate-20260916114818-8b3b8f8-f4e1c6/candidate-manifest.json --check
+  --manifest candidate-20260919055321-f8bb4fb-e00e50/candidate-manifest.json --check
 ```
 
 该命令把「文档块 / manifest 登记 / 磁盘实算哈希」三方对齐；任一不符即非 0 退出。

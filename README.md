@@ -172,7 +172,7 @@
 
 - **真机视觉走查未完成**：功能闭环已在「真实 Electron 主进程 + 真实窗口 + 合成安装」上验证，
   但 OpenCode 真实安装上的画面观感仍需人工逐项确认。当前候选
-  （buildId `20260916114818-8b3b8f8-f4e1c6`）与待办见 `docs/alpha-acceptance.md`
+  （buildId `20260919055321-f8bb4fb-e00e50`）与待办见 `docs/alpha-acceptance.md`
   （A5/A6 在授权前保持「待执行」）。
 - **没有「恢复原版」入口，除非登记出厂指纹**：原版必须由证据证明，不能靠「没看到本工具的标记」
   推断（详见 `docs/original-evidence.md`）。没有证据时可用的是「恢复到首次接管时」。
@@ -182,9 +182,10 @@
 - 备份是整档复制（150 MB 级），不是增量；保留最近 3 份。
 - 便携包**未签名**（没有代码签名证书），Windows 可能弹安全提示；不要对外声称已签名，
   也不要为了让提示消失去关闭系统防护。
-- `release/` ~ `release7/` 都是过期构建。**唯一可用于验证与分发的是当前候选**
-  `candidate-20260916114818-8b3b8f8-f4e1c6/`（buildId
-  `20260916114818-8b3b8f8-f4e1c6`）；候选目录、zip 与哈希的唯一权威入口见
+- `release/` ~ `release7/` 都是过期构建；`release-dev/` 是单独跑 `npm run dist` 的输出目录，
+  同样不是候选。**唯一可用于验证与分发的是当前候选**
+  `candidate-20260919055321-f8bb4fb-e00e50/`（buildId
+  `20260919055321-f8bb4fb-e00e50`）；候选目录、zip 与哈希的唯一权威入口见
   `docs/release-checklist.md` 第 1 节（该处由机器核对，不靠人工抄写）。
 - 图片只支持 PNG / JPEG（.jpg/.jpeg/.jfif/.jpe）/ WebP，≤ 20 MiB，不支持 SVG。
   GIF / AVIF / TIFF / BMP / HEIC 尚未开放（GIF、AVIF、TIFF 的解码器本机可用，属于第二批；

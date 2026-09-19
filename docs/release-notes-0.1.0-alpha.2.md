@@ -1,8 +1,21 @@
-# OpenCodeThemeSwitcher 0.1.0-alpha.2（Alpha 体验版）— 草稿
+# OpenCodeThemeSwitcher 0.1.0-alpha.2（Alpha 体验版）
 
-> **状态：草稿（A2-1）**。发布物尚未构建——候选在**有显示会话的 Windows 机器**上按
-> `handoff/alpha2-release-plan-2026-09-19/PLAN.md` A2-2 完整门禁产出后，本文件才定稿；
-> 届时「发布物」一节填入真实 buildId 与哈希（由 `tools/doc-candidate-entry.cjs` 生成，不手抄）。
+> **状态：候选已产出（A2-2 全绿，2026-09-19）**。`npm run release:build` 于本机桌面
+> 会话跑满 12 步 `ALL_GREEN`，登记后核验 `RELEASE_GREEN`、`publishable=true`。
+> 对外发布（A2-4）仍待 A2-3 复验与 jc 签核。
+
+## 发布物
+
+| 项 | 值 |
+|---|---|
+| buildId | `20260919055321-f8bb4fb-e00e50` |
+| 分发 zip | `candidate-20260919055321-f8bb4fb-e00e50.zip`（133 MB，82 条目） |
+| zip SHA256 | `68e47fd18f200621f5f12c6af7f6b9b8075cd4347545ba7ae1992e1fb0e46eaf` |
+| exe SHA256 | `c60b32d008783fed18f48c51dccae06c34ea845a14a646a1948aff57ad3f4fae` |
+| app.asar SHA256 | `1399191aee072d16c5f7f601a37fcce30976068b204744ee2fefd24ab1dd5d46`（966 条目 / unpacked 7） |
+
+唯一权威入口是 `docs/release-checklist.md` 第 1 节（机器核对，文档/manifest/磁盘三方一致）；
+哈希侧车 `candidate-20260919055321-f8bb4fb-e00e50.zip.sha256.txt` 与 zip 一同分发，不在 zip 内。
 
 > **非官方工具**。它通过修改 OpenCode 桌面版的本地应用归档来换背景图，
 > 不是 OpenCode 官方功能，也不受官方支持。**未签名**，Windows 可能弹出安全提示。
@@ -64,7 +77,7 @@
 - 未签名；没有代码签名证书。安全软件可能拦截，请记录提示内容，**不要关闭系统防护**。
 - 只验证过一个 OpenCode 版本（1.18.29）。
 - 未在干净的非开发环境验证过（A6 按用户决定跳过，平台声明仅开发机 Windows x64）。
-- 便携包约 131 MB（未压缩 325 MB），因为内含 Electron 运行时。
+- 便携包约 133 MB（未压缩约 341 MB），因为内含 Electron 运行时。
 - 背景资源在归档里固定命名为 `oc-theme-background.jpg`，非 JPEG 内容也落在这个名字下
   （按原图字节写入，未做统一转码）。
 - 终端（`.xterm`）与 `--syntax-*` / `--markdown-*` 语法高亮不在覆盖范围内（有意为之）。

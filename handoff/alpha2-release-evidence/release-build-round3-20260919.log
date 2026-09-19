@@ -1,0 +1,404 @@
+
+> opencode-theme-switcher@0.1.0-alpha.2 release:build
+> node tools/release-build.cjs build
+
+RELEASE_BUILD buildId=20260919055321-f8bb4fb-e00e50
+  源码提交：f8bb4fb0cc2a485856dc7c8d72f32ae7fff1e5de
+
+=== typecheck ===
+
+> opencode-theme-switcher@0.1.0-alpha.2 typecheck
+> tsc --noEmit -p tsconfig.json
+
+EXIT typecheck = 0 (6.9s)
+
+=== lint ===
+
+> opencode-theme-switcher@0.1.0-alpha.2 lint
+> eslint .
+
+EXIT lint = 0 (7.1s)
+
+=== test:unit ===
+strict=on expectedFiles=18
+resultJson=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\.cache\ots-test-logs\result-2026-09-19T05-53-36-180Z-c52b.json
+exit=0 signal=none
+log=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\.cache\ots-test-logs\suite-2026-09-19T05-53-36-180Z-c52b.log
+command=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\vitest\vitest.mjs run tests/unit --reporter=default --reporter=json --outputFile.json=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\.cache\ots-test-logs\result-2026-09-19T05-53-36-180Z-c52b.json
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-28232-1789797216099\ots-2026-09-19T05-53-36-180Z-c52b
+summary files=18passed/18total tests=321passed/321total failed=0 unhandledErrors=0
+strict=files=18/18 tests=321/321 failed=0 skipped=0 todo=0 pending=0
+ ✓ tests/unit/doc-candidate-entry.test.ts (12 tests) 2570ms
+   ✓ doc-candidate-entry：与仓库当前状态一致 > 仓库文档里自称的当前候选，与它指向的 manifest/磁盘一致  2102ms
+ ✓ tests/unit/surfaces.test.ts (6 tests) 17ms
+ Test Files  18 passed (18)
+      Tests  321 passed (321)
+   Start at  13:53:38
+   Duration  4.35s (transform 2.76s, setup 0ms, collect 7.26s, tests 8.92s, environment 8ms, prepare 9.44s)
+JSON report written to D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/node_modules/.cache/ots-test-logs/result-2026-09-19T05-53-36-180Z-c52b.json
+EXIT test:unit = 0 (7.3s)
+
+=== build ===
+
+> opencode-theme-switcher@0.1.0-alpha.2 build
+> npm run build:main && npm run build:renderer
+
+
+> opencode-theme-switcher@0.1.0-alpha.2 build:main
+> node -e "require('fs').rmSync('out',{recursive:true,force:true})" && tsc -p tsconfig.node.json
+
+
+> opencode-theme-switcher@0.1.0-alpha.2 build:renderer
+> vite build
+
+[36mvite v6.4.3 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 38 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../../out/renderer/[22m[32mindex.html                 [39m[1m[2m  0.41 kB[22m[1m[22m[2m │ gzip:  0.29 kB[22m
+[2m../../out/renderer/[22m[35massets/index-Cyl-Ethm.css  [39m[1m[2m 14.17 kB[22m[1m[22m[2m │ gzip:  3.42 kB[22m
+[2m../../out/renderer/[22m[36massets/index-CsSHvyqv.js   [39m[1m[2m255.93 kB[22m[1m[22m[2m │ gzip: 80.58 kB[22m
+[32m✓ built in 2.04s[39m
+EXIT build = 0 (9.4s)
+  out 快照：50 个文件（构建后）
+
+=== test:integration ===
+strict=on expectedFiles=15
+resultJson=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\.cache\ots-test-logs\result-2026-09-19T05-53-52-979Z-3d8f.json
+exit=0 signal=none
+log=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\.cache\ots-test-logs\suite-2026-09-19T05-53-52-979Z-3d8f.log
+command=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\vitest\vitest.mjs run tests/integration --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=default --reporter=json --outputFile.json=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\node_modules\.cache\ots-test-logs\result-2026-09-19T05-53-52-979Z-3d8f.json
+tempRoot=C:\Users\ylzho\AppData\Local\Temp\ots-28232-1789797232890\ots-2026-09-19T05-53-52-979Z-3d8f
+summary files=15passed/15total tests=179passed/179total failed=0 unhandledErrors=0
+strict=files=15/15 tests=179/179 failed=0 skipped=0 todo=0 pending=0
+ ✓ tests/integration/image-read-limits.test.ts (8 tests) 286ms
+ ✓ tests/integration/main-recovery.test.ts (8 tests) 240ms
+ ✓ tests/integration/discover.test.ts (19 tests) 227ms
+ Test Files  15 passed (15)
+      Tests  179 passed (179)
+   Start at  13:53:55
+   Duration  61.90s (transform 853ms, setup 0ms, collect 4.03s, tests 50.87s, environment 4ms, prepare 2.99s)
+JSON report written to D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/node_modules/.cache/ots-test-logs/result-2026-09-19T05-53-52-979Z-3d8f.json
+EXIT test:integration = 0 (65.1s)
+
+=== test:e2e ===
+
+> opencode-theme-switcher@0.1.0-alpha.2 test:e2e
+> playwright test
+
+
+Running 16 tests using 1 worker
+
+[1/16] tests\e2e\background-cascade.spec.ts:173:7 › 背景层叠：实色面板与多层外壳（F2） › 使用 --background-stronger 的正文区域不是实色，能透出背景
+[2/16] tests\e2e\background-cascade.spec.ts:181:7 › 背景层叠：实色面板与多层外壳（F2） › 大面积 NewLayout 外壳不再额外叠一层底色
+[3/16] tests\e2e\background-cascade.spec.ts:188:7 › 背景层叠：实色面板与多层外壳（F2） › 减少透明度时面板退化为实底，这是设计如此而不是缺陷
+[4/16] tests\e2e\background-cascade.spec.ts:272:7 › 背景层叠：局部/累计 alpha 一致（F4） › 面板层的实测不透明度等于参数 p
+[5/16] tests\e2e\background-cascade.spec.ts:287:7 › 背景层叠：局部/累计 alpha 一致（F4） › 气泡叠在面板上：实测累计不透明度等于报告假定的 1-(1-p)²
+[6/16] tests\e2e\background-cascade.spec.ts:313:7 › 背景层叠：官方运行时覆盖（F1） › 官方运行时追加 :root 之后，助手的自定义 token 仍然生效
+[7/16] tests\e2e\background-cascade.spec.ts:331:7 › 背景层叠：官方运行时覆盖（F1） › 官方运行时覆盖后，侧栏仍能看到背景图片（不是被实色挡住）
+[8/16] tests\e2e\background-cascade.spec.ts:343:7 › 背景层叠：官方运行时覆盖（F1） › 官方主题再次移除并重新插入后，自定义 token 依然保持
+[9/16] tests\e2e\theme-switcher.spec.ts:202:7 › 图形界面闭环（先不碰用户安装） › 窗口与渲染进程启动，且只看到临时目录里的合成安装
+[10/16] tests\e2e\theme-switcher.spec.ts:239:7 › 图形界面闭环（先不碰用户安装） › 未选图片时应用按钮禁用，且给出可行动的禁用原因（不是强行启用）
+[11/16] tests\e2e\theme-switcher.spec.ts:246:7 › 图形界面闭环（先不碰用户安装） › 导入图片后生成配色、可读性报告通过，应用按钮才变为可用
+[12/16] tests\e2e\theme-switcher.spec.ts:265:7 › 图形界面闭环（先不碰用户安装） › 应用前必须在确认框里看到会撤下的旧主题层，确认后安装真的被改写
+[13/16] tests\e2e\theme-switcher.spec.ts:286:7 › 图形界面闭环（先不碰用户安装） › 恢复面板区分「原版」与「首次接管快照」，无出厂证据时不给恢复原版按钮
+[14/16] tests\e2e\theme-switcher.spec.ts:294:7 › 图形界面闭环（先不碰用户安装） › 恢复到首次接管快照后，旧主题链接回到 HTML
+[15/16] tests\e2e\theme-switcher.spec.ts:301:7 › 图形界面闭环（先不碰用户安装） › 「重新检测」与「选择安装目录」入口存在，检测失败时不是死路（R6）
+[16/16] tests\e2e\theme-switcher.spec.ts:312:7 › 图形界面闭环（先不碰用户安装） › 待恢复面板在无未完成事务时明确说明「没有」，不冒充有
+  16 passed (36.8s)
+EXIT test:e2e = 0 (39.2s)
+
+=== test:e2e:electron ===
+
+> opencode-theme-switcher@0.1.0-alpha.2 test:e2e:electron
+> node tools/run-electron-e2e.cjs
+
+[OK]   物理 I/O 层使用 original-fs | original-fs
+[OK]   包装 fs 把归档误判为目录 | isFile=false size=0
+[OK]   物理层正确识别归档为文件 | isFile=true size=2484
+[OK]   Electron 下能识别合成安装 | {"success":true,"data":{"targets":[{"targetId":"opencode-desktop-win-asar:9a5e8d7e01043259","installPath":"C:\\Users\\ylzho\\AppData\\Local\\Temp\\ots-28232-1789797337179\\ots-e2e-GF1n9u\\install","channel":"windows-local-user-install","version":"1.18.29","adapterId":"opencode-desktop-win-asar","fin
+[OK]   目标被限制在临时目录内（隔离保险） | C:\Users\ylzho\AppData\Local\Temp\ots-28232-1789797337179\ots-e2e-GF1n9u\install
+[OK]   识别为 supported | 1.18.29 supported
+[OK]   在 Electron 下读取图片
+[OK]   sharp 在 Electron 下可解码并取色 | #04fc04
+[OK]   Electron 下生成主题 CSS | 9903 bytes
+[OK]   准备阶段成功 | op-20260919T055540031Z-6tnm0j
+[OK]   准备阶段列出会撤下的旧主题层 | [{"id":"prototype-local-theme","label":"原型时代注入的本地主题：雪景（深色）","entry":"out/renderer/snow-theme.css"}]
+[OK]   准备阶段一个字节都没动目标
+[OK]   应用成功 | applied
+[OK]   应用后归档指纹变化 | 78a8406cc75f → d4161242f1cb
+[OK]   归档操作窗口已关闭（noAsar 无泄漏）
+[OK]   归档操作深度已归零
+[OK]   应用后仍能解析归档头 | 14138 bytes
+[OK]   归档条目含本工具 CSS
+[OK]   归档条目含本工具背景图
+[OK]   旧主题文件保留在归档中（可恢复）
+[OK]   HTML 已撤下旧主题链接
+[OK]   HTML 含本工具主题链接
+[OK]   unpacked 标记被保留 | unpacked=1
+[OK]   能列出备份
+[OK]   不冒充原版：给出 takeover 而非 original | previous,takeover
+[OK]   上一主题备份存在 | previous,takeover
+[OK]   恢复上一主题成功
+[OK]   恢复上一主题后回到应用前指纹
+[OK]   无出厂证据时「恢复原版」被拒绝 | 无法确认为出厂原版，恢复原版已禁用
+[OK]   恢复首次接管快照成功
+[OK]   快照恢复后指纹与最初一致
+[OK]   快照恢复后旧主题链接回到 HTML（说明恢复到的是接管时状态）
+[OK]   启动恢复扫描能读到未完成事务 | pending=1
+[OK]   未完成事务被判定为「已应用但未记账」 | applied
+[OK]   遗留准备区已就位（独立实例，无同进程句柄） | C:\Users\ylzho\AppData\Local\Temp\ots-28232-1789797337179\ots-e2e-GF1n9u\runtime\instances\e2e-orphan-instance\stage
+[OK]   启动清理确实删除了遗留准备区（计数 >= 1） | cleaned=1
+[OK]   遗留准备区目录已被物理删除 | C:\Users\ylzho\AppData\Local\Temp\ots-28232-1789797337179\ots-e2e-GF1n9u\runtime\instances\e2e-orphan-instance\stage
+[OK]   无遗留准备区时计数为 0（不把没删掉任何东西报成清理成功） | cleaned=0
+
+Electron 36.9.5：38/38 通过
+EXIT test:e2e:electron = 0 (4.6s)
+
+=== audit ===
+
+> opencode-theme-switcher@0.1.0-alpha.2 audit
+> node tools/audit.cjs
+
+== 依赖许可 ==
+  @electron/asar@4.3.0  MIT
+  react@19.3.0  MIT
+  react-dom@19.3.0  MIT
+  sharp@0.35.4  Apache-2.0
+  zod@3.25.76  MIT
+  electron@36.9.5  MIT
+
+== IPC 通道（17）==
+  pickImage、importImage、importImageData、getImagePreview、generateTheme、analyzeContrast、discoverTargets、chooseTargetDirectory、inspectTarget、stageTheme、applyTheme、listBackups、restoreTheme、getOperation、getRecoveryStatus、resolveRecovery、openExternal
+
+== 结论 ==
+
+== 路径/用户名规则豁免（本地诊断产物与内部交接留档，凭证规则仍照查）==
+  ~ handoff/EXECUTION_PLAN.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/ALPHA_IMPLEMENTATION_PLAN.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/EXECUTION_STATUS.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/P4-BLOCKERS-DIAGNOSIS.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/RUNBOOK.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/diagnosis-2026-09-14/P4_DIAGNOSIS_AND_FIX_PLAN.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/diagnosis-2026-09-14/evidence/RESULTS.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/diagnosis-2026-09-14/findings.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/diagnosis-2026-09-14/probe-smoke.cjs
+  ~ handoff/alpha-finalization-plan-2026-09-13/diagnosis-2026-09-14/progress.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/diagnosis-2026-09-14/task_plan.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/findings.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/progress.md
+  ~ handoff/alpha-finalization-plan-2026-09-13/task_plan.md
+  ~ handoff/alpha-release-evidence/README.md
+  ~ handoff/alpha-release-evidence/a1a2-manual-20260918.md
+  ~ handoff/alpha-release-evidence/a5-round-20260918.md
+  ~ handoff/alpha-release-plan-2026-09-12/A5-prep.md
+  ~ handoff/alpha-release-plan-2026-09-12/RELEASE_ALPHA_PLAN.md
+  ~ handoff/alpha-release-plan-2026-09-12/findings.md
+  ~ handoff/alpha-release-plan-2026-09-12/progress.md
+  ~ handoff/alpha-release-plan-2026-09-12/publish-scope.md
+  ~ handoff/alpha-release-plan-2026-09-12/task_plan.md
+  ~ handoff/alpha2-release-plan-2026-09-19/MACHINE-WINDOW.md
+  ~ handoff/alpha2-release-plan-2026-09-19/PLAN.md
+  ~ handoff/background-incident-2026-09-12/BACKGROUND_FIX_PLAN.md
+  ~ handoff/background-incident-2026-09-12/findings.md
+  ~ handoff/background-incident-2026-09-12/probe-live-background.js
+  ~ handoff/background-incident-2026-09-12/progress.md
+  ~ handoff/background-incident-2026-09-12/task_plan.md
+  ~ handoff/background-incident-2026-09-12/verification/evidence.json
+  ~ handoff/background-incident-2026-09-12/verify-background.cjs
+  ~ handoff/findings.md
+  ~ handoff/format-review-2026-09-12/NEXT_EXECUTION_PLAN.md
+  ~ handoff/format-review-2026-09-12/TEST_RESULTS.md
+  ~ handoff/format-review-2026-09-12/findings.md
+  ~ handoff/format-review-2026-09-12/format-evidence.json
+  ~ handoff/format-review-2026-09-12/probe-formats.cjs
+  ~ handoff/format-review-2026-09-12/progress.md
+  ~ handoff/format-review-2026-09-12/task_plan.md
+  ~ handoff/progress.md
+  ~ handoff/review-2026-09-11/REVIEW.md
+  ~ handoff/review-2026-09-11/electron-readonly-probe.cjs
+  ~ handoff/review-2026-09-11/electron-readonly-result.json
+  ~ handoff/review-2026-09-11/findings.md
+  ~ handoff/review-2026-09-11/progress.md
+  ~ handoff/review-2026-09-11/task_plan.md
+  ~ handoff/review-2026-09-13-r2/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-13-r2/evidence/reproductions.json
+  ~ handoff/review-2026-09-13-r2/evidence/validation-summary.md
+  ~ handoff/review-2026-09-13-r2/findings.md
+  ~ handoff/review-2026-09-13-r2/progress.md
+  ~ handoff/review-2026-09-13-r2/reproduce-current.cjs
+  ~ handoff/review-2026-09-13-r2/task_plan.md
+  ~ handoff/review-2026-09-13/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-13/evidence/r5-diagnosis.json
+  ~ handoff/review-2026-09-13/evidence/reproductions.json
+  ~ handoff/review-2026-09-13/findings.md
+  ~ handoff/review-2026-09-13/progress.md
+  ~ handoff/review-2026-09-13/reproduce-review.cjs
+  ~ handoff/review-2026-09-13/task_plan.md
+  ~ handoff/review-2026-09-14-r2/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-14-r2/evidence/reproduction-results.json
+  ~ handoff/review-2026-09-14-r2/findings.md
+  ~ handoff/review-2026-09-14-r2/progress.md
+  ~ handoff/review-2026-09-14-r2/reproduce-review.cjs
+  ~ handoff/review-2026-09-14-r2/task_plan.md
+  ~ handoff/review-2026-09-14-r3/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-14-r3/evidence-run-sXZLwy/fixture/candidate-renamed/build-record.json
+  ~ handoff/review-2026-09-14-r3/evidence-run-sXZLwy/fixture/candidate-renamed/candidate-manifest.json
+  ~ handoff/review-2026-09-14-r3/evidence-run-sXZLwy/fixture/candidate-renamed/release-receipt.json
+  ~ handoff/review-2026-09-14-r3/evidence-run-sXZLwy/fixture/package-lock.json
+  ~ handoff/review-2026-09-14-r3/evidence-run-sXZLwy/fixture/package.json
+  ~ handoff/review-2026-09-14-r3/evidence-run-sXZLwy/results.json
+  ~ handoff/review-2026-09-14-r3/evidence/results.json
+  ~ handoff/review-2026-09-14-r3/evidence/strict-unit-result.json
+  ~ handoff/review-2026-09-14-r3/findings.md
+  ~ handoff/review-2026-09-14-r3/progress.md
+  ~ handoff/review-2026-09-14-r3/reproduce-review.cjs
+  ~ handoff/review-2026-09-14-r3/task_plan.md
+  ~ handoff/review-2026-09-16-r2/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-16-r2/findings.md
+  ~ handoff/review-2026-09-16-r2/fixtures-M8Wc4a/results.json
+  ~ handoff/review-2026-09-16-r2/fixtures-iGvbgc/results.json
+  ~ handoff/review-2026-09-16-r2/progress.md
+  ~ handoff/review-2026-09-16-r2/reproduce.cjs
+  ~ handoff/review-2026-09-16-r2/reproduction-results.json
+  ~ handoff/review-2026-09-16-r2/task_plan.md
+  ~ handoff/review-2026-09-16-r2/validation.md
+  ~ handoff/review-2026-09-16/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-16/evidence/n5-classification.json
+  ~ handoff/review-2026-09-16/evidence/n5-env-baseline.json
+  ~ handoff/review-2026-09-16/evidence/n5-forensics.md
+  ~ handoff/review-2026-09-16/evidence/n5-full-verify.json
+  ~ handoff/review-2026-09-16/evidence/n5-release-chain.md
+  ~ handoff/review-2026-09-16/evidence/runtime-probes.json
+  ~ handoff/review-2026-09-16/evidence/unit-result.json
+  ~ handoff/review-2026-09-16/findings.md
+  ~ handoff/review-2026-09-16/progress.md
+  ~ handoff/review-2026-09-16/reproduce-runtime.cjs
+  ~ handoff/review-2026-09-16/task_plan.md
+  ~ handoff/review-2026-09-17/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-17/checks.cjs
+  ~ handoff/review-2026-09-17/evidence/f2-f3-smoke.md
+  ~ handoff/review-2026-09-17/evidence/f4-candidate-attempt.md
+  ~ handoff/review-2026-09-17/evidence/f4-zip-boundary.md
+  ~ handoff/review-2026-09-17/findings.md
+  ~ handoff/review-2026-09-17/progress.md
+  ~ handoff/review-2026-09-17/reproduce.cjs
+  ~ handoff/review-2026-09-17/reproduction-results.json
+  ~ handoff/review-2026-09-17/task_plan.md
+  ~ handoff/review-2026-09-17/unit.summary.json
+  ~ handoff/review-2026-09-17/validation.md
+  ~ handoff/review-2026-09-17/verify.summary.json
+  ~ handoff/review-2026-09-18/REVIEW_AND_FIX_PLAN.md
+  ~ handoff/review-2026-09-18/evidence/g4-archive-migration.md
+  ~ handoff/startup-incident-2026-09-11/RECOVERY_AND_FIX.md
+  ~ handoff/startup-incident-2026-09-11/archive-evidence.json
+  ~ handoff/startup-incident-2026-09-11/findings.md
+  ~ handoff/startup-incident-2026-09-11/fixture-cwd/a.js
+  ~ handoff/startup-incident-2026-09-11/fixture-cwd/b.js
+  ~ handoff/startup-incident-2026-09-11/inspect-archives.cjs
+  ~ handoff/startup-incident-2026-09-11/progress.md
+  ~ handoff/startup-incident-2026-09-11/repro-stream-cwd.cjs
+  ~ handoff/startup-incident-2026-09-11/stream-cwd-evidence.json
+  ~ handoff/startup-incident-2026-09-11/task_plan.md
+  ~ handoff/task_plan.md
+  ~ handoff/version-probe-plan-2026-09-19/PLAN.md
+  ~ handoff/version-probe-plan-2026-09-19/evidence/probe-real-20260919.md
+  ~ tools/asar-probe-result.json
+  ~ tools/electron-fixture-e2e-result.json
+  ~ tools/env-probe-result.json
+  ~ tools/lock-probe-result.json
+  ~ tools/post-restore-health.cjs
+  ~ tools/post-restore-health.json
+  ~ tools/window-probe-result.json
+
+FAIL 0 项，WARN 0 项
+EXIT audit = 0 (1.3s)
+  out 复核通过：50 个文件与构建后快照一致
+
+=== dist ===
+  • electron-builder  version=26.15.3 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • skipped dependencies rebuild  reason=npmRebuild is set to false
+  • packaging       platform=win32 arch=x64 electron=36.9.5 appOutDir=candidate-20260919055321-f8bb4fb-e00e50\builder-out\win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\builder-out\win-unpacked
+  • searching for node modules  pm=npm searchDir=D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher
+  • duplicate dependency references  dependencies=["minimatch@10.2.6","@emnapi/runtime@1.11.3"]
+  • updating asar integrity executable resource  executablePath=candidate-20260919055321-f8bb4fb-e00e50\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe
+  • default Electron icon is used  reason=application icon is not set
+  • signing with signtool.exe  path=candidate-20260919055321-f8bb4fb-e00e50\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe
+EXIT dist = 0 (34.4s)
+  候选目录：candidate-20260919055321-f8bb4fb-e00e50\win-unpacked
+
+=== smoke:gui ===
+SMOKE_MODE default
+SMOKE_EXE D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\win-unpacked\OpenCodeThemeSwitcher.exe
+SMOKE_ARGS []
+SMOKE_PLATFORM win32
+SMOKE_EXE_SHA256 c60b32d008783fed18f48c51dccae06c34ea845a14a646a1948aff57ad3f4fae
+SMOKE_RUNTIME argv=["D:\\zjcfile\\weblearn\\vibecoding\\OpenCode_Theme_Switcher\\candidate-20260919055321-f8bb4fb-e00e50\\win-unpacked\\OpenCodeThemeSwitcher.exe","--inspect=0","--remote-debugging-port=0"]
+SMOKE_RUNTIME webPreferences={"allowRunningInsecureContent":false,"contextIsolation":true,"disableDialogs":false,"disablePopups":false,"enableBlinkFeatures":"","experimentalFeatures":false,"javascript":true,"nodeIntegration":false,"nodeIntegrationInSubFrames":false,"safeDialogs":false,"safeDialogsMessage":"","sandbox":true,"webSecurity":true,"webviewTag":false} windowsAtHook=1
+SMOKE_COVERAGE 页级 console/pageerror 自 firstWindow() 起；preload-error / did-fail-load / render-process-gone 自主进程诊断装上起（含回填已存在窗口）；launch 之前的主进程错误不在覆盖范围内。
+SMOKE_READY ready=true timedOut=false waitedMs=3467 polls=1 settleMs=1500
+窗口标题: OpenCode 换肤助手
+界面文本片段: OpenCode 换肤助手 | 本地运行 · 不联网 · 不上传图片 | 100%
+SMOKE_OK
+EXIT smoke:gui = 0 (21.1s)
+
+=== verify-package ===
+核对目标：D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\win-unpacked（--no-identity 取证模式，跳过身份核对）
+  exe   193.3 MB  sha256=c60b32d008783fed18f48c51dccae06c34ea845a14a646a1948aff57ad3f4fae
+  asar  17.7 MB  sha256=1399191aee072d16c5f7f601a37fcce30976068b204744ee2fefd24ab1dd5d46
+
+  归档条目 966，unpacked 7
+
+核对 30 项，失败 0 项
+EXIT verify-package = 0 (1.9s)
+
+=== zip ===
+  生成 candidate-20260919055321-f8bb4fb-e00e50.zip
+
+=== register ===
+已登记候选 -> candidate-20260919055321-f8bb4fb-e00e50\candidate-manifest.json（schema candidate-manifest/3）
+  version      0.1.0-alpha.2
+  buildId      20260919055321-f8bb4fb-e00e50
+  sourceCommit f8bb4fb0cc2a fix(verify): 归档顶层白名单补 LICENSE——与 A2-1 包内 LICENSE 决定同步（手动跑链 verify-package 拦停坐实）
+  packMethod   electron-builder（reproducibleBuild=true）
+  candidateDir candidate-20260919055321-f8bb4fb-e00e50/win-unpacked
+  zip          candidate-20260919055321-f8bb4fb-e00e50.zip
+  exe  sha256  c60b32d008783fed18f48c51dccae06c34ea845a14a646a1948aff57ad3f4fae
+  asar sha256  1399191aee072d16c5f7f601a37fcce30976068b204744ee2fefd24ab1dd5d46
+  zip  sha256  68e47fd18f200621f5f12c6af7f6b9b8075cd4347545ba7ae1992e1fb0e46eaf
+  lock sha256  374231463b85f81b521d5506ad748c7c5f7e0b55a6683f56cb3c01f88bc2d1b9
+  buildRecord  candidate-20260919055321-f8bb4fb-e00e50/build-record.json  sha256=09e4db39dd5dbac5…
+  out/**       50 个文件（冻结清单，发布门禁逐文件核对）
+EXIT register = 0 (1.6s)
+
+=== verify:release ===
+RELEASE_VERIFY：本次发布门禁（buildId=20260919055321-f8bb4fb-e00e50）
+  核对目标：D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\win-unpacked
+  登记清单：D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\candidate-manifest.json
+
+发布门禁核验 16 项，失败 0 项
+CORE_VERIFY_GREEN buildId=20260919055321-f8bb4fb-e00e50（仅基础核验；发布级判定需 --require-release-eligibility）
+stage=core publishable=false
+EXIT verify:release = 0 (7.5s)
+
+manifest: candidate-20260919055321-f8bb4fb-e00e50\candidate-manifest.json
+zip:      candidate-20260919055321-f8bb4fb-e00e50.zip (sha256=68e47fd18f200621…)
+exe:      sha256=c60b32d008783fed…
+
+=== 发布级只读终检（S2：与独立 verify 同一判据）===
+RELEASE_VERIFY：本次发布门禁（buildId=20260919055321-f8bb4fb-e00e50）
+  核对目标：D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\win-unpacked
+  登记清单：D:\zjcfile\weblearn\vibecoding\OpenCode_Theme_Switcher\candidate-20260919055321-f8bb4fb-e00e50\candidate-manifest.json
+  发布级判定：要求 12 项必检步骤齐全 + 完成回执绑定（--require-release-eligibility）
+
+发布门禁核验 18 项，失败 0 项
+RELEASE_GREEN buildId=20260919055321-f8bb4fb-e00e50（发布级：资格+回执全过）
+stage=final publishable=true
+
+ALL_GREEN buildId=20260919055321-f8bb4fb-e00e50
+(node:28232) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)

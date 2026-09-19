@@ -102,3 +102,16 @@ node tools/version-probe.cjs --discover     # 复用发现逻辑列出候选（�
 - 每提交前跑：`node --check` → lint → typecheck；V2 后加单测；
   不需要跑全量集成（不碰业务代码，`out/` 之外的产物不变）。
 - 本计划不依赖 A5（真实安装闭环）完成；probe 是只读工具，可先行。
+
+## 5. 执行记录（2026-09-19）
+
+| 项 | 提交 | 验收结果 |
+|---|---|---|
+| V1 | `9821928` | `node --check`/lint/typecheck 过；真机 `--discover` 出完整报告（全程只读），`--json` 可 `JSON.parse`；退出码约定 0/1/2 实测正确 |
+| V2 | `2e27f68` | 六场景 + 目录缺失共 7 项用例，vitest 7/7 绿（合成归档真实打包，不碰真实安装） |
+| V3 | `cb2b28d` | 报告归档 `evidence/probe-real-20260919.md`；compatibility.md 新增「新版本适配流程」；`supportedVersions` 未动 |
+
+执行中的如实登记：真机报告检查 5 为 FAIL——当前安装**正挂着主题**（A5 轮后 jc 继续使用），
+属预期状态而非脚本缺陷；证据文件含解读段与指纹对照（e6957841… vs A5 收尾 1c53ca24…）。
+V3 报告生成时 `--discover` 走 `THEME_SWITCHER_NO_REGISTRY=1` 跳过登记表（受限环境会拦
+`reg` 查询），候选目录仍覆盖本机真实安装，验收不受影响。

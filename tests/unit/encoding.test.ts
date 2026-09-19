@@ -45,7 +45,8 @@ const MOJIBAKE_RUN = new RegExp(`[${MOJIBAKE_CHARS}]{2,}`, 'u');
 /** 列出项目自身的文本文件（跳过第三方、构建产物、证据目录与锁文件） */
 function listProjectTextFiles(dir: string, acc: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP_DIRS.has(entry.name) || /^candidate-/.test(entry.name) || /^release\d*$/.test(entry.name)) {
+    // release / release2…release7（历史候选目录）与 release-dev（G4 改名后的 electron-builder 默认输出）同为构建产物
+    if (SKIP_DIRS.has(entry.name) || /^candidate-/.test(entry.name) || /^release(-dev)?\d*$/.test(entry.name)) {
       continue;
     }
     const p = path.join(dir, entry.name);

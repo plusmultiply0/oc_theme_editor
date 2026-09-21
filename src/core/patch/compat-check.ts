@@ -40,8 +40,11 @@ export interface CompatReport {
 }
 
 export interface VerifyStructureOptions {
-  /** 磁盘探测注入缝（unpacked 目录检查）；归档读取始终走 snapshot */
-  fs?: Pick<typeof fs, 'existsSync' | 'statSync'>;
+  /** 磁盘探测注入缝（unpacked 目录检查）；归档读取始终走 snapshot。用最小签名而非 Pick<typeof fs>，真实 fs 可直接传入 */
+  fs?: {
+    existsSync: (path: string) => boolean;
+    statSync: (path: string) => { isDirectory: () => boolean };
+  };
 }
 
 export async function verifyStructure(

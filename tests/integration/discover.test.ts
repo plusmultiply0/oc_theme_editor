@@ -53,6 +53,9 @@ describe('目标识别（T30、T31）', () => {
     const t = await expectTarget(r.data);
     expect(t.support).toBe('supported');
     expect(t.verifiedBy).toBe('whitelist');
+    // 白名单通道行为与 structural 计划落地前逐字一致：不跑结构验证，也就没有其产物字段
+    expect(t.compatChecks).toBeUndefined();
+    expect(t.rejectReason).toBeUndefined();
     expect(t.version).toBe('1.18.29');
     expect(t.channel).toBe('windows-local-user-install');
     expect(t.fingerprint).toMatch(/^[0-9a-f]{64}$/);
@@ -68,6 +71,9 @@ describe('目标识别（T30、T31）', () => {
     const t = await expectTarget(r.data);
     expect(t.support).toBe('supported');
     expect(t.verifiedBy).toBe('structural');
+    // S3 确认框的数据源：逐项结论随 structural 通道挂上
+    expect(t.compatChecks?.map((c) => c.key)).toEqual(['anchor', 'changeSet', 'unpacked']);
+    expect(t.compatChecks?.every((c) => c.status === 'PASS' || c.status === 'WARN')).toBe(true);
     // 说明性文案：如实区分「结构验证」与白名单的完整真机验证
     expect(t.rejectReason ?? '').toContain('未列入白名单');
     expect(t.rejectReason ?? '').toContain('结构验证');

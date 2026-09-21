@@ -1,6 +1,6 @@
 /**
  * 工具自身界面：浅色、蓝白、留白优先。
- * 尺寸一律用 rem / 弹性布局，125% 与 150% 缩放下不裁切（T56）。
+ * 尺寸用 rem / 弹性布局，跟随系统缩放不裁切（T56）；界面内不再提供手动缩放档。
  */
 :root {
   --ui-bg: #f5f7fa;
@@ -64,10 +64,10 @@ a:focus-visible {
 /* ---------- 顶栏 ---------- */
 .topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.875rem 1.5rem;
+  padding: 0.5rem 1.25rem;
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-sm);
@@ -83,8 +83,15 @@ a:focus-visible {
   letter-spacing: 0.015em;
 }
 
+.topbar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .sub {
-  margin: 0.1875rem 0 0;
+  margin: 0;
   font-size: 0.75rem;
   color: var(--ui-muted);
   letter-spacing: 0.02em;
@@ -96,11 +103,6 @@ a:focus-visible {
   gap: 1rem;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.scale {
-  display: inline-flex;
-  gap: 0.25rem;
 }
 
 .target {

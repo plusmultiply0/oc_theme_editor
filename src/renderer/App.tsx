@@ -34,12 +34,6 @@ import {
 const SPEC_KEY = 'ots.theme-spec';
 const SCALE_KEY = 'ots.ui-scale';
 
-const SCALES = [
-  { label: '100%', value: 100 },
-  { label: '125%', value: 125 },
-  { label: '150%', value: 150 },
-] as const;
-
 function loadSpec(): ThemeSpec {
   try {
     const raw = localStorage.getItem(SPEC_KEY);
@@ -60,12 +54,12 @@ function saveSpec(spec: ThemeSpec): boolean {
   }
 }
 
-function loadScale(): number {
+// 缩放档已移除（jc 拍板）：旧版本可能存过 125/150，启动时静默覆写为 100
+function convergeLegacyScale(): void {
   try {
-    const v = Number(localStorage.getItem(SCALE_KEY));
-    return SCALES.some((s) => s.value === v) ? v : 100;
+    if (localStorage.getItem(SCALE_KEY) !== '100') localStorage.setItem(SCALE_KEY, '100');
   } catch {
-    return 100;
+    // 读写不了就不管，反正不再有消费方
   }
 }
 
@@ -92,7 +86,6 @@ export default function App() {
   const [recovery, setRecovery] = useState<RecoveryStatus | null>(null);
   const [ui, setUi] = useState<UiState>({ kind: 'empty' });
   const [summary, setSummary] = useState<StageSummary | null>(null);
-  const [scale, setScale] = useState<number>(loadScale);
   const [notice, setNotice] = useState<string | null>(null);
   /** structural 目标的应用前置确认（S3），不影响 UiState 九类状态 */
   const [pendingStructural, setPendingStructural] = useState(false);
@@ -121,15 +114,10 @@ export default function App() {
     recoveryBlocking,
   };
 
-  // 缩放：改根字号，布局用 rem，125% / 150% 下不裁切（T56）
+  // 缩放档已移除：界面尺寸全部 rem/弹性，跟随系统缩放（T56 能力不变）
   useEffect(() => {
-    document.documentElement.style.fontSize = `${(16 * scale) / 100}px`;
-    try {
-      localStorage.setItem(SCALE_KEY, String(scale));
-    } catch {
-      setNotice('界面缩放未能保存，下次启动会回到 100%。');
-    }
-  }, [scale]);
+    convergeLegacyScale();
+  }, []);
 
   const fail = useCallback((error: AppError) => {
     const scope = errorScope(error.code);
@@ -395,25 +383,12 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div>
+        <div className="topbar-title">
           <h1>OpenCode 换肤助手</h1>
           <p className="sub">本地运行 · 不联网 · 不上传图片</p>
         </div>
 
         <div className="topbar-right">
-          <div className="scale" role="group" aria-label="界面缩放">
-            {SCALES.map((s) => (
-              <button
-                key={s.value}
-                className={`btn small ${scale === s.value ? 'active' : ''}`}
-                type="button"
-                aria-pressed={scale === s.value}
-                onClick={() => setScale(s.value)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
           <div className="target">
             {target ? (
               <>

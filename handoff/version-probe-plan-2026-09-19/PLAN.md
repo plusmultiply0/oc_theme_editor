@@ -115,3 +115,9 @@ node tools/version-probe.cjs --discover     # 复用发现逻辑列出候选（�
 属预期状态而非脚本缺陷；证据文件含解读段与指纹对照（e6957841… vs A5 收尾 1c53ca24…）。
 V3 报告生成时 `--discover` 走 `THEME_SWITCHER_NO_REGISTRY=1` 跳过登记表（受限环境会拦
 `reg` 查询），候选目录仍覆盖本机真实安装，验收不受影响。
+
+## 6. 后续修订（2026-09-21，structural-compat 计划 S1）
+
+检查 4/5/6 已并入 core 单一来源：脚本改为调用 `out/core/patch/compat-check` 的 `verifyStructure`，
+判据与产品链路（`inspectRoot`）同源，工具内不再保留独立的锚点计数/变更集合实现。
+连带口径变化：锚点 ≥2 次由旧 WARN 收紧为 FAIL（落点不唯一即拒绝，不猜测）。

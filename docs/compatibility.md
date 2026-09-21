@@ -148,3 +148,54 @@ OpenCode 出新版 →
 - 对**已挂本工具主题**的安装，检查 5（变更集合冲突）会如实 FAIL 并提示先恢复——
   新版本适配探测应在未挂主题的安装上跑，或对已挂主题的安装先走恢复流程。
 - 真机验证报告归档：`handoff/version-probe-plan-2026-09-19/evidence/probe-real-20260919.md`。
+
+## 更新（2026-09-21）：两通道放行模型（structural-compat 计划 S1–S5）
+
+上文「白名单外一律 unknown，只允许预览」的口径已被本节的结构验证通道**取代**：
+白名单不再是唯一放行依据。`TargetSupportSchema` 三值不变，门径判断（`support !== 'supported'` 拒绝）一行未改。
+
+### 两通道一张门
+
+| 通道 | 条件 | 结果 | UI 呈现 |
+|---|---|---|---|
+| whitelist | `supportedVersions` 命中 | `supported` + `verifiedBy: 'whitelist'` | 绿色「supported」徽章，行为与之前逐字节一致（不跑结构验证） |
+| structural | 未命中，但只读结构验证全过 | `supported` + `verifiedBy: 'structural'` | 提示蓝「结构验证通过」徽章 + 应用前逐项确认框 |
+| 都不满足 | — | `unknown`，rejectReason 写明失败的检查项 | 只允许预览，不允许应用 |
+
+### 结构验证判据（单一来源 `src/core/patch/compat-check.ts`，产品链路与 version-probe 共用）
+
+1. **锚点唯一**：`adapter.injection.anchor` 在 htmlEntry 中恰好出现 1 次。
+   0 次＝结构已变；≥2 次＝落点不唯一、拒绝（不猜测、不取第一处）；htmlEntry 读不到按 0 次处理。
+2. **变更集合归属**：`cssFile`/`imageFile` 不存在＝干净；存在且可识别为本工具产物
+   （HTML 带 `HTML_INJECT_COMMENT` 注入标记 **且** CSS 带 `CSS_OWN_BANNER` 生成横幅）＝通过，再应用会覆盖；
+   无法确认归属（含只有图片没有 CSS 的孤儿产物）＝按第三方占用拒绝。
+3. **unpacked 目录存在性**：信息项，PASS/WARN，永不阻断。
+
+标记常量在 `src/core/patch/markers.ts`，由 stage/css/compat-check 三处共用，防止生成侧与判据侧漂移。
+
+### 竞态重验（apply 入口，本通道的安全核心）
+
+inspect 与 apply 之间归档可能被自动更新换掉。`applyTheme` 在算完 `beforeHash` 后与
+`target.fingerprint` 比对：不一致就**对新归档重跑结构验证**——不通过则 `TARGET_HASH_MISMATCH`
+拒绝且尚未写任何东西；通过则把 target 的版本与指纹刷新为新归档实测值再继续，
+事务记录、备份证据（assessOriginalEvidence / ensureOriginalBackup / createBackup）全部对齐刷新后的 target。
+
+### 显式确认（防「悄悄放行」）
+
+structural 目标的 stage 与 apply **两个入口**都要求 `confirmStructural: true`，缺失即
+`STRUCTURAL_CONFIRM_REQUIRED`（安装未修改类错误）。UI 侧对应点击「应用到 OpenCode」时先弹
+逐项确认框（列三项检查结论），确认后才带标志进入流程；白名单路径不受影响、零变化。
+
+### 如实边界
+
+- **结构验证 ≠ 完整真机验证**：只证明「注入机制结构适用」，不证明界面效果逐项正常
+  （UI 能看 ≠ 全部功能验过）。徽章用提示蓝而非验证绿，确认框明写此边界。
+- 应用后若 OpenCode 自动更新，主题可能被覆盖（这同时是竞态重验存在的原因），需重新应用。
+- 不猜锚点、不改 `supportedVersions` 内容（白名单更新仍须走 probe＋真机闭环流程）、
+  structural 通道不宣称「已验证」。
+
+### 实况记录（2026-09-21）
+
+真机 OpenCode 已自动更新到 **1.18.31**（不在白名单）。probe 只读复跑：结构 6 项 PASS、
+白名单检查 WARN；`inspectRoot` 实测返回 `support: 'supported', verifiedBy: 'structural'`——
+两通道模型对真实漂移版本的直接实证。

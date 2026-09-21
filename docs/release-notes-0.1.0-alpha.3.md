@@ -1,18 +1,17 @@
 # OpenCodeThemeSwitcher 0.1.0-alpha.3（Alpha 体验版）
 
-> **状态：发布准备中**。本文件先固化变更与口径；「发布物」一节在
-> `npm run release:build`（桌面会话，12 步全绿 `ALL_GREEN`）产出并登记候选后补全，
-> 唯一权威入口是 `docs/release-checklist.md` 第 1 节（机器核对，文档/manifest/磁盘三方一致）。
+> **状态：候选已产出（2026-09-21 全链 `ALL_GREEN`）**。`npm run release:build` 跑满 12 步，
+> 登记后核验 `RELEASE_GREEN`、`publishable=true`。对外发布（tag + Release）按 A8 签核推进。
 
 ## 发布物
 
 | 项 | 值 |
 |---|---|
-| buildId | 待登记 |
-| 分发 zip | 待登记（整目录 zip，不能只发 exe） |
-| zip SHA256 | 待登记 |
-| exe SHA256 | 待登记 |
-| app.asar SHA256 | 待登记 |
+| buildId | `20260921124125-bd8c2d5-0c200b` |
+| 分发 zip | `candidate-20260921124125-bd8c2d5-0c200b.zip`（133 MB，82 条目） |
+| zip SHA256 | `7b953fc8f9571230cb8668fbedae066a50f6bd6a0078fc30b1446ea5d9f14085` |
+| exe SHA256 | `bab39ac743d9d14bc5c7a82070dec480d7849782dce7ce47322e7c60e21afefd` |
+| app.asar SHA256 | `d4e5df653b3e740095189ed13a526138d27032baab114fb614fd366775c888eb`（968 条目 / unpacked 7） |
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 

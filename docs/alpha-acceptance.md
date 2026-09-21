@@ -17,14 +17,14 @@ A5（真实安装）、A6（干净环境）、A8（GO/NO-GO）需要用户授权
 
 | 项 | 值 |
 |---|---|
-| 候选版本 | **`0.1.0-alpha.2`**（package.json / package-lock.json 已同步；`private: true` 保留） |
-| buildId | **`20260919055321-f8bb4fb-e00e50`** |
-| 提交（来源） | `f8bb4fb0cc2a485856dc7c8d72f32ae7fff1e5de`「fix(verify): 归档顶层白名单补 LICENSE——与 A2-1 包内 LICENSE 决定同步」 |
-| 候选身份登记 | `candidate-20260919055321-f8bb4fb-e00e50/candidate-manifest.json`（schema `candidate-manifest/3`，`packMethod: electron-builder`，`reproducibleBuild: true`） |
-| 完成回执 | `candidate-20260919055321-f8bb4fb-e00e50/release-receipt.json`（schema `release-receipt/1`，绑定同一 buildId 与源码提交） |
-| 包目录 | `candidate-20260919055321-f8bb4fb-e00e50/win-unpacked` |
-| 平台 | Windows x64（仅开发机；未在 Windows 11 上实测）。**构建执行方式**：由 jc 在**桌面 cmd 会话**手动运行 `npm run release:build`——agent 自动化会话无独立 GPU 进程、`smoke:gui` 必崩（`docs/acceptance.md` §8，2026-09-19 修订补充） |
-| 目标 | OpenCode Desktop 1.18.29，用户级安装（未为了匹配白名单降级 OpenCode） |
+| 候选版本 | **`0.1.0-alpha.3`**（package.json / package-lock.json 已同步；`private: true` 保留） |
+| buildId | **`20260921124125-bd8c2d5-0c200b`** |
+| 提交（来源） | `bd8c2d50802aceab189b41ded457101e0ed9ff28`「chore(release): alpha.3 发布准备——版本号 0.1.0-alpha.3 + 发布说明草案」 |
+| 候选身份登记 | `candidate-20260921124125-bd8c2d5-0c200b/candidate-manifest.json`（schema `candidate-manifest/3`，`packMethod: electron-builder`，`reproducibleBuild: true`） |
+| 完成回执 | `candidate-20260921124125-bd8c2d5-0c200b/release-receipt.json`（schema `release-receipt/1`，绑定同一 buildId 与源码提交） |
+| 包目录 | `candidate-20260921124125-bd8c2d5-0c200b/win-unpacked` |
+| 平台 | Windows x64（仅开发机；未在 Windows 11 上实测）。**构建执行方式**：本轮由 agent 会话运行 `npm run release:build` 全链通过（含 `test:e2e:electron` 3.7s 与 `smoke:gui` 26.4s 空参数）——§8.1「agent 会话 smoke 必崩」按 2026-09-21 实况修订为**会话环境相关**，见第 5.0 节 |
+| 目标 | OpenCode Desktop 1.18.29（白名单完整验证）；非白名单版本自本轮起可经结构验证通道应用（真机 1.18.31 实测结构兼容） |
 | 签名 | 未签名（如实声明） |
 | zip / exe / app.asar SHA256 | 见 `docs/release-checklist.md` 第 1 节的机器可核对块（**不在本文件重复抄写**） |
 
@@ -46,6 +46,11 @@ schema `candidate-manifest/1`，手工重封，**不可重复构建**）早于 R
 `v0.1.0-alpha.1` 候选**（tag + 私有仓库 Release，见第 9.4 节），自 0.1.0-alpha.2
 候选登记后不再是当前候选；其 manifest、build-record、receipt 与哈希原样保留。
 本文件第 5–9 节中凡引用该 buildId 的记录均为历史事实，不随本轮改写。
+
+追加（2026-09-21）：`20260919055321-f8bb4fb-e00e50`（源 `f8bb4fb`）为**已发布的
+`v0.1.0-alpha.2` 候选**（tag + 私有仓库 Release，见第 9.5 节），自 0.1.0-alpha.3
+候选登记后不再是当前候选；其 manifest、build-record、receipt 与哈希原样保留。
+第 5.0（原文）与 9.5 节的记录为历史事实，不随本轮改写。
 
 ## 1. 基线（A0）
 
@@ -121,7 +126,45 @@ ImageStore 编译产物，**不触碰真机安装与真实运行数据目录**�
 
 ## 5. A4 全量回归与候选冻结
 
-### 5.0 当前候选（`0.1.0-alpha.2`，buildId `20260919055321-f8bb4fb-e00e50`）
+### 5.0 当前候选（`0.1.0-alpha.3`，buildId `20260921124125-bd8c2d5-0c200b`）
+
+构建于 2026-09-21，由 **agent 会话**运行 `npm run release:build` 一次跑满，无拦停轮。
+完整链 12 项全部 `passed`（取自该候选 `build-record.json`）：
+
+| 步骤 | 退出码 | 耗时 |
+|---|---|---|
+| `typecheck` | 0 | 8.1s |
+| `lint` | 0 | 6.6s |
+| `test:unit` | 0 | 9.6s |
+| `build` | 0 | 8.9s |
+| `test:integration` | 0 | 60.9s |
+| `test:e2e` | 0 | 35.3s |
+| `test:e2e:electron` | 0 | 3.7s |
+| `audit` | 0 | 1.3s |
+| `dist` | 0 | 61.8s |
+| `smoke:gui` | 0 | 26.4s（空参数默认配置，与双击等价） |
+| `verify-package` | 0 | 1.5s |
+| `zip` | 0 | — |
+
+（具体测试数量以同轮次独立运行为准：unit 335 / integration 183 / e2e 16；
+链内日志未整存，按本文档口径不抄写。）
+
+登记后核验：`verify:release` core 16 项 0 失败 → 发布级终检 **18 项 0 失败，
+`RELEASE_GREEN`，`publishable=true`**，末行 `ALL_GREEN buildId=20260921124125-bd8c2d5-0c200b`。
+侧车 `candidate-20260921124125-bd8c2d5-0c200b.zip.sha256.txt` 已于登记后、分发前生成（exe/asar/zip 三行）。
+
+**G1/§8.1 再次修订（重要，2026-09-21）**：本轮 `test:e2e:electron` 与 `smoke:gui`
+在 agent 会话真实通过（耗时与 alpha.2 桌面轮同量级），说明前轮「agent 会话 smoke 必崩
+（`0x80000003`）」是**当时会话环境现象**，不是恒定约束；此后不再预设 agent 会话不可跑
+Electron 步骤，以每次链运行的真实退出码为准。
+「真机 GUI 视觉观察归 jc」的职责划分不变（机器退出码证明不了观感）。
+
+本轮相对 alpha.2 的源码增量：P2 占位符修复（`bee960b`）+ 两通道放行模型
+structural-compat S1–S5（`a9e4f53`..`8e8cc5b`），详见 `docs/compatibility.md` 2026-09-21 节。
+
+> 以下 5.0a / 5.1 / 5.2 小节为**历史记录**，原文保留不改写。
+
+### 5.0a 历史候选（`0.1.0-alpha.2`，buildId `20260919055321-f8bb4fb-e00e50`）
 
 构建于 2026-09-19，由 jc 在**桌面 cmd 会话**手动运行 `npm run release:build`。
 完整链 12 项全部 `passed`（取自该候选 `build-record.json`）：

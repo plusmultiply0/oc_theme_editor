@@ -265,3 +265,17 @@ e2e/e2e:electron/audit/dist），停在 smoke:gui；只到 `win-unpacked`，未 
 该候选仍停在 smoke:gui、未登记不可发布，是否弃用并入 alpha.2 线待用户决策。
 三条过程偏差与新候选登记详见 `docs/alpha-acceptance.md` §5.0 与
 `docs/release-checklist.md` §2.3/§3。
+
+### 8.2 修订追加（2026-09-21，alpha.3 跑链实证）
+
+8.1 中「agent 自动化会话空参数 spawn **必然** 0x80000003 崩溃」一条**再次修订**：
+该现象并非 agent 会话的固有属性，而是**会话环境相关**——
+
+- 2026-09-21 本轮 `npm run release:build` 在 **agent 会话**内一次跑满 12 步全绿，
+  其中 `test:e2e:electron` 以 3.7s 通过（38/38），`smoke:gui` 以**默认空参数**
+  26.4s 通过（`SMOKE_OK`），末行 `ALL_GREEN buildId=20260921124125-bd8c2d5-0c200b`。
+- 因此「哪类会话能跑 smoke:gui」不再是可靠判据，**以每次链运行的实际退出码为准**；
+  跑不动时按 8/8.1 的取证路径排查，不要把「必然崩」当先验结论。
+
+**不变的部分**：8.1 的分工结论仍然成立——**真机 GUI 视觉观察与 A5 走查归 jc**
+（G1 职责条款）；链跑通只证明构建与冒烟资格，不替代人对画面观感的确认。

@@ -258,6 +258,11 @@ export async function inspectRoot(root: string): Promise<Result<InspectOutcome>>
     fingerprint: snapshot.data.sha256,
     support: supported ? 'supported' : 'unknown',
     ...(supported ? { verifiedBy: inWhitelist ? ('whitelist' as const) : ('structural' as const) } : {}),
+    ...(supported && !inWhitelist && compat
+      ? {
+          compatChecks: compat.checks.map(({ key, name, status, detail }) => ({ key, name, status, detail })),
+        }
+      : {}),
     ...(supported
       ? inWhitelist
         ? {}

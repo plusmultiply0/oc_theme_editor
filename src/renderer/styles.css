@@ -139,6 +139,29 @@ a:focus-visible {
   border-color: #f4c7c2;
 }
 
+/* structural 通道：提示蓝而非验证绿，避免与白名单「supported」观感混同（S3）；放在 .badge.supported 之后以覆盖其配色 */
+.badge.structural {
+  background: #e8f0fb;
+  color: var(--ui-primary);
+  border-color: #c6d9f2;
+}
+
+.compat-status {
+  font-weight: 600;
+}
+
+.compat-status.PASS {
+  color: var(--ui-ok);
+}
+
+.compat-status.WARN {
+  color: var(--ui-warn);
+}
+
+.compat-status.FAIL {
+  color: var(--ui-danger);
+}
+
 .reason {
   color: var(--ui-warn);
 }

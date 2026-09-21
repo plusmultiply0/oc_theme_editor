@@ -13,6 +13,7 @@ import { SUPPORTED_FORMATS_HINT } from '../shared/image-formats';
 import Preview from './components/Preview';
 import ContrastPanel from './components/ContrastPanel';
 import ApplyDialog from './components/ApplyDialog';
+import StructuralConfirmDialog from './components/StructuralConfirmDialog';
 import RestorePanel from './components/RestorePanel';
 import RecoveryPanel from './components/RecoveryPanel';
 import {
@@ -93,6 +94,8 @@ export default function App() {
   const [summary, setSummary] = useState<StageSummary | null>(null);
   const [scale, setScale] = useState<number>(loadScale);
   const [notice, setNotice] = useState<string | null>(null);
+  /** structural 目标的应用前置确认（S3），不影响 UiState 九类状态 */
+  const [pendingStructural, setPendingStructural] = useState(false);
   /** 实际内容格式的显示名（由主进程按 magic bytes 识别，不是后缀） */
   const [imageFormat, setImageFormat] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -319,7 +322,7 @@ export default function App() {
     });
   }, []);
 
-  const stage = useCallback(async () => {
+  const stage = useCallback(async (confirmStructural: boolean) => {
     if (!target) return;
     if (!canStage({ ...gate, busy: isBusy(ui) })) return;
     setUi({ kind: 'staging' });
@@ -327,6 +330,7 @@ export default function App() {
       targetId: target.targetId,
       imageId: spec.imageId,
       spec,
+      confirmStructural,
     });
     if (!r.success) {
       await refreshRecovery();
@@ -340,7 +344,11 @@ export default function App() {
   const apply = useCallback(async () => {
     if (!summary) return;
     setUi({ kind: 'applying', phase: '正在写入应用资源…' });
-    const r = await window.themeSwitcher.applyTheme({ operationId: summary.operationId });
+    const r = await window.themeSwitcher.applyTheme({
+      operationId: summary.operationId,
+      // 前置确认框已给过；后端 apply 入口还会按同一标志再核一次（S2）
+      ...(target?.verifiedBy === 'structural' ? { confirmStructural: true } : {}),
+    });
     setSummary(null);
     if (!r.success) {
       await refreshRecovery();
@@ -349,7 +357,7 @@ export default function App() {
     }
     setUi({ kind: 'success', message: `已应用（${formatDateTime(r.data.createdAt)}）。请重新启动 OpenCode 查看效果。` });
     await refreshBackups(target?.targetId ?? '');
-  }, [fail, refreshBackups, refreshRecovery, summary, target?.targetId]);
+  }, [fail, refreshBackups, refreshRecovery, summary, target?.targetId, target?.verifiedBy]);
 
   const restore = useCallback(
     async (kind: 'original' | 'previous' | 'takeover') => {
@@ -409,7 +417,13 @@ export default function App() {
           <div className="target">
             {target ? (
               <>
-                <span className={`badge ${target.support}`}>{target.support}</span>
+                {target.verifiedBy === 'structural' ? (
+                  <span className="badge supported structural" title="此版本未列入白名单，已通过代码结构验证">
+                    结构验证通过
+                  </span>
+                ) : (
+                  <span className={`badge ${target.support}`}>{target.support}</span>
+                )}
                 <span className="mono">{target.version}</span>
                 <span className="muted">{target.installPath}</span>
                 {target.rejectReason ? <span className="reason">{target.rejectReason}</span> : null}
@@ -526,7 +540,14 @@ export default function App() {
             <button
               className="btn primary"
               type="button"
-              onClick={() => void stage()}
+              onClick={() => {
+                // structural 通道先过逐项确认框，确认后才进入准备/应用流程（S3）
+                if (target?.verifiedBy === 'structural') {
+                  setPendingStructural(true);
+                  return;
+                }
+                void stage(false);
+              }}
               disabled={Boolean(blocked) || isBusy(ui)}
               title={blocked ?? undefined}
             >
@@ -672,6 +693,17 @@ export default function App() {
             setUi({ kind: 'ready' });
           }}
           onConfirm={() => void apply()}
+        />
+      ) : null}
+
+      {pendingStructural && target?.verifiedBy === 'structural' ? (
+        <StructuralConfirmDialog
+          target={target}
+          onCancel={() => setPendingStructural(false)}
+          onConfirm={() => {
+            setPendingStructural(false);
+            void stage(true);
+          }}
         />
       ) : null}
     </div>

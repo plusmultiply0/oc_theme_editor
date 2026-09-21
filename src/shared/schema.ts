@@ -83,6 +83,14 @@ export const TargetSupportSchema = z.enum(['supported', 'unsupported', 'unknown'
 /** supported 的两条来源通道（structural-compat 计划）：名单命中或结构验证通过 */
 export const TargetVerifiedBySchema = z.enum(['whitelist', 'structural']);
 
+/** 结构验证逐项结论（供 UI 确认框列证据；判据来自 core/patch/compat-check） */
+export const TargetCompatCheckSchema = z.object({
+  key: z.enum(['anchor', 'changeSet', 'unpacked']),
+  name: z.string().min(1),
+  status: z.enum(['PASS', 'WARN', 'FAIL']),
+  detail: z.string(),
+});
+
 export const TargetInfoSchema = z.object({
   targetId: z.string().min(1),
   /** canonicalize 后的真实绝对路径，仅在主进程持有与展示 */
@@ -97,6 +105,8 @@ export const TargetInfoSchema = z.object({
   rejectReason: z.string().optional(),
   /** support 为 supported 时的放行通道；structural 表示非名单版本经代码结构验证 */
   verifiedBy: TargetVerifiedBySchema.optional(),
+  /** structural 通道的逐项结构检查结论（S3 确认框展示用） */
+  compatChecks: z.array(TargetCompatCheckSchema).optional(),
 });
 
 export const ContrastTargetSchema = z.enum(['text', 'largeText', 'ui', 'disabled']);
@@ -179,6 +189,7 @@ export type ThemeMode = z.infer<typeof ThemeModeSchema>;
 export type ThemeSpec = z.infer<typeof ThemeSpecSchema>;
 export type TargetSupport = z.infer<typeof TargetSupportSchema>;
 export type TargetVerifiedBy = z.infer<typeof TargetVerifiedBySchema>;
+export type TargetCompatCheck = z.infer<typeof TargetCompatCheckSchema>;
 export type TargetInfo = z.infer<typeof TargetInfoSchema>;
 export type ContrastTarget = z.infer<typeof ContrastTargetSchema>;
 export type ContrastEntry = z.infer<typeof ContrastEntrySchema>;

@@ -15,6 +15,7 @@ const api: ThemeSwitcherApi = {
   discoverTargets: () => ipcRenderer.invoke('discoverTargets'),
   chooseTargetDirectory: () => ipcRenderer.invoke('chooseTargetDirectory'),
   inspectTarget: (targetId) => ipcRenderer.invoke('inspectTarget', targetId),
+  launchTarget: (targetId) => ipcRenderer.invoke('launchTarget', targetId),
   getRecoveryStatus: () => ipcRenderer.invoke('getRecoveryStatus'),
   resolveRecovery: (input) => ipcRenderer.invoke('resolveRecovery', input),
   stageTheme: (input) => ipcRenderer.invoke('stageTheme', input),

@@ -11,9 +11,14 @@
  * 只能拿到主进程登记后的 targetId。
  */
 import { discoverTargets as scan, inspectRoot } from '../../core/patch/discover';
+import { adapterById } from '../../adapters/registry';
+import { systemProcessProbe, type ProcessProbe } from '../../core/patch/precheck';
 import { ok, fail, type Result } from '../../shared/errors';
 import type { TargetInfo } from '../../shared/schema';
 import type { DiscoveredTargets, RejectedTargetInfo, RegisterDirectoryResult } from '../../shared/ipc';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 export interface TargetServiceOptions {
   localAppData?: string;
@@ -21,6 +26,10 @@ export interface TargetServiceOptions {
   extraRoots?: string[];
   /** 是否查询 Windows 卸载登记表补充候选 */
   useRegistry?: boolean;
+  /** 进程探针（与 precheck 同口径），测试注入避免真的查系统 */
+  processProbe?: ProcessProbe;
+  /** 启动通道注入点：测试不真起进程 */
+  launchIo?: { exists: (p: string) => boolean; spawn: (exePath: string) => void };
 }
 
 export class TargetService {
@@ -44,8 +53,9 @@ export class TargetService {
     const rejected: RejectedTargetInfo[] = [];
     for (const o of outcomes) {
       if (o.kind === 'target') {
-        targets.push(o.target);
-        this.cache.set(o.target.targetId, o.target);
+        const t = await this.withProcessState(o.target);
+        targets.push(t);
+        this.cache.set(t.targetId, t);
       } else {
         rejected.push({
           path: o.rejected.path,
@@ -72,9 +82,10 @@ export class TargetService {
     if (!r.success) return r;
 
     if (r.data.kind === 'target') {
-      this.cache.set(r.data.target.targetId, r.data.target);
+      const t = await this.withProcessState(r.data.target);
+      this.cache.set(t.targetId, t);
       if (!this.extraRoots.includes(dir)) this.extraRoots.push(dir);
-      return ok({ target: r.data.target });
+      return ok({ target: t });
     }
 
     const rejected: RejectedTargetInfo = {
@@ -110,7 +121,71 @@ export class TargetService {
         r.data.rejected.recoveryHint,
       );
     }
-    this.cache.set(targetId, r.data.target);
-    return ok(r.data.target);
+    const t = await this.withProcessState(r.data.target);
+    this.cache.set(targetId, t);
+    return ok(t);
+  }
+
+  /** 按 adapter 声明的 exe 相对路径定位可执行文件；路径永远不出主进程 */
+  private resolveExePath(target: TargetInfo): Result<string> {
+    const adapter = adapterById(target.adapterId);
+    if (!adapter) {
+      return fail('TARGET_UNSUPPORTED', '找不到该目标对应的适配器', '请重新检测安装目标。');
+    }
+    const root = path.resolve(target.installPath);
+    const exePath = path.resolve(root, adapter.layout.exe);
+    // adapter 声明是固定的，但仍复验拼接结果落在安装根内——防声明被日后改坏
+    if (!exePath.toLowerCase().startsWith(root.toLowerCase() + path.sep)) {
+      return fail('INVALID_PARAMS', 'exe 路径越出安装根', '请重新检测安装目标。');
+    }
+    return ok(exePath);
+  }
+
+  private async withProcessState(target: TargetInfo): Promise<TargetInfo> {
+    const exe = this.resolveExePath(target);
+    if (!exe.success) return target;
+    try {
+      const state = await (this.opts.processProbe ?? systemProcessProbe)(exe.data);
+      return { ...target, processState: state };
+    } catch {
+      return { ...target, processState: 'unknown' };
+    }
+  }
+
+  /**
+   * 「启动 OpenCode」：detached spawn，不等待、不持句柄；单实例下二次启动会聚焦已有窗口。
+   * 失败只返回干净错误——不动归档、不改任何目标内容。
+   */
+  async launch(targetId: string): Promise<Result<{ launched: boolean }>> {
+    const t = this.get(targetId);
+    if (!t.success) return t;
+
+    const exe = this.resolveExePath(t.data);
+    if (!exe.success) return exe;
+
+    const io = this.opts.launchIo ?? {
+      exists: existsSync,
+      spawn: (exePath: string) => {
+        spawn(exePath, [], { detached: true, stdio: 'ignore' }).unref();
+      },
+    };
+    if (!io.exists(exe.data)) {
+      return fail(
+        'LAUNCH_FAILED',
+        '安装根下找不到目标可执行文件',
+        '目标可能已被移动或卸载，请重新检测后重试。',
+      );
+    }
+    try {
+      io.spawn(exe.data);
+    } catch (e) {
+      return fail(
+        'LAUNCH_FAILED',
+        `启动失败：${e instanceof Error ? e.message : String(e)}`,
+        '请从系统里手动打开 OpenCode，再回到本工具重试。',
+      );
+    }
+    this.cache.set(targetId, { ...t.data, processState: 'running' });
+    return ok({ launched: true });
   }
 }

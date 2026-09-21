@@ -180,6 +180,18 @@ export default function App() {
     }
   }, [fail, refreshTargets]);
 
+  /** U2：启动 OpenCode。renderer 只交 targetId，路径由主进程按适配器解析 */
+  const [launchedId, setLaunchedId] = useState('');
+  const launchTarget = useCallback(async () => {
+    if (!target) return;
+    const r = await window.themeSwitcher.launchTarget(target.targetId);
+    if (!r.success) {
+      fail(r.error);
+      return;
+    }
+    setLaunchedId(target.targetId);
+  }, [target, fail]);
+
   const refreshBackups = useCallback(async (id: string) => {
     if (!id) return;
     const r = await window.themeSwitcher.listBackups(id);
@@ -389,6 +401,16 @@ export default function App() {
         </div>
 
         <div className="topbar-right">
+          <button
+            className="btn primary"
+            type="button"
+            disabled={!target || isBusy(ui)}
+            onClick={() => void launchTarget()}
+          >
+            {target && (launchedId === target.targetId || target.processState === 'running')
+              ? '打开 OpenCode'
+              : '启动 OpenCode'}
+          </button>
           <div className="target">
             {target ? (
               <>

@@ -161,7 +161,7 @@ describe('R5 诊断', () => {
     const targets = new TargetService({
       localAppData: path.join(runtime, 'no-such-local'),
       extraRoots: [install.root],
-      useRegistry: false,
+      useRegistry: false, processProbe: async () => 'idle' as const,
     });
     const operations = new OperationService({
       runtimeRoot: runtime,

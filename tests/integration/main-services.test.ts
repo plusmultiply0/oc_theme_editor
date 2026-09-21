@@ -67,7 +67,7 @@ async function setup(version = '1.18.29', files?: Record<string, string>): Promi
   bus.subscribe((e) => events.push(e.phase));
 
   const images = new ImageStore({ runtimeRoot: runtime, picker: async () => [imageFile] });
-  const targets = new TargetService({ localAppData: path.join(runtime, 'no-such-local'), extraRoots: [install.root], useRegistry: false });
+  const targets = new TargetService({ localAppData: path.join(runtime, 'no-such-local'), extraRoots: [install.root], useRegistry: false, processProbe: async () => 'idle' as const });
   const themes = new ThemeService(images);
   const operations = new OperationService({
     runtimeRoot: runtime,

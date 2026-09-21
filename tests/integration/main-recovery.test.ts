@@ -65,7 +65,7 @@ describe('启动恢复服务（R7）', () => {
   it('bootstrap 会扫描到未完成事务并给出可判定的状态与可执行动作', async () => {
     const inst = await fixture();
     const runtime = tmp('ots-rec-runtime-');
-    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false, processProbe: async () => 'idle' as const });
     const discovered = await targets.discover();
     if (!discovered.success) throw new Error('discover failed');
     const target = discovered.data.targets[0];
@@ -91,7 +91,7 @@ describe('启动恢复服务（R7）', () => {
   it('目标处于中间状态时判为 needs_recovery 并阻断后续 apply', async () => {
     const inst = await fixture();
     const runtime = tmp('ots-rec-runtime2-');
-    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false, processProbe: async () => 'idle' as const });
     const discovered = await targets.discover();
     if (!discovered.success) throw new Error('discover failed');
     const target = discovered.data.targets[0];
@@ -129,7 +129,7 @@ describe('启动恢复服务（R7）', () => {
   it('未生效的事务按事实落成 failed，之后不再阻断', async () => {
     const inst = await fixture();
     const runtime = tmp('ots-rec-runtime3-');
-    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false, processProbe: async () => 'idle' as const });
     const discovered = await targets.discover();
     if (!discovered.success) throw new Error('discover failed');
     const target = discovered.data.targets[0];
@@ -153,7 +153,7 @@ describe('启动恢复服务（R7）', () => {
   it('bootstrap 会清掉残留准备区，但不碰备份与事务日志', async () => {
     const inst = await fixture();
     const runtime = tmp('ots-rec-runtime4-');
-    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false, processProbe: async () => 'idle' as const });
     const discovered = await targets.discover();
     if (!discovered.success) throw new Error('discover failed');
     const target = discovered.data.targets[0];
@@ -177,7 +177,7 @@ describe('启动恢复服务（R7）', () => {
 describe('手动指定安装目录（R6）', () => {
   it('登记一个包含归档的目录后，它成为可操作目标', async () => {
     const inst = await fixture();
-    const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false, processProbe: async () => 'idle' as const });
 
     // 一开始什么都找不到
     const before = await targets.discover();
@@ -196,7 +196,7 @@ describe('手动指定安装目录（R6）', () => {
 
   it('登记不认识的目录时返回具体原因，而不是含糊成功', async () => {
     const empty = tmp('ots-r6-empty-');
-    const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false, processProbe: async () => 'idle' as const });
     const r = await targets.registerDirectory(empty);
     expect(r.success).toBe(true);
     if (!r.success) return;
@@ -211,7 +211,7 @@ describe('手动指定安装目录（R6）', () => {
       files: { 'out/renderer/index.html': '<html><body>no head here</body></html>' },
     });
     installs.push(inst);
-    const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false, processProbe: async () => 'idle' as const });
     const r = await targets.registerDirectory(inst.root);
     expect(r.success).toBe(true);
     if (!r.success) return;
@@ -223,7 +223,7 @@ describe('手动指定安装目录（R6）', () => {
   it('apply 闸门：存在阻断性未完成事务时，写入在进入事务之前就被拒绝', async () => {
     const inst = await fixture();
     const runtime = tmp('ots-r7-guard-');
-    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false });
+    const targets = new TargetService({ localAppData: '', extraRoots: [inst.root], useRegistry: false, processProbe: async () => 'idle' as const });
     const discovered = await targets.discover();
     if (!discovered.success) throw new Error('discover failed');
     const target = discovered.data.targets[0];

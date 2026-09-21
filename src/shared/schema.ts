@@ -107,6 +107,8 @@ export const TargetInfoSchema = z.object({
   verifiedBy: TargetVerifiedBySchema.optional(),
   /** structural 通道的逐项结构检查结论（S3 确认框展示用） */
   compatChecks: z.array(TargetCompatCheckSchema).optional(),
+  /** 目标进程状态：由主进程服务用 precheck 同口径探针补充（launch 按钮文案），非 core 判据 */
+  processState: z.enum(['idle', 'running', 'unknown']).optional(),
 });
 
 export const ContrastTargetSchema = z.enum(['text', 'largeText', 'ui', 'disabled']);

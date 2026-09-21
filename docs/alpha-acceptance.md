@@ -510,3 +510,29 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
   遗留非阻塞项：P2 占位符缺陷修复轮、live-cli takeover 参数（工具面）、
   历史候选目录处置、演示素材、A7 隐私处置待 jc。
 
+### 9.6 发布执行记录（2026-09-21，alpha.3，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 指令链「同步 tag 与发布 alpha.3」→「跑 npm run release:build」。
+  本轮**未做 A5 真机复验**（含 structural 徽章/确认框走查），tag 注释如实标注
+  「A5 待做，未宣称 A8 签核」——与 alpha.1/alpha.2 的「复验通过后签核发布」先例**不同**，
+  属用户明示指令下的提前发布，风险口径以第 5.0 节链证据为准。
+- **链运行**：`npm run release:build` 在 **agent 会话**一次跑满 12 步全绿
+  （`smoke:gui` 空参数 26.4s `SMOKE_OK`），末行
+  `ALL_GREEN buildId=20260921124125-bd8c2d5-0c200b`。据此修订 `docs/acceptance.md`
+  §8.1「agent 会话 smoke 必崩」为会话环境相关（§8.2）。
+- **登记**：`fab237f`（README/acceptance/alpha-acceptance/release-checklist/
+  release-notes 五文件）；`doc-candidate-entry.cjs --check` 得
+  `DOC_ENTRY_OK`（文档、manifest、磁盘实算三方一致）；侧车
+  `.zip.sha256.txt` 已按规则生成于登记后、分发前（按 `.gitignore` `candidate-*.txt`
+  不入库，与先例一致）。
+- **tag**：`v0.1.0-alpha.3`（带注释，指向登记 HEAD `fab237f`，注释含 buildId、
+  zip SHA256 `7b953fc8…f14085`、相对 alpha.2 变化、已知限制含 A5 待做），
+  已推送 `origin`（`* [new tag]`）。
+- **Release（待执行）**：本机无 gh CLI，按先例由 jc 在 GitHub 网页创建 pre-release，
+  附件两件：`candidate-20260921124125-bd8c2d5-0c200b.zip`（133,378,495 B，
+  SHA256 `7b953fc8f9571230cb8668fbedae066a50f6bd6a0078fc30b1446ea5d9f14085`）+
+  同名 `.zip.sha256.txt`；正文用 `docs/release-notes-0.1.0-alpha.3.md` 全文。
+  **jc 回执后在本节补记 URL 与 Assets 可见性确认，此前不得称已发布。**
+- **核验边界与分发口径**：同 9.4/9.5——私有仓库受控分发，远程可见性以 jc 页面
+  回执为准；转公开前 A7 隐私处置清单必须先执行。
+

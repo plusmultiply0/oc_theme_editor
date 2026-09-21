@@ -50,8 +50,8 @@ interface Ctx {
 let ctx: Ctx | null = null;
 const cleanups: (() => void)[] = [];
 
-async function setup(version = '1.18.29'): Promise<Ctx> {
-  const install = await makeSyntheticInstall({ version });
+async function setup(version = '1.18.29', files?: Record<string, string>): Promise<Ctx> {
+  const install = await makeSyntheticInstall({ version, ...(files ? { files } : {}) });
   cleanups.push(install.cleanup);
 
   const runtime = fs.mkdtempSync(path.join(testTmpRoot(), 'ots-runtime-'));
@@ -296,14 +296,14 @@ describe('主进程服务：识别 → 生成 → 准备 → 应用 → 恢复',
 });
 
 describe('未验证目标', () => {
-  it('版本不在白名单时识别为 unknown，准备阶段直接拒绝', async () => {
-    const c = await setup('9.9.9');
+  it('非名单版本结构验证不通过时识别为 unknown，准备阶段直接拒绝', async () => {
+    const c = await setup('9.9.9', { 'out/renderer/index.html': '<html><body>no head here</body></html>' });
     const discovered = await c.targets.discover();
     expect(discovered.success).toBe(true);
     if (!discovered.success) return;
     const target = discovered.data.targets[0];
     expect(target.support).toBe('unknown');
-    expect(target.rejectReason).toContain('未经验证');
+    expect(target.rejectReason).toContain('结构验证未通过');
 
     const picked = await c.images.pick();
     if (!picked.success) throw new Error('pick failed');

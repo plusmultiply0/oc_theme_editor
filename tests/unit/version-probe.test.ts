@@ -1,16 +1,16 @@
 /**
  * version-probe 探测脚本（tools/version-probe.cjs）单元测试 —— 计划 V2。
  *
- * 六个场景全部对着**合成归档**跑（@electron/asar 真实打包），不触碰真实安装：
+ * 各场景全部对着**合成归档**跑（@electron/asar 真实打包），不触碰真实安装：
  *   1. 正常归档（锚点 1 次、无补丁文件、unpacked 在位）→ 全 PASS，退出 0；
  *   2. 锚点缺失 → 检查 4 FAIL，退出 1；
- *   3. 锚点两次 → 检查 4 WARN 但退出 0，报告注明需人工确认；
- *   4. 已含 oc-theme-custom.css → 检查 5 FAIL，退出 1；
+ *   3. 锚点两次 → 检查 4 FAIL，退出 1（S1 起判据收紧：落点不唯一即拒绝，不再 WARN）；
+ *   4. 已含第三方 oc-theme-custom.css（无归属标记）→ 检查 5 FAIL，退出 1；
  *   5. 包名不符 → 检查 2 FAIL，退出 1；
  *   6. 版本不在白名单 → 检查 7 标 unknown，其余照常执行，退出 0。
  *
- * 注入缝：probeInstall(root) 只吃目录路径，判据取自 out/ 生产模块——
- * 测试与真机跑的是同一套检查逻辑。
+ * 注入缝：probeInstall(root) 只吃目录路径，检查 4/5/6 消费 out/core/patch/compat-check
+ * ——判据与产品链路单一来源，测试与真机跑的是同一套检查逻辑。
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
@@ -90,7 +90,7 @@ describe('version-probe：七项检查与退出码约定', () => {
     expect(rep.exitCode).toBe(1);
   });
 
-  it('场景 3：</head> 出现两次 → 检查 4 WARN，退出 0 且注明人工确认', async () => {
+  it('场景 3：</head> 出现两次 → 检查 4 FAIL，退出 1（落点不唯一即拒绝）', async () => {
     const root = await makeProbeInstall({
       files: {
         'out/renderer/index.html':
@@ -98,10 +98,26 @@ describe('version-probe：七项检查与退出码约定', () => {
       },
     });
     const rep = await probe.probeInstall(root);
-    expect(check(rep, 4).status).toBe('WARN');
+    expect(check(rep, 4).status).toBe('FAIL');
     expect(check(rep, 4).detail).toContain('2 次');
-    expect(check(rep, 4).detail).toContain('人工');
-    expect(rep.conclusion).toBe('WARN');
+    expect(rep.conclusion).toBe('FAIL');
+    expect(rep.exitCode).toBe(1);
+  });
+
+  it('场景 3b：归档已含本工具产物（注入标记+生成标记齐全）→ 检查 5 PASS，再应用可覆盖', async () => {
+    const root = await makeProbeInstall({
+      files: {
+        'out/renderer/index.html':
+          '<!doctype html><html><head><title>t</title>' +
+          '<link rel="stylesheet" href="./oc-theme-custom.css"> <!-- opencode-theme-switcher -->\n' +
+          '</head><body></body></html>',
+        'out/renderer/oc-theme-custom.css': '/* 由 OpenCode 换肤助手生成；示例 */\nhtml{}',
+      },
+    });
+    const rep = await probe.probeInstall(root);
+    expect(check(rep, 4).status).toBe('PASS');
+    expect(check(rep, 5).status).toBe('PASS');
+    expect(check(rep, 5).detail).toContain('本工具产物');
     expect(rep.exitCode).toBe(0);
   });
 

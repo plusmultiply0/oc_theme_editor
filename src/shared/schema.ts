@@ -80,6 +80,9 @@ export const ThemeSpecSchema = z.object({
 
 export const TargetSupportSchema = z.enum(['supported', 'unsupported', 'unknown']);
 
+/** supported 的两条来源通道（structural-compat 计划）：名单命中或结构验证通过 */
+export const TargetVerifiedBySchema = z.enum(['whitelist', 'structural']);
+
 export const TargetInfoSchema = z.object({
   targetId: z.string().min(1),
   /** canonicalize 后的真实绝对路径，仅在主进程持有与展示 */
@@ -92,6 +95,8 @@ export const TargetInfoSchema = z.object({
   support: TargetSupportSchema,
   /** support 不为 supported 时的原因，UI 必须展示 */
   rejectReason: z.string().optional(),
+  /** support 为 supported 时的放行通道；structural 表示非名单版本经代码结构验证 */
+  verifiedBy: TargetVerifiedBySchema.optional(),
 });
 
 export const ContrastTargetSchema = z.enum(['text', 'largeText', 'ui', 'disabled']);
@@ -173,6 +178,7 @@ export type ThemeTokens = z.infer<typeof ThemeTokensSchema>;
 export type ThemeMode = z.infer<typeof ThemeModeSchema>;
 export type ThemeSpec = z.infer<typeof ThemeSpecSchema>;
 export type TargetSupport = z.infer<typeof TargetSupportSchema>;
+export type TargetVerifiedBy = z.infer<typeof TargetVerifiedBySchema>;
 export type TargetInfo = z.infer<typeof TargetInfoSchema>;
 export type ContrastTarget = z.infer<typeof ContrastTargetSchema>;
 export type ContrastEntry = z.infer<typeof ContrastEntrySchema>;

@@ -16,6 +16,7 @@ import type { TargetAdapter } from '../../adapters/types';
 import type { TargetInfo, TargetSupport } from '../../shared/schema';
 import { ok, type ErrorCode, type Result } from '../../shared/errors';
 import { canonicalize, instanceIdFromPath } from './paths';
+import { describeFailed, verifyStructure } from './compat-check';
 import { readAsar, readAsarPackage } from './asar';
 import { physicalIsDir, physicalIsFile } from './physical-fs';
 
@@ -244,7 +245,10 @@ export async function inspectRoot(root: string): Promise<Result<InspectOutcome>>
   }
 
   const version = pkg.data.version ?? '';
-  const supported = adapter.supportedVersions.includes(version);
+  const inWhitelist = adapter.supportedVersions.includes(version);
+  // 白名单未命中不再一票否决：跑只读结构验证，全过即经 structural 通道放行（S1）
+  const compat = inWhitelist ? null : await verifyStructure(snapshot.data, adapter);
+  const supported = inWhitelist || (compat !== null && compat.compatible);
   const target: TargetInfo = {
     targetId: `${adapter.id}:${instanceIdFromPath(canon.data)}`,
     installPath: canon.data,
@@ -253,10 +257,15 @@ export async function inspectRoot(root: string): Promise<Result<InspectOutcome>>
     adapterId: adapter.id,
     fingerprint: snapshot.data.sha256,
     support: supported ? 'supported' : 'unknown',
+    ...(supported ? { verifiedBy: inWhitelist ? ('whitelist' as const) : ('structural' as const) } : {}),
     ...(supported
-      ? {}
+      ? inWhitelist
+        ? {}
+        : {
+            rejectReason: `版本 ${version || '未知'} 未列入白名单（已验证：${adapter.supportedVersions.join('、')}），但已通过代码结构验证（锚点唯一、变更集合干净），允许应用；注意这与白名单版本的完整真机验证不同。`,
+          }
       : {
-          rejectReason: `版本 ${version || '未知'} 未经验证（已验证：${adapter.supportedVersions.join('、')}）；只允许预览，不允许应用。`,
+          rejectReason: `版本 ${version || '未知'} 未列入白名单（已验证：${adapter.supportedVersions.join('、')}），且结构验证未通过：${compat === null ? '未知' : describeFailed(compat)}；只允许预览，不允许应用。`,
         }),
   };
   return ok({ kind: 'target', target });

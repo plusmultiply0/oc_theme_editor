@@ -205,15 +205,19 @@ describe('手动指定安装目录（R6）', () => {
     expect(r.data.rejected?.recoveryHint).not.toBe('');
   });
 
-  it('登记未知版本时给出「未经验证」而不是当成可用目标', async () => {
-    const inst = await makeSyntheticInstall({ version: '9.9.9' });
+  it('登记未知版本且结构验证不通过时给出具体检查项，而不是当成可用目标', async () => {
+    const inst = await makeSyntheticInstall({
+      version: '9.9.9',
+      files: { 'out/renderer/index.html': '<html><body>no head here</body></html>' },
+    });
     installs.push(inst);
     const targets = new TargetService({ localAppData: '', extraRoots: [], useRegistry: false });
     const r = await targets.registerDirectory(inst.root);
     expect(r.success).toBe(true);
     if (!r.success) return;
     expect(r.data.target?.support).toBe('unknown');
-    expect(r.data.target?.rejectReason ?? '').toContain('未经验证');
+    expect(r.data.target?.rejectReason ?? '').toContain('结构验证未通过');
+    expect(r.data.target?.rejectReason ?? '').toContain('注入锚点');
   });
 
   it('apply 闸门：存在阻断性未完成事务时，写入在进入事务之前就被拒绝', async () => {

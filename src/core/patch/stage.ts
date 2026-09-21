@@ -23,6 +23,7 @@ import { extractArchive } from './archive-io';
 import { packArchiveInWorker } from './pack';
 import { physicalFsp, physicalSha256File } from './physical-fs';
 import { isSafeArchiveEntry, safeJoin } from './paths';
+import { HTML_INJECT_COMMENT } from './markers';
 import { analyzeThemeLayers, stripLinks } from './legacy-theme';
 import { verifyPackedResult, type EntryBaseline } from './archive-verify';
 
@@ -81,8 +82,6 @@ interface FileEntry {
   size: number;
   sha256: string;
 }
-
-const INJECT_COMMENT = '<!-- opencode-theme-switcher -->';
 
 /**
  * 结构性校验 HTML 注入结果（事故 F3；Alpha A3 加强）。
@@ -163,7 +162,7 @@ export function verifyStagedHtml(html: string, adapter: TargetAdapter): Result<{
     return fail('STAGE_FAILED', `HTML 入口中找不到注入锚点 ${anchor}`, '该版本可能不兼容；安装未被修改。');
   }
 
-  const facts = parseGateFacts(html, INJECT_COMMENT);
+  const facts = parseGateFacts(html, HTML_INJECT_COMMENT);
   if (facts.headStart < 0 || facts.headEnd < 0) {
     return fail(
       'STAGE_FAILED',
@@ -309,8 +308,8 @@ export function injectLink(html: string, cssHref: string, anchor: string): Resul
   if (!html.includes(anchor)) {
     return fail('STAGE_FAILED', 'HTML 入口中找不到注入锚点', '该版本可能不兼容；安装未被修改。');
   }
-  const cleaned = stripPreviousInjection(html, INJECT_COMMENT);
-  const link = `<link rel="stylesheet" href="${cssHref}"> ${INJECT_COMMENT}\n`;
+  const cleaned = stripPreviousInjection(html, HTML_INJECT_COMMENT);
+  const link = `<link rel="stylesheet" href="${cssHref}"> ${HTML_INJECT_COMMENT}\n`;
   return ok(cleaned.replace(anchor, `${link}${anchor}`));
 }
 

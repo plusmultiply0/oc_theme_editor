@@ -5,8 +5,9 @@
  * 全程只读：不写安装目录、不启动 GUI；PASS 也**不**改变 supportedVersions——
  * 进白名单仍是「代码改动 + 真机闭环 + 提交」的人工决策。
  *
- * 判据同源：布局 / 包名 / 锚点 / 变更集合全部取自 out/adapters 的生产声明，
- * 归档读取复用 out/core/patch/asar——禁止在本文件重抄一份定义。
+ * 判据同源：布局 / 包名取自 out/adapters 的生产声明；结构验证（检查 4/5/6）
+ * 直接消费 out/core/patch/compat-check——与产品链路同一把尺子，本文件不留第二份判据。
+ * 归档读取复用 out/core/patch/asar。
  *
  * 用法（先 npm run build）：
  *   node tools/version-probe.cjs <安装目录> [--json]
@@ -26,6 +27,7 @@ if (!fs.existsSync(path.join(OUT, 'main', 'index.js'))) {
 
 const { ADAPTERS } = require(path.join(OUT, 'adapters', 'registry'));
 const asar = require(path.join(OUT, 'core', 'patch', 'asar'));
+const compat = require(path.join(OUT, 'core', 'patch', 'compat-check'));
 const discover = require(path.join(OUT, 'core', 'patch', 'discover'));
 
 const PASS = 'PASS';
@@ -129,71 +131,20 @@ async function probeInstall(root, opts = {}) {
     ),
   );
 
-  // 检查 4（注入锚点）：数 adapter.injection.anchor 在 htmlEntry 中的出现次数
+  // 检查 4/5/6（注入锚点 / 变更集合归属 / unpacked 信息项）：
+  // 判据全部取自 core/compat-check（structural-compat S1 单一来源）——
+  // 本文件不得再抄一份独立实现；白名单外版本能否放行应用与产品链路同一把尺子。
   if (snapshot) {
-    const tr = await asar.readAsarText(snapshot, adapter.injection.htmlEntry);
-    if (!tr.success) {
-      checks.push(
-        check(4, '注入锚点', FAIL, 'readAsarText(htmlEntry)', `HTML 入口读不到：${adapter.injection.htmlEntry}`),
-      );
-    } else {
-      const n = tr.data.split(adapter.injection.anchor).length - 1;
-      checks.push(
-        check(
-          4,
-          '注入锚点',
-          n === 1 ? PASS : n > 1 ? WARN : FAIL,
-          `统计「${adapter.injection.anchor}」出现次数`,
-          n === 1
-            ? '恰好 1 次，注入位置唯一'
-            : n > 1
-              ? `${n} 次：注入前需人工确认落点（脚本不猜）`
-              : '0 次：HTML 结构已变，现行注入方案不适用',
-        ),
-      );
+    const report = await compat.verifyStructure(snapshot, adapter, { fs: fss });
+    const IDS = { anchor: 4, changeSet: 5, unpacked: 6 };
+    for (const c of report.checks) {
+      checks.push(check(IDS[c.key], c.name, c.status, c.basis, c.detail));
     }
   } else {
-    checks.push(check(4, '注入锚点', FAIL, 'readAsarText(htmlEntry)', '无归档可读'));
+    checks.push(check(4, '注入锚点', FAIL, 'core/compat-check：锚点唯一性', '无归档可读'));
+    checks.push(check(5, '变更集合归属', FAIL, 'core/compat-check：变更集合干净', '无归档可读'));
+    checks.push(check(6, 'unpacked 完整性（信息项）', FAIL, 'core/compat-check：unpacked 目录在位', '无归档可读'));
   }
-
-  // 检查 5（变更集合冲突）：补丁产物条目是否已在归档内
-  if (snapshot) {
-    const files = asar.listAsarFiles(snapshot.header);
-    const present = [adapter.injection.cssFile, adapter.injection.imageFile].filter((f) => files.includes(f));
-    checks.push(
-      check(
-        5,
-        '变更集合冲突',
-        present.length === 0 ? PASS : FAIL,
-        'listAsarFiles 查 cssFile/imageFile',
-        present.length === 0
-          ? `两文件均不存在（干净）；归档共 ${files.length} 条目`
-          : `已存在：${present.join('、')}——该安装打过补丁或有残留，先走恢复流程再评估`,
-      ),
-    );
-  } else {
-    checks.push(check(5, '变更集合冲突', FAIL, 'listAsarFiles', '无归档可读'));
-  }
-
-  // 检查 6（unpacked 完整性，信息项）
-  const unpackedDir = path.join(root, `${adapter.layout.archive}.unpacked`);
-  let unpackedCount = null;
-  if (fss.existsSync(unpackedDir)) {
-    try {
-      unpackedCount = countFiles(fss, unpackedDir);
-    } catch {
-      unpackedCount = -1;
-    }
-  }
-  checks.push(
-    check(
-      6,
-      'unpacked 完整性（信息项）',
-      unpackedCount === null ? WARN : PASS,
-      'resources/app.asar.unpacked 存在与条目数',
-      unpackedCount === null ? '不存在（本工具未挂过主题时属正常）' : `存在，${unpackedCount < 0 ? '条目数读取失败' : `${unpackedCount} 个文件`}`,
-    ),
-  );
 
   // 检查 7（白名单比对，信息项）：不在列只标 unknown，不中断
   const inList = version !== null && adapter.supportedVersions.includes(version);
@@ -227,18 +178,9 @@ async function probeInstall(root, opts = {}) {
     nextStep: hasFail
       ? '按上表 FAIL 项定位结构变化；probe 不做降级猜测，不改 supportedVersions。'
       : hasWarn
-        ? '无阻断项但含 WARN：白名单外版本需真机闭环后才可进 supportedVersions；锚点多处需人工确认落点。'
-        : '全部 PASS：可安排一轮真机闭环（导入→应用→重启→视觉→恢复）后再决策进白名单。',
+        ? '无阻断项但含 WARN：白名单外版本的结构判据以检查 4/5 为准（同产品链路）；进 supportedVersions 仍需真机闭环的人工决策。'
+        : '全部 PASS：结构验证与产品链路同判据通过；进白名单仍是「真机闭环 + 人工决策」。',
   };
-}
-
-function countFiles(fss, dir) {
-  let n = 0;
-  for (const ent of fss.readdirSync(dir, { withFileTypes: true })) {
-    if (ent.isDirectory()) n += countFiles(fss, path.join(dir, ent.name));
-    else n += 1;
-  }
-  return n;
 }
 
 /* ---------- 输出 ---------- */

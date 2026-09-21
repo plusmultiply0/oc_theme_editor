@@ -52,6 +52,7 @@ describe('目标识别（T30、T31）', () => {
     if (!r.success) return;
     const t = await expectTarget(r.data);
     expect(t.support).toBe('supported');
+    expect(t.verifiedBy).toBe('whitelist');
     expect(t.version).toBe('1.18.29');
     expect(t.channel).toBe('windows-local-user-install');
     expect(t.fingerprint).toMatch(/^[0-9a-f]{64}$/);
@@ -59,14 +60,34 @@ describe('目标识别（T30、T31）', () => {
     expect(t.targetId).toContain('opencode-desktop-win-asar');
   });
 
-  it('未验证版本判为 unknown，并给出原因，且不会被当成可应用目标', async () => {
+  it('未验证版本 + 结构验证通过 → structural 通道放行（S1）', async () => {
     const inst = await fixture({ version: '9.9.9' });
     const r = await inspectRoot(inst.root);
     expect(r.success).toBe(true);
     if (!r.success) return;
     const t = await expectTarget(r.data);
+    expect(t.support).toBe('supported');
+    expect(t.verifiedBy).toBe('structural');
+    // 说明性文案：如实区分「结构验证」与白名单的完整真机验证
+    expect(t.rejectReason ?? '').toContain('未列入白名单');
+    expect(t.rejectReason ?? '').toContain('结构验证');
+    expect(onlySupported([r.data])).toHaveLength(1);
+  });
+
+  it('未验证版本 + 锚点结构已变 → 维持 unknown，原因写明检查项', async () => {
+    const inst = await fixture({
+      version: '9.9.9',
+      files: { 'out/renderer/index.html': '<html><body>no head here</body></html>' },
+    });
+    const r = await inspectRoot(inst.root);
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    const t = await expectTarget(r.data);
     expect(t.support).toBe('unknown');
-    expect(t.rejectReason ?? '').toContain('未经验证');
+    expect(t.verifiedBy).toBeUndefined();
+    expect(t.rejectReason ?? '').toContain('结构验证未通过');
+    expect(t.rejectReason ?? '').toContain('注入锚点');
+    expect(t.rejectReason ?? '').toContain('只允许预览，不允许应用');
     expect(onlySupported([r.data])).toHaveLength(0);
   });
 

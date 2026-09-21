@@ -18,6 +18,7 @@ import { fail, ok, type Result } from '../../shared/errors';
 import { hexToRgb, composite, rgbToHex } from './contrast';
 import { bubbleLayerAlpha, overlayAlpha, panelAlpha, REGION_ALPHAS } from './surfaces';
 import { renderTokenCss } from './tokens';
+import { CSS_OWN_BANNER } from '../patch/markers';
 
 export interface RenderCssInput {
   tokens: ThemeTokens;
@@ -107,7 +108,7 @@ export function renderThemeCss(input: RenderCssInput): string {
   z-index: -1;
 }`;
 
-  return `/* 由 OpenCode 换肤助手生成；非官方本地资源定制，应用更新后可能失效。
+  return `/* ${CSS_OWN_BANNER}；非官方本地资源定制，应用更新后可能失效。
    token 名依据 OpenCode 1.18.29 官方 main CSS 的语义变量清单，不含终端与语法高亮。 */
 ${backgroundBlock}
 

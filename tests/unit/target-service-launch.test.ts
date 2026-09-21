@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { TargetService } from '../../src/main/services/target-service';
 import { adapterById } from '../../src/adapters/registry';
+import { OPENCODE_DESKTOP_ADAPTER } from '../../src/adapters/opencode-desktop';
 import { makeSyntheticInstall, type SyntheticInstall } from '../fixtures/synthetic-install';
 import type { TargetInfo } from '../../src/shared/schema';
 import type { ProcessState } from '../../src/core/patch/precheck';
@@ -92,5 +93,38 @@ describe('TargetService.launch（U2 启动通道）', () => {
     expect(r.error.code).toBe('LAUNCH_FAILED');
     expect(r.error.message).toContain('EACCES-simulated');
     expect(r.error.recoveryHint).toBeTruthy();
+  });
+});
+
+describe('launch exe 路径解析守卫（U3）', () => {
+  it('适配器声明逃逸安装根 → INVALID_PARAMS，不 spawn', async () => {
+    const spawns: string[] = [];
+    const { svc, target } = await harness({ spawn: (p) => spawns.push(p) });
+    const original = OPENCODE_DESKTOP_ADAPTER.layout.exe;
+    try {
+      // 模拟「日后适配器声明被改坏」：守卫必须拦住，而不是照着拼出去 spawn
+      OPENCODE_DESKTOP_ADAPTER.layout.exe = path.join('..', 'evil.exe');
+      const r = await svc.launch(target.targetId);
+      expect(r.success).toBe(false);
+      if (r.success) return;
+      expect(r.error.code).toBe('INVALID_PARAMS');
+      expect(spawns).toEqual([]);
+    } finally {
+      OPENCODE_DESKTOP_ADAPTER.layout.exe = original;
+    }
+  });
+
+  it('子目录相对声明仍在安装根内 → 正常解析', async () => {
+    const spawns: string[] = [];
+    const { svc, target, install } = await harness({ spawn: (p) => spawns.push(p) });
+    const original = OPENCODE_DESKTOP_ADAPTER.layout.exe;
+    try {
+      OPENCODE_DESKTOP_ADAPTER.layout.exe = path.join('bin', 'OpenCode.exe');
+      const r = await svc.launch(target.targetId);
+      expect(r.success).toBe(true);
+      expect(spawns).toEqual([path.resolve(install.root, 'bin', 'OpenCode.exe')]);
+    } finally {
+      OPENCODE_DESKTOP_ADAPTER.layout.exe = original;
+    }
   });
 });

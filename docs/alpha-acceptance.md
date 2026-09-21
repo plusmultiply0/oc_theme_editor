@@ -528,11 +528,15 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
 - **tag**：`v0.1.0-alpha.3`（带注释，指向登记 HEAD `fab237f`，注释含 buildId、
   zip SHA256 `7b953fc8…f14085`、相对 alpha.2 变化、已知限制含 A5 待做），
   已推送 `origin`（`* [new tag]`）。
-- **Release（待执行）**：本机无 gh CLI，按先例由 jc 在 GitHub 网页创建 pre-release，
+- **Release**：本机无 gh CLI，按先例由 jc 在 GitHub 网页创建 pre-release，
   附件两件：`candidate-20260921124125-bd8c2d5-0c200b.zip`（133,378,495 B，
   SHA256 `7b953fc8f9571230cb8668fbedae066a50f6bd6a0078fc30b1446ea5d9f14085`）+
-  同名 `.zip.sha256.txt`；正文用 `docs/release-notes-0.1.0-alpha.3.md` 全文。
-  **jc 回执后在本节补记 URL 与 Assets 可见性确认，此前不得称已发布。**
+  同名 `.zip.sha256.txt`；正文为 `docs/release-notes-0.1.0-alpha.3.md` 全文。
+  **2026-09-21 jc 网页回执（页面 URL）**：
+  `https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v0.1.0-alpha.3`。
+  附件可见性以该回执为准（私有仓库，wb 侧无匿名核验通道，同 9.4/9.5 口径）。
 - **核验边界与分发口径**：同 9.4/9.5——私有仓库受控分发，远程可见性以 jc 页面
   回执为准；转公开前 A7 隐私处置清单必须先执行。
+- 至此 alpha.3 发布轮 agent 侧与上传侧均闭环。**遗留**：A5 真机走查（structural
+  徽章/确认框，1.18.31 为天然对象）待 jc；A6 干净环境未验证。
 

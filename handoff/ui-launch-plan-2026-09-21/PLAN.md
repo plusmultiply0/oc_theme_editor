@@ -75,3 +75,14 @@ U1 与 U2 互不依赖，可任意顺序；各一个提交。
 - spawn 必须 `detached + unref + stdio:'ignore'`，不等待、不占用句柄；
 - 不动模拟预览层（mock-*/--p-*）任何样式与 token；
 - 缩放档移除是产品决定（jc 拍板），但 rem 弹性布局保留，系统级缩放适应能力不降级。
+
+## 执行记录（2026-09-21）
+
+- U1 顶栏收紧 + 缩放档移除：`ded5175`
+- U2 launchTarget 全链路（shared→preload→main IPC→TargetService.launch→顶栏按钮）：`958d0c1`
+- U3 守卫单测两例 + README 第 4 步按钮说明：`4d11f43`
+- 门禁：lint/typecheck 0；unit 342/342；playwright e2e 16/16；DOC_ENTRY_OK（README 改动后复验）。
+- 如实注记：`npm run test:e2e:electron` 本轮未单跑（automode 拦，先例同；留发布全链或桌面会话）；
+  before/after 截图在临时目录 `%TEMP%\ots-ui-shots\after-u1u2.png`，不入库；
+  新顶栏观感与「启动 OpenCode」真机点击归 jc（G1 视觉观察职责）。
+- 已推送：origin/main = `4d11f43`（3c37369..4d11f43 三提交）。

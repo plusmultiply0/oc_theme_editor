@@ -317,4 +317,36 @@ describe('未验证目标', () => {
     if (staged.success) return;
     expect(staged.error.code).toBe('TARGET_UNSUPPORTED');
   });
+
+  it('structural 通道：stage/apply 缺显式确认标志一律拒绝，带上后走通（S2）', async () => {
+    const c = await setup('9.9.9');
+    const discovered = await c.targets.discover();
+    expect(discovered.success).toBe(true);
+    if (!discovered.success) return;
+    const target = discovered.data.targets[0];
+    expect(target.support).toBe('supported');
+    expect(target.verifiedBy).toBe('structural');
+
+    const picked = await c.images.pick();
+    if (!picked.success) throw new Error('pick failed');
+    await c.images.import(picked.data.imageId);
+    const base = { targetId: target.targetId, imageId: picked.data.imageId, spec: spec(picked.data.imageId) };
+
+    const noConfirm = await c.operations.stage(base);
+    expect(!noConfirm.success && noConfirm.error.code).toBe('STRUCTURAL_CONFIRM_REQUIRED');
+
+    const staged = await c.operations.stage({ ...base, confirmStructural: true });
+    expect(staged.success).toBe(true);
+    if (!staged.success) return;
+
+    // 应用入口再要一次确认：只带了 operationId 的 apply 仍被拒
+    const applyNoConfirm = await c.operations.apply({ operationId: staged.data.operationId });
+    expect(!applyNoConfirm.success && applyNoConfirm.error.code).toBe('STRUCTURAL_CONFIRM_REQUIRED');
+
+    const applied = await c.operations.apply({ operationId: staged.data.operationId, confirmStructural: true });
+    expect(applied.success).toBe(true);
+    if (!applied.success) return;
+    expect(applied.data.status).toBe('applied');
+    expect(applied.data.version).toBe('9.9.9');
+  });
 });

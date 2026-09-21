@@ -26,6 +26,8 @@ export const ERROR_CODES = [
   'TARGET_RUNNING',
   'TARGET_HASH_MISMATCH',
   'TARGET_SIGNATURE_PROTECTED',
+  /** structural 通道（非名单版本经结构验证）应用前的显式确认缺失；缺省拒绝，未写任何东西 */
+  'STRUCTURAL_CONFIRM_REQUIRED',
 
   // 环境
   'PERMISSION_DENIED',

@@ -141,6 +141,8 @@ export interface StageThemeInput {
   targetId: string;
   imageId: string;
   spec: ThemeSpec;
+  /** structural 通道（非名单版本经结构验证放行）必须显式确认，缺省拒绝（S2） */
+  confirmStructural?: boolean;
 }
 
 /**
@@ -180,6 +182,8 @@ export interface StagedTheme {
 
 export interface ApplyThemeInput {
   operationId: string;
+  /** 同 stage：structural 目标应用前必须带显式确认标志（S2） */
+  confirmStructural?: boolean;
 }
 
 export interface BackupInfo {

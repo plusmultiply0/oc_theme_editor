@@ -6,6 +6,7 @@
  *
  * 安全约束：
  * - 未经验证的目标（support !== 'supported'）一律拒绝应用。
+ * - 应用入口竞态重验：inspect 之后归档被换（自动更新）→ 指纹比对 + 结构复核，不过即拒（S2）。
  * - 不修改可执行文件、不改安全开关、不强制结束进程。
  * - 重复应用同一主题直接返回已应用，不重复写盘。
  */
@@ -15,7 +16,8 @@ import { adapterById } from '../../adapters/registry';
 import type { TargetAdapter } from '../../adapters/types';
 import { fail, ok, type Result } from '../../shared/errors';
 import type { OperationEvent, OperationManifest, TargetInfo } from '../../shared/schema';
-import { readAsar, readAsarText } from './asar';
+import { readAsar, readAsarPackage, readAsarText } from './asar';
+import { describeFailed, verifyStructure } from './compat-check';
 import { physicalFsp } from './physical-fs';
 import { ensureDirs, originalDir, previousDir, runtimeDirs, type RuntimeLayout } from './layout';
 import { ensureOriginalBackup, createBackup, setBackupHealth } from './backup';
@@ -132,6 +134,32 @@ async function runApply(
   const beforeHash = snapshot.data.sha256;
 
   /*
+   * 竞态重验（structural-compat S2，安全核心）：inspect 与 apply 之间
+   * OpenCode 可能恰好自动更新，把归档整个换掉。指纹不一致就对新归档重跑
+   * verifyStructure——重验不过直接拒绝（此时尚未写任何东西）；
+   * 通过则刷新内存里的目标记录（版本、指纹）后继续。
+   */
+  let target = input.target;
+  if (target.fingerprint !== beforeHash) {
+    const compat = await verifyStructure(snapshot.data, adapter);
+    if (!compat.compatible) {
+      return fail(
+        'TARGET_HASH_MISMATCH',
+        `目标归档在识别之后发生了变化，结构复核未通过：${describeFailed(compat)}`,
+        '未写入任何内容；请重新检测目标后再应用。',
+        `inspect=${target.fingerprint} current=${beforeHash}`,
+      );
+    }
+    const pkg = await readAsarPackage(snapshot.data);
+    target = {
+      ...target,
+      fingerprint: beforeHash,
+      version: pkg.success ? (pkg.data.version ?? target.version) : target.version,
+    };
+    emit('inspected', '目标归档在识别后发生变化，已通过结构复核对齐记录', 5);
+  }
+
+  /*
    * F2 硬门禁（第一部分）：先证明「输入可信」，才开始任何备份/打包。
    * 事故里 staged 本来就是坏的也能一路走到 applied —— 这里是拦住它的第一道闸。
    * 基线部分在 ensureOriginalBackup 之后做（需要先有首次接管快照）。
@@ -173,7 +201,7 @@ async function runApply(
 
   // T32、T33：进程、写权限、磁盘
   const pre = await precheckTarget(
-    input.target,
+    target,
     {
       ...(input.hooks?.probe ? { probe: input.hooks.probe } : {}),
       archiveSize: snapshot.data.size,
@@ -225,7 +253,7 @@ async function runApply(
     schema: 1,
     operationId,
     targetId: input.target.targetId,
-    version: input.target.version,
+    version: target.version,
     adapterId: adapter.id,
     beforeHash,
     afterHash: staged.data.afterHash,
@@ -253,7 +281,7 @@ async function runApply(
   // 是否原版由证据判定，不再靠「看不到本工具标记」反推。
   const htmlText = await readAsarText(snapshot.data, adapter.injection.htmlEntry);
   const assessment = await assessOriginalEvidence({
-    version: input.target.version,
+    version: target.version,
     sha256: beforeHash,
     html: htmlText.success ? htmlText.data : '',
     adapter,
@@ -266,7 +294,7 @@ async function runApply(
   const original = await ensureOriginalBackup(originalDir(layout), {
     archivePath,
     expectedHash: beforeHash,
-    version: input.target.version,
+    version: target.version,
     evidence: assessment.evidence,
     note: assessment.note,
   });
@@ -285,7 +313,7 @@ async function runApply(
     archivePath,
     dir: previousDir(layout),
     kind: 'previous',
-    version: input.target.version,
+    version: target.version,
     expectedHash: beforeHash,
     ...(input.hooks?.corruptBackup ? { corruptAfterCopy: true } : {}),
   });

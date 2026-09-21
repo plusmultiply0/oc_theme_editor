@@ -25,6 +25,7 @@ import { listTx } from '../../src/core/patch/txlog';
 import { runtimeDirs } from '../../src/core/patch/layout';
 import { instanceIdFromPath } from '../../src/core/patch/paths';
 import { injectLink, verifyStagedHtml } from '../../src/core/patch/stage';
+import { CSS_OWN_BANNER } from '../../src/core/patch/markers';
 import { ADAPTER } from './helpers/adapter';
 import type { TargetInfo } from '../../src/shared/schema';
 
@@ -46,7 +47,9 @@ async function makeTarget(): Promise<{ inst: SyntheticInstall; target: TargetInf
 }
 
 function css(color: string): string {
-  return `html:root { --background-base: ${color}; }`;
+  // 带本工具生成标记：与真实产物（renderThemeCss 必带横幅）同构，
+  // 否则连续应用时 S2 竞态重验会把上一轮 CSS 当第三方占用而拒绝。
+  return `/* ${CSS_OWN_BANNER}（测试夹具） */\nhtml:root { --background-base: ${color}; }`;
 }
 
 /** 三张不同的图，保证内容指纹每次都变 */

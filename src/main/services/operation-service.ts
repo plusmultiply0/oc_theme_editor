@@ -118,6 +118,10 @@ export class OperationService {
         '未验证的目标只允许预览，不允许应用。',
       );
     }
+    // structural 通道（非名单版本经结构验证放行）必须带显式确认标志，缺省拒绝（S2）
+    if (target.data.verifiedBy === 'structural' && !input?.confirmStructural) {
+      return this.structuralConfirmRequired();
+    }
 
     const adapter = adapterById(target.data.adapterId);
     if (!adapter) {
@@ -268,7 +272,7 @@ export class OperationService {
         const clear = await this.opts.recoveryGuard();
         if (!clear.success) return clear;
       }
-      return await this.runApply(operationId);
+      return await this.runApply(operationId, input.confirmStructural === true);
     } catch (e) {
       return errorResult(e, 'INTERNAL');
     } finally {
@@ -276,7 +280,15 @@ export class OperationService {
     }
   }
 
-  private async runApply(operationId: string): Promise<Result<OperationManifest>> {
+  private structuralConfirmRequired(): Result<never> {
+    return fail(
+      'STRUCTURAL_CONFIRM_REQUIRED',
+      '该目标为非白名单版本经结构验证放行，应用前需要显式确认',
+      '请在确认对话框中核对结构验证结论并确认后再应用；安装未被修改。',
+    );
+  }
+
+  private async runApply(operationId: string, confirmStructural = false): Promise<Result<OperationManifest>> {
     // 准备记录按实例分散存放，这里逐个实例查找
     const found = await this.findStaged(operationId);
     if (!found) {
@@ -292,6 +304,10 @@ export class OperationService {
         target.data.rejectReason ?? '该目标未经验证',
         '未验证的目标只允许预览，不允许应用。',
       );
+    }
+    // 应用比准备更靠近写入：确认标志必须在 apply 入口重新给（S2，防 stage 后版本漂移）
+    if (target.data.verifiedBy === 'structural' && !confirmStructural) {
+      return this.structuralConfirmRequired();
     }
 
     const adapter = adapterById(target.data.adapterId);

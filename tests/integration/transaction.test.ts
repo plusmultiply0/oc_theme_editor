@@ -28,6 +28,7 @@ import {
 import { readAsar, readAsarText, sha256File, listAsarFiles, toArchivePath } from '../../src/core/patch/asar';
 import { collectUnpacked } from '../../src/core/patch/stage';
 import { instanceIdFromPath } from '../../src/core/patch/paths';
+import { CSS_OWN_BANNER } from '../../src/core/patch/markers';
 import type { TargetInfo } from '../../src/shared/schema';
 
 const installs: SyntheticInstall[] = [];
@@ -53,7 +54,9 @@ function runtimeLayout(installPath: string, root: string) {
 }
 
 function css(name: string): string {
-  return `:root { --background-base: ${name}; }`;
+  // 带本工具生成标记：模拟真实产物（renderThemeCss 必带横幅），
+  // 否则第二次应用时结构重验会把它当成第三方占用的 CSS 而拒绝。
+  return `/* ${CSS_OWN_BANNER}（测试夹具） */\n:root { --background-base: ${name}; }`;
 }
 
 type ApplyArgs = Parameters<typeof applyTheme>[0];
@@ -821,5 +824,58 @@ describe('备份健康标记与恢复（事故 F3）', () => {
     );
     const records = await listBackupRecords(dir);
     expect(records[0].health).toBe('unverified');
+  });
+});
+
+describe('竞态重验（structural-compat S2）', () => {
+  /** 模拟 OpenCode 自动更新：inspect 之后把归档整个换掉 */
+  async function swapArchive(inst: SyntheticInstall, opts: Parameters<typeof makeSyntheticInstall>[0]) {
+    const updated = await makeSyntheticInstall(opts);
+    installs.push(updated);
+    fs.copyFileSync(updated.archivePath, inst.archivePath);
+  }
+
+  it('识别后归档被换且结构已变（无锚点）→ 重验拒绝，未写任何东西', async () => {
+    const { inst, target } = await makeTarget();
+    await swapArchive(inst, {
+      version: '9.9.9',
+      files: { 'out/renderer/index.html': '<html><body>no head here</body></html>' },
+    });
+    const r = await doApply({
+      target,
+      runtimeRoot: newRuntime(),
+      css: css('#111111'),
+      imageBytes: Buffer.from('image-bytes'),
+      themeSummary: '测试主题',
+    });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.code).toBe('TARGET_HASH_MISMATCH');
+    expect(r.error.message).toContain('结构复核未通过');
+    const snap = await readAsar(inst.archivePath);
+    expect(snap.success).toBe(true);
+    if (snap.success) {
+      expect(listAsarFiles(snap.data.header)).not.toContain('out/renderer/oc-theme-custom.css');
+    }
+  });
+
+  it('识别后归档被换但结构仍适用 → 重验通过，版本记录对齐后继续', async () => {
+    const { inst, target } = await makeTarget();
+    expect(target.verifiedBy).toBe('whitelist');
+    await swapArchive(inst, { version: '9.9.9' });
+    const r = await doApply({
+      target,
+      runtimeRoot: newRuntime(),
+      css: css('#222222'),
+      imageBytes: Buffer.from('image-bytes'),
+      themeSummary: '测试主题',
+    });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.manifest.version).toBe('9.9.9');
+    expect(r.data.manifest.beforeHash).not.toBe(target.fingerprint);
+    const snap = await readAsar(inst.archivePath);
+    if (!snap.success) throw new Error('read asar failed');
+    expect(listAsarFiles(snap.data.header)).toContain('out/renderer/oc-theme-custom.css');
   });
 });

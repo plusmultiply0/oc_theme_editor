@@ -86,3 +86,10 @@ U1 与 U2 互不依赖，可任意顺序；各一个提交。
   before/after 截图在临时目录 `%TEMP%\ots-ui-shots\after-u1u2.png`，不入库；
   新顶栏观感与「启动 OpenCode」真机点击归 jc（G1 视觉观察职责）。
 - 已推送：origin/main = `4d11f43`（3c37369..4d11f43 三提交）。
+
+### 追加：2026-09-22 全门禁复验
+
+- typecheck/lint 0；unit 342/342；playwright e2e 首跑 3 例级联失败
+  （265 点「应用到 OpenCode」后 15s 确认框未出现，286/294 为其级联），
+  原样复跑 16/16（48s）。期间代码零变更（仅文档提交），按环境争用偶发处理、未改代码，
+  与 docs/acceptance.md §8.2 同类口径；若后续再现再立案诊断。

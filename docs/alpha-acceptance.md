@@ -562,3 +562,32 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
 - 至此 alpha.3 发布轮 agent 侧与上传侧均闭环。**遗留**：A5 真机走查（structural
   徽章/确认框，1.18.31 为天然对象）待 jc；A6 干净环境未验证。
 
+### 9.7 候选登记（2026-09-22，alpha.4，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 指令「npm run release:build 构建新候选包」→「继续走候选登记
+  （进文档 + 打 tag v0.1.0-alpha.4）」。本轮增量源码为 UI 轮 U1–U3（顶栏精简 +
+  「启动 OpenCode」按钮，`ded5175`/`958d0c1`/`4d11f43`），**未做新增功能的 A5 真机复验**，
+  tag 注释如实标注「真机观感归 jc」——延续 alpha.3 的「用户明示指令下发布、不宣称 A8 签核」口径。
+- **链运行**：`npm run release:build` 在 **agent 会话**一次跑满 12 步全绿，末行
+  `ALL_GREEN buildId=20260922050618-c48863e-769d1d`；`smoke:gui`（空参数，27.9s）与
+  `test:e2e:electron`（15.3s）均真实通过，是 alpha.3 轮「Electron 步骤能否跑以每次链
+  运行的真实退出码为准」修订之后的又一次实证。发布级只读终检 18 项 0 失败，
+  `RELEASE_GREEN`、`publishable=true`。
+- **候选身份**：buildId `20260922050618-c48863e-769d1d`，来源提交 `c48863e`（版本号
+  bump + 发布说明草案），`packMethod: electron-builder`，可重复构建。
+  zip SHA256 `4b25f17bec96e5ec3c36c5588f04741a63a84ddb0afd02ce3c627658b96469ae`、
+  exe SHA256 `8ed0c00d4a0c1e3cfead7ccd833c57ba918174bccd0ec500ae46b098ae07b97c`、
+  app.asar SHA256 `53970cdb39f133910458a52cc9f9c8d5456d6b7ef6e83c16f411897c79003422`
+  （968 条目 / unpacked 7）。
+- **中间构建定性**：09-22 另有一次 `ALL_GREEN` 试跑 `candidate-20260922045126-a374f2e-8ad1f2/`，
+  发生在版本号 bump **之前**、包内版本字段仍为 `0.1.0-alpha.3`，未做候选登记、无文档入口，
+  仅作排障现场保留、**勿分发**（已在 `release-checklist.md` §2.5 注明）。
+- **登记**：`doc-candidate-entry.cjs --manifest candidate-20260922050618-c48863e-769d1d/
+  candidate-manifest.json --check` 得 `DOC_ENTRY_OK`（文档、manifest、磁盘实算三方一致）；
+  侧车 `.zip.sha256.txt` 已按规则生成于登记后、分发前（按 `.gitignore` `candidate-*.txt`
+  不入库，与先例一致）。alpha.3 转历史（`release-checklist.md` §2.5）。
+- **tag / Release（待执行）**：tag `v0.1.0-alpha.4` 待打在候选登记 HEAD 并推送；
+  GitHub pre-release 与附件上传本机无 gh CLI，按先例由 jc 网页执行，回执后补记页面 URL。
+  **本节登记时不宣称已发布**，远程可见性以 jc 网页回执为准（同 9.4/9.5/9.6 口径）。
+
+

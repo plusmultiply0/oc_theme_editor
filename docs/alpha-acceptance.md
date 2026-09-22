@@ -586,8 +586,14 @@ S3 完成后的测试范围（如实记录）：**全量单元+集成 323 项通
   candidate-manifest.json --check` 得 `DOC_ENTRY_OK`（文档、manifest、磁盘实算三方一致）；
   侧车 `.zip.sha256.txt` 已按规则生成于登记后、分发前（按 `.gitignore` `candidate-*.txt`
   不入库，与先例一致）。alpha.3 转历史（`release-checklist.md` §2.5）。
-- **tag / Release（待执行）**：tag `v0.1.0-alpha.4` 待打在候选登记 HEAD 并推送；
-  GitHub pre-release 与附件上传本机无 gh CLI，按先例由 jc 网页执行，回执后补记页面 URL。
-  **本节登记时不宣称已发布**，远程可见性以 jc 网页回执为准（同 9.4/9.5/9.6 口径）。
+- **tag / Release**：tag `v0.1.0-alpha.4` 已打在候选登记 HEAD `15fe473` 并推送 `origin`
+  （`* [new tag]`）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4/9.5/9.6 先例）。
+  **2026-09-22 jc 网页回执（页面 URL）**：
+  `https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v0.1.0-alpha.4`。
+  附件可见性以该回执为准（私有仓库，wb 侧无匿名核验通道，同 9.4/9.5/9.6 口径）。
+  **本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
+- 至此 alpha.4 发布轮 agent 侧与上传侧均闭环。**遗留**：U1–U3（新顶栏观感 + 「启动
+  OpenCode」按钮）真机走查待 jc；A5 基线门阻塞限制未修（已入发布说明已知限制）；
+  A6 干净环境未验证。
 
 

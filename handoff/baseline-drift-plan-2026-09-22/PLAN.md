@@ -109,3 +109,26 @@ B1 自包含；B2 依赖 B1 的分类接口；B3 收尾。全部本机可完成�
 | 官方更新被误判为篡改（用户又卡住） | 阈值取保守 + 拒绝文案给出具体不一致条目样例与前 10 条明细（现状已有），用户可拿着明细反馈 |
 | 篡改伪装成整体更新（改 package.json 版本号 + 批量换文件） | 五条件含锚点/变更集合/unpacked 结构三重独立信号，伪造成本极高；剩余风险在 README 如实声明「结构级判定，非密码学校验」 |
 | 重新接管后「恢复首次接管快照」语义混乱 | takeover 快照文件不动，仅基线指针迁移；UI 文案注明基线已迁移到某版本 |
+
+## 执行记录（2026-09-22）
+
+- **B1 `c957272`**：`compareWithBaseline` 改为产出结构化差异（changed/missing/added/kindChanged）
+  不再一票否决；`classifyDrift` 纯函数五条件裁决（阈值命名常量 0.5/100）；基线文件升 v2 信封
+  （meta：version/fingerprint/unpackedPaths，旧裸数组读取兼容，legacy 从首次接管快照 meta.json 回推）；
+  旧基线 `baseline.v{N}.json` 序号归档永不删除；txlog 记 `rebaselined`+`baselineFromVersion`；
+  `verifyPackedResult` 产物门禁不放宽。PLAN 未明说的一处实现决策：**基线对应版本号来源**——
+  EntryBaseline 无版本字段，故 v2 信封存 version，legacy 场景从 original 备份记录回推
+  （jc 真机即 legacy，此路径无它则条件 1 永不过）。门禁：typecheck/lint 0，单测 342，集成 183。
+- **B2 `3ee6f0c`**：单测 24 例（五条件逐一打穿、49/51 边界、package.json 双通道、顺序无关、
+  常量固定、信封读写、序号归档）+ 集成 5 例端到端（正例放行链逐字节回归、局部篡改/锚点消失/
+  第三方占用/unpacked 变化四负例）。注：夹具 css 须带生成横幅（变更集合归属自证与产线同形态）。
+  门禁：单测 366，集成 188。
+- **B3 `bca0071`**：拒绝文案按 versionChanged 是否通过分两类（「疑似被官方更新但未达自动放行条件」
+  /「疑似第三方改动」），放行 emit 可见告知含新版本号；README/alpha.4 发布说明/alpha-acceptance §6
+  三处口径联动。门禁：typecheck/lint 0，单测 366，集成 188。
+- **遗留（如实）**：
+  - **真机 1070 条场景重应用复验未做**——由 jc 本机授权后执行，agent 门禁绿不等于真机复验完成；
+  - `e2e:electron` 本轮未单跑（改动集中于 core/apply 与文档，渲染层未动）；
+  - 修复**不在已发布的 alpha.4**，随下一候选生效；是否重开候选/发布轮由 jc 拍板；
+  - 排查中发现 README「唯一可用于验证与分发」段落仍指 alpha.3 候选（与 alpha.4 buildId 段落矛盾），
+    属预存在文档不一致，超本轮范围未动，待下轮发布登记时一并校正。

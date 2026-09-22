@@ -190,7 +190,16 @@ async function runApply(
     snapshot.data,
   );
   if (!baselineGate.success) return baselineGate;
-
+  if (baselineGate.data.rebaselined) {
+    // 放行对用户可见（B3）：进度事件里如实说明基线已随官方更新迁移
+    emit(
+      'inspected',
+      baselineGate.data.newVersion
+        ? `检测到目标已更新至 ${baselineGate.data.newVersion}，已自动更新基线（旧基线归档留存）`
+        : '检测到目标已整体更新，已自动更新基线（旧基线归档留存）',
+      5,
+    );
+  }
   // T42：重复应用同一主题且不重复写盘
   const themeHash = input.themeHash ?? computeThemeHash(input.css, input.imageBytes);
   const lastApplied = await latestApplied(layout);
@@ -493,6 +502,8 @@ interface BaselineGateResult {
   rebaselined: boolean;
   /** 重新接管前基线对应的版本号，供操作记录与文案消费 */
   previousVersion: string | null;
+  /** 重新接管后基线对应的版本号（当前归档），供进度与结果文案消费 */
+  newVersion: string | null;
 }
 
 /** 旧格式基线（裸数组，无元数据）时，从首次接管快照回推版本与 unpacked 集合 */
@@ -538,6 +549,7 @@ async function resolveBaselineGate(
         store: false,
         rebaselined: false,
         previousVersion: existing.data.meta?.version ?? null,
+        newVersion: null,
       });
     }
 
@@ -568,10 +580,18 @@ async function resolveBaselineGate(
       const basis = verdict.conditions
         .map((c) => `${c.passed ? '✓' : '✗'} ${c.key}：${c.detail}`)
         .join('；');
+      // 文案分两类（B3）：有版本变化证据的按「疑似官方更新但未达自动放行条件」，
+      // 其余按「疑似第三方改动」。拒绝本身不变——只是把实话说到对应的那扇门上。
+      const looksOfficial =
+        verdict.conditions.find((c) => c.key === 'versionChanged')?.passed === true;
       return fail(
         'ARCHIVE_CORRUPT',
-        `目标与首次接管快照不一致（${problems.length} 条），本次输入不可信`,
-        '请先用恢复入口回到接管时的状态，再重新应用。',
+        looksOfficial
+          ? `目标疑似被官方更新（${problems.length} 条与接管基线不一致），但未满足自动放行条件，本次输入不可信`
+          : `目标与首次接管快照不一致（${problems.length} 条），疑似第三方改动，本次输入不可信`,
+        looksOfficial
+          ? '看起来是 OpenCode 更新过但没通过自动接管判据（下方明细列出未过项）：请优先把本工具升级到适配新版本后重试；仍不行再走恢复入口，别直接按旧快照降级。'
+          : '请先用恢复入口回到接管时的状态，再重新应用；若确认没装过别的改包工具，请把明细反馈给开发者。',
         `${problems.slice(0, 10).join('；')}｜自动放行判定未通过：${basis}`,
       );
     }
@@ -590,6 +610,7 @@ async function resolveBaselineGate(
       store: true,
       rebaselined: true,
       previousVersion: baselineVersion,
+      newVersion: archiveVersion,
     });
   }
 
@@ -607,5 +628,6 @@ async function resolveBaselineGate(
     store: true,
     rebaselined: false,
     previousVersion: null,
+    newVersion: null,
   });
 }

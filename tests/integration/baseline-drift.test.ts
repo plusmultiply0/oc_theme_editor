@@ -75,6 +75,7 @@ async function applyThemeWith(
   runtime: string,
   target: Awaited<ReturnType<typeof targetOf>>,
   css: string,
+  events?: string[],
 ) {
   return applyTheme({
     target,
@@ -83,6 +84,7 @@ async function applyThemeWith(
     imageBytes: Buffer.from('image'),
     themeSummary: 'drift 验证用主题',
     hooks: { probe: async () => 'idle' },
+    ...(events ? { onEvent: (e) => events.push(e.message) } : {}),
   });
 }
 
@@ -118,10 +120,15 @@ describe('端到端：官方整体更新自动重新接管（A5 死循环的正�
     const updatedHash = await sha256File(inst.archivePath);
 
     // 3) 用更新前的目标记录重应用（A5 的真实链路）：分类判定 official-update → 放行
-    const second = await applyThemeWith(runtime, target, themeCss('#222222'));
+    const secondEvents: string[] = [];
+    const second = await applyThemeWith(runtime, target, themeCss('#222222'), secondEvents);
     expect(second.success).toBe(true);
     if (!second.success) return;
     expect(second.data.noop).toBe(false);
+    // 放行不是静默搬家：进度事件里告知基线已随更新迁移（B3）
+    expect(secondEvents.some((m) => m.includes('已更新至 1.18.31') && m.includes('已自动更新基线'))).toBe(
+      true,
+    );
     const appliedHash = await sha256File(inst.archivePath);
     expect(appliedHash).not.toBe(updatedHash);
 
@@ -216,7 +223,8 @@ describe('端到端：不满足自动放行条件的差异维持拒绝', () => {
     expect(t.r.success).toBe(false);
     if (!t.r.success) {
       expect(t.r.error.code).toBe('ARCHIVE_CORRUPT');
-      // 拒绝明细里能看到分类判定依据（versionChanged 未过）
+      // 版本没变 → 疑似第三方改动一类文案；明细里能看到分类判定依据
+      expect(t.r.error.message).toContain('疑似第三方改动');
       expect(t.r.error.detail ?? '').toContain('自动放行判定未通过');
       expect(t.r.error.detail ?? '').toContain('✗ versionChanged');
     }
@@ -292,6 +300,8 @@ describe('端到端：不满足自动放行条件的差异维持拒绝', () => {
     expect(t.r.success).toBe(false);
     if (!t.r.success) {
       expect(t.r.error.code).toBe('ARCHIVE_CORRUPT');
+      // 版本变了但原生模块集合不稳 → 「疑似官方更新但未达自动放行条件」一类文案
+      expect(t.r.error.message).toContain('疑似被官方更新');
       expect(t.r.error.detail ?? '').toContain('✗ unpackedSet');
     }
     await expectRejectedUntouched(t);

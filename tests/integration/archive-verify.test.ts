@@ -16,6 +16,7 @@ import {
   buildBaseline,
   checkScripts,
   compareWithBaseline,
+  countDrift,
   findSharedOffsetConflicts,
   scanArchive,
   verifyIntegrity,
@@ -221,19 +222,22 @@ describe('脚本可解析检查（哈希不能证明内容是好的）', () => {
   });
 });
 
-describe('接管基线比对（输入不可信必须拒绝）', () => {
-  it('首次接管以接手时状态为基线；之后被外部改动的归档必须拒绝', async () => {
+describe('接管基线比对（差异结构化，裁决由分类负责）', () => {
+  it('首次接管以接手时状态为基线；之后被外部改动的归档要报出结构化差异', async () => {
     const inst = await fixture();
     const baseline = await buildBaseline(inst.archivePath, isAllowed);
     expect(baseline.success).toBe(true);
     if (!baseline.success) return;
-    expect(baseline.data.size).toBeGreaterThan(0);
+    expect(baseline.data.entries.size).toBeGreaterThan(0);
 
     // 外部改动一个非白名单条目（语义上等价于「已被外部工具改过」）
     overwriteEntry(inst.archivePath, 'out/main/index.js', 'console.log(2);\n');
-    const cmp = await compareWithBaseline(inst.archivePath, baseline.data, { isAllowed });
-    expect(cmp.success).toBe(false);
-    if (!cmp.success) expect(cmp.error.message).toContain('首次接管');
+    const cmp = await compareWithBaseline(inst.archivePath, baseline.data.entries, { isAllowed });
+    expect(cmp.success).toBe(true);
+    if (!cmp.success) return;
+    // 比对只如实产出差异清单；「拒绝与否」由 classifyDrift/apply 裁决（B2 覆盖）
+    expect(countDrift(cmp.data.drift)).toBe(1);
+    expect(cmp.data.drift.changed[0]?.path).toBe('out/main/index.js');
   });
 
   it('白名单条目允许与基线不同（它们本来就是要被替换的）', async () => {
@@ -242,8 +246,10 @@ describe('接管基线比对（输入不可信必须拒绝）', () => {
     if (!baseline.success) throw new Error(baseline.error.message);
     // 伪造一个「白名单条目内容不同」的归档：直接改 HTML 的前 15 字节
     overwriteEntry(inst.archivePath, 'out/renderer/index.html', '<!doctype html>');
-    const cmp = await compareWithBaseline(inst.archivePath, baseline.data, { isAllowed });
+    const cmp = await compareWithBaseline(inst.archivePath, baseline.data.entries, { isAllowed });
     expect(cmp.success).toBe(true);
+    if (!cmp.success) return;
+    expect(countDrift(cmp.data.drift)).toBe(0);
   });
 });
 

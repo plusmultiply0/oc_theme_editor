@@ -173,6 +173,10 @@ export const OperationManifestSchema = z.object({
   themeHash: z.string().optional(),
   /** 本次使用的备份来源，恢复时用于校验 */
   backupKind: z.enum(['original', 'previous', 'pre-restore']).optional(),
+  /** 本次应用前发生了自动放行式重新接管（基线已按官方更新迁移） */
+  rebaselined: z.boolean().optional(),
+  /** 重新接管前基线对应的版本号（旧基线文件已按序号归档留存） */
+  baselineFromVersion: z.string().optional(),
 });
 
 /** IPC 事件：带 operationId、phase、message；只在可计量时给百分比（T15） */

@@ -16,22 +16,32 @@ import { adapterById } from '../../adapters/registry';
 import type { TargetAdapter } from '../../adapters/types';
 import { fail, ok, type Result } from '../../shared/errors';
 import type { OperationEvent, OperationManifest, TargetInfo } from '../../shared/schema';
-import { readAsar, readAsarPackage, readAsarText } from './asar';
+import { readAsar, readAsarPackage, readAsarText, type AsarSnapshot } from './asar';
 import { describeFailed, verifyStructure } from './compat-check';
 import { physicalFsp } from './physical-fs';
 import { ensureDirs, originalDir, previousDir, runtimeDirs, type RuntimeLayout } from './layout';
-import { ensureOriginalBackup, createBackup, setBackupHealth } from './backup';
+import {
+  ensureOriginalBackup,
+  createBackup,
+  listBackupRecords,
+  setBackupHealth,
+} from './backup';
 import { assessOriginalEvidence } from './original-evidence';
 import { stageChanges, type StageResult } from './stage';
 import {
+  archiveCurrentBaselineFile,
   buildBaseline,
   checkScripts,
+  classifyDrift,
   compareWithBaseline,
+  countDrift,
+  describeDrift,
   findSharedOffsetConflicts,
   readBaselineFile,
   scanArchive,
   verifyIntegrity,
   writeBaselineFile,
+  type BaselineMeta,
   type EntryBaseline,
 } from './archive-verify';
 import { commitStaged, type CommitHooks } from './commit';
@@ -170,9 +180,15 @@ async function runApply(
   /*
    * F2 硬门禁（第二部分）：与首次接管基线比对。
    * 基线文件不存在时（首次接管），以**接手那一刻**的归档为基线 ——
-   * 那是本工具唯一能为它担保的状态；此后每次应用都必须与它一致。
+   * 那是本工具唯一能为它担保的状态；此后每次应用都与它比对，
+   * 不一致按差异分类裁决（官方整体更新→重新接管；零星改动→拒绝）。
    */
-  const baselineGate = await resolveBaselineGate(archivePath, adapter, originalDir(layout));
+  const baselineGate = await resolveBaselineGate(
+    archivePath,
+    adapter,
+    originalDir(layout),
+    snapshot.data,
+  );
   if (!baselineGate.success) return baselineGate;
 
   // T42：重复应用同一主题且不重复写盘
@@ -264,6 +280,11 @@ async function runApply(
     createdAt: new Date().toISOString(),
     kind: 'apply',
     themeHash,
+    // 重新接管落证据：基线已从旧版本迁移（旧基线文件按序号归档在同目录）
+    ...(baselineGate.data.rebaselined ? { rebaselined: true } : {}),
+    ...(baselineGate.data.rebaselined && baselineGate.data.previousVersion
+      ? { baselineFromVersion: baselineGate.data.previousVersion }
+      : {}),
     phases: [{ phase: 'inspected', at: new Date().toISOString() }],
     targetPath: archivePath,
   };
@@ -300,9 +321,18 @@ async function runApply(
   });
   if (!original.success) return original;
 
-  // 首次接管：把接手时的基线与快照一起保存，之后每次应用都与它比对
-  if (baselineGate.data.created) {
-    const stored = await writeBaselineFile(originalDir(layout), baselineGate.data.baseline);
+  // 首次接管：把接手时的基线与快照一起保存，之后每次应用都与它比对。
+  // 重新接管：先按序号归档旧基线（永不覆盖删除），再写新基线。
+  if (baselineGate.data.store) {
+    if (baselineGate.data.rebaselined) {
+      const archived = await archiveCurrentBaselineFile(originalDir(layout));
+      if (!archived.success) return archived;
+    }
+    const stored = await writeBaselineFile(
+      originalDir(layout),
+      baselineGate.data.baseline,
+      baselineGate.data.meta,
+    );
     if (!stored.success) return stored;
   }
 
@@ -442,32 +472,140 @@ async function verifyTargetArchive(
 }
 
 /**
- * F2 硬门禁第二部分：解析基线并把当前归档与之比对。
+ * F2 硬门禁第二部分：解析基线并把当前归档与之比对，**对差异分类裁决**。
  *
- * - 基线文件已存在（非首次接管）→ 当前归档的非白名单条目必须与它完全一致；
- *   相对接管时被外部改动/已损坏的输入必须拒绝 —— 不能为坏内容重算 hash 后放行。
- * - 基线文件不存在（首次接管）→ 以接手那一刻的归档为基线，不做比对（它就是基准本身）；
+ * - 基线文件不存在（首次接管）→ 以接手那一刻的归档为基线（它就是基准本身），
  *   调用方在首次接管快照落盘后把基线一起保存。
+ * - 与基线完全一致 → 照常继续。
+ * - 有差异时经 classifyDrift 五条件裁决（baseline-drift B1）：
+ *   official-update（OpenCode 自动更新整体换归档）→ 以当前归档重建基线，
+ *   旧基线由调用方按序号归档留存后继续应用；
+ *   suspicious（局部篡改、锚点丢失、原生模块集合变化等）→ 照旧拒绝，
+ *   硬门禁的防篡改职责不放宽——只是不再把官方更新也一并挡死。
  */
+interface BaselineGateResult {
+  baseline: Map<string, EntryBaseline>;
+  meta: BaselineMeta;
+  compared: number;
+  /** 需要落盘基线（首次接管或重新接管） */
+  store: boolean;
+  /** 重新接管：落盘前必须先把旧基线按序号归档 */
+  rebaselined: boolean;
+  /** 重新接管前基线对应的版本号，供操作记录与文案消费 */
+  previousVersion: string | null;
+}
+
+/** 旧格式基线（裸数组，无元数据）时，从首次接管快照回推版本与 unpacked 集合 */
+async function deriveLegacyBaselineContext(
+  originalBackupDir: string,
+  adapter: TargetAdapter,
+): Promise<{ version: string | null; unpackedPaths: string[] | null }> {
+  const records = await listBackupRecords(originalBackupDir);
+  const orig = records.find((r) => r.kind === 'original');
+  if (!orig) return { version: null, unpackedPaths: null };
+  let unpackedPaths: string[] | null = null;
+  const scan = scanArchive(orig.file);
+  if (scan.success) {
+    unpackedPaths = [...scan.data.entries.values()]
+      .filter((e) => e.unpacked && !adapter.allowedChanges.includes(e.path))
+      .map((e) => e.path)
+      .sort();
+  }
+  return { version: orig.version || null, unpackedPaths };
+}
+
 async function resolveBaselineGate(
   archivePath: string,
   adapter: TargetAdapter,
   originalBackupDir: string,
-): Promise<
-  Result<{ baseline: Map<string, EntryBaseline>; compared: number; created: boolean }>
-> {
+  snapshot: AsarSnapshot,
+): Promise<Result<BaselineGateResult>> {
   const isAllowed = (entry: string): boolean => adapter.allowedChanges.includes(entry);
+  const emptyMeta: BaselineMeta = { version: null, fingerprint: null, unpackedPaths: [] };
 
   const existing = await readBaselineFile(originalBackupDir);
   if (!existing.success) return existing;
 
   if (existing.data) {
-    const compared = await compareWithBaseline(archivePath, existing.data, { isAllowed });
-    if (!compared.success) return compared;
-    return ok({ baseline: existing.data, compared: compared.data.compared, created: false });
+    const cmp = await compareWithBaseline(archivePath, existing.data.entries, { isAllowed });
+    if (!cmp.success) return cmp;
+    const driftCount = countDrift(cmp.data.drift);
+    if (driftCount === 0) {
+      return ok({
+        baseline: existing.data.entries,
+        meta: existing.data.meta ?? emptyMeta,
+        compared: cmp.data.compared,
+        store: false,
+        rebaselined: false,
+        previousVersion: existing.data.meta?.version ?? null,
+      });
+    }
+
+    // 有差异 → 分类裁决。判据要素全部来自已有独立检查，缺一不可。
+    const pkg = await readAsarPackage(snapshot);
+    const archiveVersion = pkg.success ? pkg.data.version ?? null : null;
+    const legacy = existing.data.meta
+      ? { version: null as string | null, unpackedPaths: null as string[] | null }
+      : await deriveLegacyBaselineContext(originalBackupDir, adapter);
+    const baselineVersion = existing.data.meta?.version ?? legacy.version;
+    const baselineUnpacked = existing.data.meta?.unpackedPaths ?? legacy.unpackedPaths;
+    const structure = await verifyStructure(snapshot, adapter);
+    const anchorUnique = structure.checks.find((c) => c.key === 'anchor')?.status !== 'FAIL';
+    const changeSetClean = structure.checks.find((c) => c.key === 'changeSet')?.status !== 'FAIL';
+    const verdict = classifyDrift({
+      drift: cmp.data.drift,
+      baselineCount: existing.data.entries.size,
+      archiveVersion,
+      baselineVersion,
+      anchorUnique,
+      changeSetClean,
+      currentUnpacked: cmp.data.currentUnpacked,
+      baselineUnpacked,
+    });
+
+    if (verdict.verdict === 'suspicious') {
+      const problems = describeDrift(cmp.data.drift);
+      const basis = verdict.conditions
+        .map((c) => `${c.passed ? '✓' : '✗'} ${c.key}：${c.detail}`)
+        .join('；');
+      return fail(
+        'ARCHIVE_CORRUPT',
+        `目标与首次接管快照不一致（${problems.length} 条），本次输入不可信`,
+        '请先用恢复入口回到接管时的状态，再重新应用。',
+        `${problems.slice(0, 10).join('；')}｜自动放行判定未通过：${basis}`,
+      );
+    }
+
+    // official-update：以当前归档重建基线；落盘由调用方在旧基线序号归档后执行
+    const rebuilt = await buildBaseline(archivePath, isAllowed);
+    if (!rebuilt.success) return rebuilt;
+    return ok({
+      baseline: rebuilt.data.entries,
+      meta: {
+        version: archiveVersion,
+        fingerprint: snapshot.sha256,
+        unpackedPaths: rebuilt.data.unpackedPaths,
+      },
+      compared: 0,
+      store: true,
+      rebaselined: true,
+      previousVersion: baselineVersion,
+    });
   }
 
   const built = await buildBaseline(archivePath, isAllowed);
   if (!built.success) return built;
-  return ok({ baseline: built.data, compared: 0, created: true });
+  const pkg = await readAsarPackage(snapshot);
+  return ok({
+    baseline: built.data.entries,
+    meta: {
+      version: pkg.success ? pkg.data.version ?? null : null,
+      fingerprint: snapshot.sha256,
+      unpackedPaths: built.data.unpackedPaths,
+    },
+    compared: 0,
+    store: true,
+    rebaselined: false,
+    previousVersion: null,
+  });
 }

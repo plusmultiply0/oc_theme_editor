@@ -13,8 +13,9 @@
  *  2. `checkScripts`：对非白名单的 .js/.json 按各自语义做解析检查。
  *     能拦住「内容自洽但本身就是截断/坏文件」——本次事故的形态，
  *     坏内容的 hash 是打包器重新算出来的，自校验必然通过。
- *  3. `compareWithBaseline`：与首次接管快照的逐条基线比对。
- *     能拦住「相对接管时被外部改动/已损坏」的输入。
+ *  3. `compareWithBaseline`：与首次接管快照的逐条基线比对，产出**结构化差异**。
+ *     输入侧由调用方分类裁决（官方整体更新→重新接管；零星改动→拒绝，见 classifyDrift）；
+ *     产物侧（`verifyPackedResult`）不放宽——staged 有任何差异即拒绝提交。
  *
  * 另有 `findSharedOffsetConflicts`：同 offset 条目必须同内容同长度。
  * 事故里两个不同文件共享 offset 且 size 不同，这条能直接抓住。
@@ -58,6 +59,22 @@ export interface EntryBaseline {
   size: number;
   sha256: string;
   unpacked: boolean;
+}
+
+/** 基线文件的伴生元数据（v2 信封）；旧格式数组没有这些字段 */
+export interface BaselineMeta {
+  /** 基线对应归档的 package.json version；无法判定时为 null */
+  version: string | null;
+  /** 基线对应归档的 sha256 指纹 */
+  fingerprint: string | null;
+  /** 基线对应归档的 unpacked 条目路径集合（官方更新的天然信号之一） */
+  unpackedPaths: string[];
+}
+
+export interface StoredBaseline {
+  entries: Map<string, EntryBaseline>;
+  /** null = 旧格式（裸数组），无元数据 */
+  meta: BaselineMeta | null;
 }
 
 export const BASELINE_FILENAME = 'baseline.json';
@@ -397,20 +414,23 @@ export async function checkScripts(
 }
 
 /**
- * 从归档里建立非白名单条目的基线（size + 内容 sha256）。
+ * 从归档里建立非白名单条目的基线（size + 内容 sha256）+ unpacked 路径集合。
  * 白名单条目本来就会被替换/新增，不进基线。
+ * unpacked 实体在归档外算不了 hash，但**路径集合**要随基线保存——
+ * 重新接管判据条件⑤（原生模块集合是否一致）需要基线侧的记录。
  */
 export async function buildBaseline(
   archivePath: string,
   isAllowed: (entry: string) => boolean,
-): Promise<Result<Map<string, EntryBaseline>>> {
+): Promise<Result<{ entries: Map<string, EntryBaseline>; unpackedPaths: string[] }>> {
   const scan = scanArchive(archivePath);
   if (!scan.success) return scan;
   const baseline = new Map<string, EntryBaseline>();
+  const unpackedPaths: string[] = [];
   for (const entry of scan.data.entries.values()) {
     if (isAllowed(entry.path)) continue;
     if (entry.unpacked || entry.link) {
-      // unpacked 实体在归档外，无法在这里算 hash；由调用方另行处理
+      if (entry.unpacked) unpackedPaths.push(entry.path);
       continue;
     }
     baseline.set(entry.path, {
@@ -421,7 +441,7 @@ export async function buildBaseline(
     });
     if (baseline.size % 500 === 0) await physicalFsp.readFile(archivePath).catch(() => undefined);
   }
-  return ok(baseline);
+  return ok({ entries: baseline, unpackedPaths: unpackedPaths.sort() });
 }
 
 export interface BaselineCompareOptions {
@@ -429,37 +449,84 @@ export interface BaselineCompareOptions {
   isAllowed: (entry: string) => boolean;
 }
 
+/** 结构化差异清单（baseline-drift B1）：比对不再一票否决，由调用方分类裁决 */
+export interface BaselineDriftChanged {
+  path: string;
+  why: 'size' | 'content';
+  baselineSize: number;
+  currentSize: number;
+}
+
+export interface BaselineDrift {
+  /** 基线里有、当前也有，但大小或内容不同 */
+  changed: BaselineDriftChanged[];
+  /** 基线里有、当前缺失 */
+  missing: string[];
+  /** 当前新增、基线里没有（非白名单） */
+  added: string[];
+  /** 基线是打包条目，当前变成 unpacked/link */
+  kindChanged: string[];
+}
+
+export function countDrift(drift: BaselineDrift): number {
+  return drift.changed.length + drift.missing.length + drift.added.length + drift.kindChanged.length;
+}
+
+/** 供拒绝文案与明细复用的逐条描述（与旧 fail detail 口径一致） */
+export function describeDrift(drift: BaselineDrift): string[] {
+  return [
+    ...drift.changed.map((c) =>
+      c.why === 'size'
+        ? `${c.path}（大小 ${c.currentSize}，基线 ${c.baselineSize}）`
+        : `${c.path}（内容与首次接管时不同）`,
+    ),
+    ...drift.missing.map((p) => `${p}（基线里有，当前归档缺失）`),
+    ...drift.kindChanged.map((p) => `${p}（基线是打包条目，当前变成了 unpacked/link）`),
+    ...drift.added.map((p) => `${p}（首次接管时不存在，当前归档新增）`),
+  ];
+}
+
 /**
- * 把当前归档的非白名单条目与基线比对。
- * 基线来自首次接管快照 —— 那是本工具接手时的状态，也是我们唯一能为它担保的状态。
+ * 把当前归档的非白名单条目与基线比对，返回**结构化差异**而不是直接拒绝。
+ * 基线来自首次接管快照 —— 那是本工具接手时的状态；差异如何裁决见 classifyDrift。
  */
 export async function compareWithBaseline(
   archivePath: string,
   baseline: Map<string, EntryBaseline>,
   opts: BaselineCompareOptions,
-): Promise<Result<{ compared: number }>> {
+): Promise<Result<{ compared: number; drift: BaselineDrift; currentUnpacked: string[] }>> {
   const scan = scanArchive(archivePath);
   if (!scan.success) return scan;
-  const problems: string[] = [];
+  const drift: BaselineDrift = { changed: [], missing: [], added: [], kindChanged: [] };
   let compared = 0;
   for (const [entry, want] of baseline) {
     if (opts.isAllowed(entry)) continue;
     const now = scan.data.entries.get(entry);
     if (!now) {
-      problems.push(`${entry}（基线里有，当前归档缺失）`);
+      drift.missing.push(entry);
       continue;
     }
     if (now.unpacked || now.link) {
-      problems.push(`${entry}（基线是打包条目，当前变成了 unpacked/link）`);
+      drift.kindChanged.push(entry);
       continue;
     }
     if (now.size !== want.size) {
-      problems.push(`${entry}（大小 ${now.size}，基线 ${want.size}）`);
+      drift.changed.push({
+        path: entry,
+        why: 'size',
+        baselineSize: want.size,
+        currentSize: now.size,
+      });
       continue;
     }
     const got = sha256(readEntryBytes(scan.data, now));
     if (got !== want.sha256) {
-      problems.push(`${entry}（内容与首次接管时不同）`);
+      drift.changed.push({
+        path: entry,
+        why: 'content',
+        baselineSize: want.size,
+        currentSize: now.size,
+      });
       continue;
     }
     compared += 1;
@@ -469,29 +536,144 @@ export async function compareWithBaseline(
   for (const entry of scan.data.entries.values()) {
     if (baseline.has(entry.path) || opts.isAllowed(entry.path)) continue;
     if (entry.unpacked || entry.link) continue;
-    problems.push(`${entry.path}（首次接管时不存在，当前归档新增）`);
+    drift.added.push(entry.path);
   }
-  if (problems.length > 0) {
-    return fail(
-      'ARCHIVE_CORRUPT',
-      `目标与首次接管快照不一致（${problems.length} 条），本次输入不可信`,
-      '请先用恢复入口回到接管时的状态，再重新应用。',
-      problems.slice(0, 10).join('；'),
-    );
-  }
-  return ok({ compared });
+  // 与 buildBaseline 口径一致：白名单条目不参与 unpacked 集合比对
+  const currentUnpacked = [...scan.data.entries.values()]
+    .filter((e) => e.unpacked && !opts.isAllowed(e.path))
+    .map((e) => e.path)
+    .sort();
+  return ok({ compared, drift, currentUnpacked });
 }
 
-/** 把基线写进首次接管的备份目录（与备份一起保存）；先写临时文件再改名，避免半截 JSON */
+/*
+ * 重新接管（re-baseline）判据阈值 —— 命名常量，单测固定，不散落逻辑。
+ * 官方整体更新会换掉绝大多数条目；零星改动不是。取保守值：
+ * 差异规模不足一半、又没到「package.json 变了且 ≥100 条」的量级，一律按可疑处理。
+ */
+export const REBASELINE_DRIFT_RATIO = 0.5;
+export const REBASELINE_DRIFT_MIN_COUNT = 100;
+
+export type DriftVerdictKind = 'official-update' | 'suspicious';
+
+export interface DriftConditionResult {
+  key: 'versionChanged' | 'anchorUnique' | 'changeSetClean' | 'driftScale' | 'unpackedSet';
+  passed: boolean;
+  detail: string;
+}
+
+export interface DriftVerdict {
+  verdict: DriftVerdictKind;
+  driftCount: number;
+  /** 五条件的逐条判定依据（通过与否都要留痕，供明细与文案消费） */
+  conditions: DriftConditionResult[];
+}
+
+export interface DriftClassifyInput {
+  drift: BaselineDrift;
+  /** 基线条目总数（比例阈值分母） */
+  baselineCount: number;
+  /** 当前归档 package.json 的 version；读不到为 null */
+  archiveVersion: string | null;
+  /** 基线对应归档的 version；旧基线无记录时为 null */
+  baselineVersion: string | null;
+  /** verifyStructure 检查 1：注入锚点恰好 1 处 */
+  anchorUnique: boolean;
+  /** verifyStructure 检查 2：css/jpg 变更集合干净（不存在或本工具产物） */
+  changeSetClean: boolean;
+  currentUnpacked: readonly string[];
+  /** 基线侧 unpacked 路径集合；旧基线无记录时为 null（按不可判定处理） */
+  baselineUnpacked: readonly string[] | null;
+}
+
+/**
+ * 差异分类裁决（纯函数，无 IO）：五条件**同时满足**才判 official-update，
+ * 任一不过即 suspicious —— 宁拒勿纵。拒绝路径仍由调用方维持硬门禁语义。
+ */
+export function classifyDrift(input: DriftClassifyInput): DriftVerdict {
+  const driftCount = countDrift(input.drift);
+  const conditions: DriftConditionResult[] = [];
+
+  // ① 版本确实变了（双方都得有记录才可比）
+  const versionChanged =
+    input.archiveVersion !== null &&
+    input.baselineVersion !== null &&
+    input.archiveVersion !== input.baselineVersion;
+  conditions.push({
+    key: 'versionChanged',
+    passed: versionChanged,
+    detail:
+      input.archiveVersion === null
+        ? '当前归档读不到 version，无法与基线比对'
+        : input.baselineVersion === null
+          ? '基线无对应 version 记录，无法证明版本变化'
+          : `归档 version=${input.archiveVersion} 基线 version=${input.baselineVersion}${versionChanged ? '（不同）' : '（相同，非更新）'}`,
+  });
+
+  // ② 锚点仍唯一
+  conditions.push({
+    key: 'anchorUnique',
+    passed: input.anchorUnique,
+    detail: input.anchorUnique ? '注入锚点恰好 1 处' : '锚点消失或不唯一，补丁不适用',
+  });
+
+  // ③ 变更集合干净
+  conditions.push({
+    key: 'changeSetClean',
+    passed: input.changeSetClean,
+    detail: input.changeSetClean ? 'css/图片条目不存在或为本工具产物' : '变更集合被第三方占用',
+  });
+
+  // ④ 差异规模达到「整体替换」量级
+  const ratioHit = driftCount >= input.baselineCount * REBASELINE_DRIFT_RATIO;
+  const packageJsonChanged = input.drift.changed.some((c) => c.path === 'package.json');
+  const minCountHit = packageJsonChanged && driftCount >= REBASELINE_DRIFT_MIN_COUNT;
+  conditions.push({
+    key: 'driftScale',
+    passed: ratioHit || minCountHit,
+    detail: `差异 ${driftCount}/${input.baselineCount} 条，阈值：≥${Math.ceil(input.baselineCount * REBASELINE_DRIFT_RATIO)} 条（50%）或 package.json 变化且 ≥${REBASELINE_DRIFT_MIN_COUNT} 条（package.json 变化=${packageJsonChanged}）`,
+  });
+
+  // ⑤ unpacked 原生模块路径集合一致（数量与路径，内容不验——官方更新必换内容）
+  const wantUnpacked = input.baselineUnpacked === null ? null : [...input.baselineUnpacked].sort();
+  const nowUnpacked = [...input.currentUnpacked].sort();
+  const unpackedSet =
+    wantUnpacked !== null &&
+    wantUnpacked.length === nowUnpacked.length &&
+    wantUnpacked.every((p, i) => p === nowUnpacked[i]);
+  conditions.push({
+    key: 'unpackedSet',
+    passed: unpackedSet,
+    detail:
+      input.baselineUnpacked === null
+        ? '基线无 unpacked 集合记录，无法核对原生模块结构'
+        : `当前 ${input.currentUnpacked.length} 个 vs 基线 ${input.baselineUnpacked.length} 个${unpackedSet ? '（一致）' : '（不一致）'}`,
+  });
+
+  const verdict: DriftVerdictKind = conditions.every((c) => c.passed)
+    ? 'official-update'
+    : 'suspicious';
+  return { verdict, driftCount, conditions };
+}
+
+/**
+ * 把基线写进首次接管的备份目录（与备份一起保存）；先写临时文件再改名，避免半截 JSON。
+ * v2 信封带元数据（version/fingerprint/unpackedPaths）——重新接管判据要读回它们。
+ */
 export async function writeBaselineFile(
   dir: string,
   baseline: Map<string, EntryBaseline>,
+  meta: BaselineMeta,
 ): Promise<Result<void>> {
   try {
     const payload = [...baseline.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
     const tmp = path.join(dir, `${BASELINE_FILENAME}.tmp`);
     await physicalFsp.mkdir(dir, { recursive: true });
-    await physicalFsp.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+    await physicalFsp.writeFile(
+      tmp,
+      JSON.stringify({ schema: 2, meta, entries: payload }, null, 2),
+      'utf8',
+    );
     await physicalFsp.rename(tmp, path.join(dir, BASELINE_FILENAME));
     return ok(undefined);
   } catch (e) {
@@ -501,14 +683,59 @@ export async function writeBaselineFile(
 
 export async function readBaselineFile(
   dir: string,
-): Promise<Result<Map<string, EntryBaseline> | null>> {
+): Promise<Result<StoredBaseline | null>> {
   const file = path.join(dir, BASELINE_FILENAME);
   try {
-    const raw = JSON.parse(await physicalFsp.readFile(file, 'utf8')) as EntryBaseline[];
-    if (!Array.isArray(raw)) return ok(null);
-    return ok(new Map(raw.map((r) => [r.path, r] as const)));
+    const raw = JSON.parse(await physicalFsp.readFile(file, 'utf8')) as unknown;
+    // 旧格式：裸数组，无元数据（重新接管判据会缺版本与 unpacked 记录，由调用方回退推导）
+    if (Array.isArray(raw)) {
+      const rows = raw as EntryBaseline[];
+      return ok({ entries: new Map(rows.map((r) => [r.path, r] as const)), meta: null });
+    }
+    const envelope = raw as { schema?: number; meta?: BaselineMeta; entries?: EntryBaseline[] };
+    if (envelope.schema !== 2 || !Array.isArray(envelope.entries)) return ok(null);
+    const m = envelope.meta;
+    return ok({
+      entries: new Map(envelope.entries.map((r) => [r.path, r] as const)),
+      meta:
+        m && Array.isArray(m.unpackedPaths)
+          ? {
+              version: typeof m.version === 'string' ? m.version : null,
+              fingerprint: typeof m.fingerprint === 'string' ? m.fingerprint : null,
+              unpackedPaths: m.unpackedPaths,
+            }
+          : null,
+    });
   } catch {
     return ok(null);
+  }
+}
+
+/**
+ * 重新接管前把当前基线文件按序号归档（baseline.v1.json 递增）。
+ * 旧基线永不覆盖删除——与备份同目录留存，可追溯。
+ */
+export async function archiveCurrentBaselineFile(dir: string): Promise<Result<number>> {
+  try {
+    const names = await physicalFsp.readdir(dir);
+    let maxSeq = 0;
+    for (const n of names) {
+      const m = /^baseline\.v(\d+)\.json$/.exec(n);
+      if (m) maxSeq = Math.max(maxSeq, Number(m[1]));
+    }
+    const seq = maxSeq + 1;
+    await physicalFsp.rename(
+      path.join(dir, BASELINE_FILENAME),
+      path.join(dir, `baseline.v${seq}.json`),
+    );
+    return ok(seq);
+  } catch (e) {
+    return fail(
+      'BACKUP_FAILED',
+      '旧基线归档失败，未开始重新接管',
+      '未对安装产生任何改动。',
+      String(e),
+    );
   }
 }
 
@@ -623,11 +850,22 @@ export async function verifyPackedResult(input: PackedVerifyInput): Promise<Resu
     );
   }
 
-  // 非白名单条目与基线比对
+  // 非白名单条目与基线比对。
+  // 注意：这里是**产物门禁**（staged 必须等于基线+白名单预期），与 apply 入口的
+  // 「输入基线门」不同——输入门做差异分类放行，产物门禁不放宽：有任何差异即拒绝提交。
   let compared = 0;
   if (input.baseline && input.baseline.size > 0) {
     const cmp = await compareWithBaseline(input.stagedArchive, input.baseline, { isAllowed });
     if (!cmp.success) return cmp;
+    const problems = describeDrift(cmp.data.drift);
+    if (problems.length > 0) {
+      return fail(
+        'ARCHIVE_CORRUPT',
+        `重建结果与首次接管快照不一致（${problems.length} 条）`,
+        '已拒绝提交；安装未被修改。',
+        problems.slice(0, 10).join('；'),
+      );
+    }
     compared = cmp.data.compared;
   }
 

@@ -645,8 +645,11 @@ legacy 回推路径），locks 空、最近事务终态、OpenCode 已完全退�
   `.zip.sha256.txt` 已生成（不入库，同先例）。
 - **tag / Release**：tag `v0.1.0-alpha.5` 打在候选登记 HEAD `5bb61f7` 并推送 `origin`
   （`* [new tag]`）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.7 先例）。
+  **2026-09-23 jc 网页回执（页面 URL）**：
+  `https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v0.1.0-alpha.5`。
+  附件可见性以该回执为准（私有仓库，wb 侧无匿名核验通道，同 9.4–9.7 口径）。
   **本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
-- **遗留**：alpha.4 用户升级本候选才脱离基线门恒拒；发布说明「已知限制」中真机逐项
+- 至此 alpha.5 发布轮 agent 侧与上传侧均闭环。**遗留**：alpha.4 用户升级本候选才脱离基线门恒拒；发布说明「已知限制」中真机逐项
   视觉走查、A6 干净环境、P3 色块外观缺陷口径不变。
 
 

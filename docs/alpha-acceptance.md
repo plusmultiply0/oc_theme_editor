@@ -409,8 +409,9 @@ legacy 回推路径），locks 空、最近事务终态、OpenCode 已完全退�
 旧基线 `baseline.v1.json`（裸数组 6943 条）归档留存、新基线 v2 信封
 （version 1.18.32、fingerprint=应用前 e711a876、unpacked 47 条）、txlog
 `rebaselined=true`+`baselineFromVersion=1.18.31`、takeover 快照 asar 与 original 记录未动。
-**遗留口径不变**：应用后画面观感（重启 OpenCode 逐项确认）仍待 jc；修复仍未随 alpha.4 分发，
-是否起新候选（P3-1）由 jc 拍板。
+**[观感回执 2026-09-23]** jc 重启 OpenCode 后回执「通过」——按惯例属**整体回执**（非逐项），
+本轮应用后画面观感登记为已确认；P3-1 新候选（alpha.5）经 jc 拍板**开工**，
+修复随该候选分发（此前「不在 alpha.4」口径对该候选生效前仍成立）。
 
 ## 7. A6 干净环境验证（用户决定跳过）
 

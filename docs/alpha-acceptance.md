@@ -622,4 +622,31 @@ legacy 回推路径），locks 空、最近事务终态、OpenCode 已完全退�
   OpenCode」按钮）真机走查待 jc；A5 基线门阻塞限制未修（已入发布说明已知限制）；
   A6 干净环境未验证。
 
+### 9.8 候选登记（2026-09-23，alpha.5，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 对 2026-09-23 现状审查三项回执「通过、入库、开工」——「开工」即授权
+  P3-1 新候选轮。本轮增量源码为 baseline-drift B1–B3（基线门分类放行，`c957272`/`3ee6f0c`/
+  `bca0071`）+ live-cli 确认通道（`79057d7`）+ 素材与文档；**A5 真机复验已在本轮登记前完成**
+  （1.18.31→1.18.32 自动重新接管 applied，见 §6 落账；观感整体回执同 §6）——与 alpha.3/4
+  「未复验先发布」不同，本轮修复随包有真机场景证据。不宣称 A8 全签核（A6 仍跳过）。
+- **链运行**：`npm run release:build` 在 **agent 会话**一次跑满 12 步全绿，末行
+  `ALL_GREEN buildId=20260923081342-001342d-30fc1c`；`smoke:gui`（空参数，34.2s）与
+  `test:e2e:electron`（19.6s）均真实通过。发布级只读终检通过，
+  `RELEASE_GREEN`、`publishable=true`。
+- **候选身份**：buildId `20260923081342-001342d-30fc1c`，来源提交 `001342d`（版本号
+  bump + 发布说明草案），`packMethod: electron-builder`，可重复构建。
+  zip SHA256 `addb45120d265cf7de84d2bace5f7dfbe62404363849b4b914580962086ba1b9`、
+  exe SHA256 `ed0f8595ffb62cca7d2e373f5626336af8badacd2269c720579df914b61456f3`、
+  app.asar SHA256 `743b37bb9a5b3379bfef4ac34950438e879a705608c24d19ff7e82029490a869`
+  （968 条目 / unpacked 7）。zip 127.2 MB / 82 条目。
+- **登记**：`release-checklist.md` §1 权威入口块换为上述 buildId 与哈希，§2.6 把 alpha.4
+  转历史（其 manifest/哈希原样保留），§3 门禁表按本轮 build-record 改写；README 三处
+  指针与口径同步（修复「随 alpha.5 生效，alpha.4 及更早不含」）。侧车
+  `.zip.sha256.txt` 已生成（不入库，同先例）。
+- **tag / Release**：tag `v0.1.0-alpha.5` 打在候选登记提交并推送 `origin`（提交号在
+  追加补记中落账）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.7 先例）。
+  **本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
+- **遗留**：alpha.4 用户升级本候选才脱离基线门恒拒；发布说明「已知限制」中真机逐项
+  视觉走查、A6 干净环境、P3 色块外观缺陷口径不变。
+
 

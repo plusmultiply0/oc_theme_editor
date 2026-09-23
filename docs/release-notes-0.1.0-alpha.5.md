@@ -1,17 +1,18 @@
 # OpenCodeThemeSwitcher 0.1.0-alpha.5（Alpha 体验版）
 
-> **状态：草稿（2026-09-23）**。待 `npm run release:build` 全链 `ALL_GREEN` 后补发布物
-> 与哈希并转「已发布」。本轮主题：baseline-drift 修复（基线门分类放行）首次随包分发。
+> **状态：候选登记完成（2026-09-23）**。`npm run release:build` 12 步 `ALL_GREEN`，
+> 登记后核验 `RELEASE_GREEN`、`publishable=true`；GitHub pre-release 待 jc 网页操作。
+> 发布执行记录见 `docs/alpha-acceptance.md` §9.8。
 
 ## 发布物
 
 | 项 | 值 |
 |---|---|
-| buildId | 待登记 |
-| 分发 zip | 待登记 |
-| zip SHA256 | 待登记 |
-| exe SHA256 | 待登记 |
-| app.asar SHA256 | 待登记 |
+| buildId | `20260923081342-001342d-30fc1c` |
+| 分发 zip | `candidate-20260923081342-001342d-30fc1c.zip`（127.2 MB，82 条目） |
+| zip SHA256 | `addb45120d265cf7de84d2bace5f7dfbe62404363849b4b914580962086ba1b9` |
+| exe SHA256 | `ed0f8595ffb62cca7d2e373f5626336af8badacd2269c720579df914b61456f3` |
+| app.asar SHA256 | `743b37bb9a5b3379bfef4ac34950438e879a705608c24d19ff7e82029490a869`（968 条目 / unpacked 7） |
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 

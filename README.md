@@ -200,8 +200,8 @@
   也不要为了让提示消失去关闭系统防护。
 - `release/` ~ `release7/` 都是过期构建；`release-dev/` 是单独跑 `npm run dist` 的输出目录，
   同样不是候选。**唯一可用于验证与分发的是当前候选**
-  `candidate-20260921124125-bd8c2d5-0c200b/`（buildId
-  `20260921124125-bd8c2d5-0c200b`）；候选目录、zip 与哈希的唯一权威入口见
+  `candidate-20260922050618-c48863e-769d1d/`（buildId
+  `20260922050618-c48863e-769d1d`）；候选目录、zip 与哈希的唯一权威入口见
   `docs/release-checklist.md` 第 1 节（该处由机器核对，不靠人工抄写）。
 - 图片只支持 PNG / JPEG（.jpg/.jpeg/.jfif/.jpe）/ WebP，≤ 20 MiB，不支持 SVG。
   GIF / AVIF / TIFF / BMP / HEIC 尚未开放（GIF、AVIF、TIFF 的解码器本机可用，属于第二批；

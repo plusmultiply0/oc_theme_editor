@@ -643,8 +643,8 @@ legacy 回推路径），locks 空、最近事务终态、OpenCode 已完全退�
   转历史（其 manifest/哈希原样保留），§3 门禁表按本轮 build-record 改写；README 三处
   指针与口径同步（修复「随 alpha.5 生效，alpha.4 及更早不含」）。侧车
   `.zip.sha256.txt` 已生成（不入库，同先例）。
-- **tag / Release**：tag `v0.1.0-alpha.5` 打在候选登记提交并推送 `origin`（提交号在
-  追加补记中落账）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.7 先例）。
+- **tag / Release**：tag `v0.1.0-alpha.5` 打在候选登记 HEAD `5bb61f7` 并推送 `origin`
+  （`* [new tag]`）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.7 先例）。
   **本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
 - **遗留**：alpha.4 用户升级本候选才脱离基线门恒拒；发布说明「已知限制」中真机逐项
   视觉走查、A6 干净环境、P3 色块外观缺陷口径不变。

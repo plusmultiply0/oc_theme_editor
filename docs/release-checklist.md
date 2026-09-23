@@ -181,6 +181,47 @@ alpha.2（第 1 节）取代它成为唯一入口；其 manifest、hash 与 rece
 不在 alpha.4 包内，随 alpha.5 分发——alpha.4 用户「接管后自动更新致基线恒拒」限制
 在 alpha.5 前仍然成立。
 
+### 2.7 2026-09-23 ago/ 归档迁移与 robocopy 事故定损（追加，不改写上文结论）
+
+应 jc 要求，全部历史构建（`release/`~`release7/`、`release-dev/`、各
+`candidate-*` 目录与 zip/侧车）已迁至 `ago/` 目录归档（本地归档区，已加入
+`.gitignore`，不入库）。迁移过程中 agent 的一次后台 robocopy 批量移动因
+MSYS2 路径转换规避（`MSYS2_ARG_CONV_EXCL='*'`）导致循环变量未展开，9 个候选
+目录被合并写入字面目录 `ago$B` 并按同名后写覆盖先写，`/MOVE` 随即清空源目录
+（仅剩被安全软件锁定的 `app.asar`）。**分发链无损，受损的是部分历史目录的
+「物理原样保留」**。定损如下（2026-09-23 实盘核验）：
+
+| 目录（现位于 `ago/`） | 迁移后状态 |
+|---|---|
+| `candidate-20260922050618-c48863e-769d1d/`（alpha.4） | **完整**（83 文件：win-unpacked 79 件 + manifest/build-record/receipt 三件 JSON，buildId 核对一致） |
+| `candidate-OpenCodeThemeSwitcher-0.1.0-alpha.1/`（手工重封） | **完整**（122 文件，含 4 枚 asar） |
+| `candidate-20260916074544-f425ea3-3c455a/` | 151 文件，win-unpacked 与 builder-out 两树互补、各缺对方独有件（unpacked 7 件 / app.asar 1 枚），非事故丢失 |
+| `candidate-20260916094710-…`（alpha.1 前置试跑） | 仅剩 2 枚被锁 `app.asar`，其余件丢失 |
+| `candidate-20260916114818-8b3b8f8-f4e1c6/`（alpha.1） | 同上，仅剩 2 枚 `app.asar` |
+| `candidate-20260918013040-b43dc44-a0a453/`（未登记轮） | 同上（无 zip，独有件丢失最重） |
+| `candidate-20260919054633-7eff0b6-7b9983/`（verify-package 拦停轮） | 同上 |
+| `candidate-20260919055321-f8bb4fb-e00e50/`（alpha.2） | 同上 |
+| `candidate-20260921124125-bd8c2d5-0c200b/`（alpha.3） | 同上 |
+| `candidate-20260922045126-a374f2e-8ad1f2/`（未登记试跑） | 同上 |
+
+**哈希核验（certutil 实测，全部与 §2.1、§2.3–2.6 台账一致）**：四代 alpha 的
+zip、`app.asar`，及 alpha.4 的 exe；alpha.1–3 的 exe 随目录覆盖丢失，但其
+二进制可由在位的对应 zip 重新解出。各 zip 与侧车 `.sha256.txt` 均在位。
+
+**勘正（只追加）**：§2.3–2.6 的「其 manifest、build-record、receipt 与哈希
+原样保留，未做任何改写」中，**哈希与登记事实**仍然成立（以本表 + zip +
+`docs/alpha-acceptance.md` §9.x 为权威），但 alpha.1–3 及未登记轮的目录内
+**物理文件**自本日起不再原样保留。当前候选 alpha.5（第 1 节）完全未受影响，
+`--check` 三方核对仍为 `DOC_ENTRY_OK`。
+
+**遗留清理**：①根目录 `ago$B/` 为事故残留（两棵 electron 运行时树 + 2 枚被锁
+asar），锁释放后直接删除；②`ago/` 内被锁的旧 `app.asar` 同 §2.2 注，锁释放后
+可清。
+
+**教训落账**：Windows 批量移动含 electron 产物的目录，必须先单目录演练并在
+目的地点验，再跑循环；`MSYS2_ARG_CONV_EXCL='*'` 下含 `\` 的目标路径字面量
+可能静默不展开，首轮必须 `ls` 验证去向；robocopy 返回码「成功」不代表目标正确。
+
 ## 3. 当前门禁结果（buildId `20260923081342-001342d-30fc1c`）
 
 以下数字**只属于第 1 节那一个候选**，取自其 `build-record.json`；

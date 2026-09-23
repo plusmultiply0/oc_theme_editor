@@ -34,6 +34,9 @@ handoff/images/
 candidate-*/
 candidate-*.zip
 candidate-*.txt
+# 历史候选归档区（迁移中，内容同上，不入库）
+ago/
+ago$B/
 
 # 复审/诊断夹具：内含嵌套 .git 与 .asar/.exe 构建产物，只保留文本证据
 handoff/review-*/evidence*/fixture/

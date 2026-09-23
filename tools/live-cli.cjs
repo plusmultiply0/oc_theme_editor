@@ -8,7 +8,7 @@
  * 用法（先 npm run build）：
  *   node tools/live-cli.cjs status
  *   node tools/live-cli.cjs precheck
- *   node tools/live-cli.cjs apply --image D:\path\to\wallpaper.jpg [--mode auto] [--overlay 0.35] [--panel 0.86] [--blur 0] [--primary #3b6fd4]
+ *   node tools/live-cli.cjs apply --image D:\path\to\wallpaper.jpg [--mode auto] [--overlay 0.35] [--panel 0.86] [--blur 0] [--primary #3b6fd4] [--confirm-structural]
  *   node tools/live-cli.cjs restore previous
  *   node tools/live-cli.cjs restore original
  *
@@ -173,7 +173,14 @@ async function main() {
       ...(args.flags.primary ? { primary: args.flags.primary } : {}),
     };
 
-    const staged = await operations.stage({ targetId: target.targetId, imageId: spec.imageId, spec });
+    // structural 通道目标需显式确认（等价于 GUI 的应用确认对话框）：--confirm-structural
+    const confirmStructural = args.flags['confirm-structural'] === 'true';
+    const staged = await operations.stage({
+      targetId: target.targetId,
+      imageId: spec.imageId,
+      spec,
+      ...(confirmStructural ? { confirmStructural: true } : {}),
+    });
     if (!printResult('准备（预检 + 生成产物）', staged)) {
       process.exit(staged.error.code === 'TARGET_RUNNING' ? 2 : 1);
     }
@@ -183,7 +190,10 @@ async function main() {
     console.log(`  需要空间：约 ${(s.requiredBytes / 1024 / 1024).toFixed(0)} MB`);
     console.log(`  目标指纹（提交前）：${s.beforeHash.slice(0, 16)}…`);
 
-    const applied = await operations.apply({ operationId: staged.data.operationId });
+    const applied = await operations.apply({
+      operationId: staged.data.operationId,
+      ...(confirmStructural ? { confirmStructural: true } : {}),
+    });
     if (!printResult('应用', applied)) process.exit(1);
     console.log(`  操作 ID：${applied.data.operationId}`);
     console.log(`  状态：${applied.data.status}　主题：${applied.data.themeSummary}`);

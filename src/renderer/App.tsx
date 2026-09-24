@@ -182,18 +182,6 @@ export default function App() {
     }
   }, [fail, refreshTargets]);
 
-  /** U2：启动 OpenCode。renderer 只交 targetId，路径由主进程按适配器解析 */
-  const [launchedId, setLaunchedId] = useState('');
-  const launchTarget = useCallback(async () => {
-    if (!target) return;
-    const r = await window.themeSwitcher.launchTarget(target.targetId);
-    if (!r.success) {
-      fail(r.error);
-      return;
-    }
-    setLaunchedId(target.targetId);
-  }, [target, fail]);
-
   const refreshBackups = useCallback(async (id: string) => {
     if (!id) return;
     const r = await window.themeSwitcher.listBackups(id);
@@ -678,18 +666,6 @@ export default function App() {
       </main>
 
       <footer className={`status ${ui.kind}`}>
-        <span className="status-launch">
-          <button
-            className="btn primary small"
-            type="button"
-            disabled={!target || isBusy(ui)}
-            onClick={() => void launchTarget()}
-          >
-            {target && (launchedId === target.targetId || target.processState === 'running')
-              ? '打开 OpenCode'
-              : '启动 OpenCode'}
-          </button>
-        </span>
         {ui.kind === 'empty' || ui.kind === 'ready' ? readyText(gate) : null}
         {ui.kind === 'analyzing' ? '正在提取配色…' : null}
         {ui.kind === 'staging' ? '正在检查目标与生成准备内容…' : null}

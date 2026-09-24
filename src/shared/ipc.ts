@@ -26,7 +26,6 @@ export const IPC_CHANNELS = [
   'discoverTargets',
   'chooseTargetDirectory',
   'inspectTarget',
-  'launchTarget',
   'stageTheme',
   'applyTheme',
   'listBackups',
@@ -238,8 +237,6 @@ export interface ThemeSwitcherApi {
    */
   chooseTargetDirectory(): Promise<Result<RegisterDirectoryResult>>;
   inspectTarget(targetId: string): Promise<Result<TargetInfo>>;
-  /** 启动目标：只按 targetId，主进程按 adapter 声明的 exe 相对路径解析，不接收任何路径参数 */
-  launchTarget(targetId: string): Promise<Result<{ launched: boolean }>>;
   /** 启动恢复状态：有待人工处理的未完成事务时，apply 会被后端阻断（R7） */
   getRecoveryStatus(): Promise<Result<RecoveryStatus>>;
   /** 对未完成事务落账；方向由磁盘事实决定，不允许把 needs_recovery 写成 applied */

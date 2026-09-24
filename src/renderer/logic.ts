@@ -126,7 +126,8 @@ export function isBusy(state: UiState): boolean {
 
 /**
  * 应用按钮的可用条件（T54、R6）。
- * 目标与对比度共同决定：没有已验证目标、报告未通过、或有待人工处理的未完成事务时都不放行。
+ * 目标与完成度共同决定：没有已验证目标、或有待人工处理的未完成事务时都不放行。
+ * W3 起对比度不再是按钮级硬闸：未达标仍可点「应用」，由服务端拦下并弹出显式确认区。
  * 按钮禁用只是辅助，后端 precheck 同样会拦。
  */
 export interface GateInput {
@@ -147,7 +148,6 @@ export function canStage(args: GateInput & { busy: boolean }): boolean {
     args.hasImage &&
     args.hasPreview &&
     args.targetSupported &&
-    args.reportPassed &&
     !args.recoveryBlocking &&
     !args.busy
   );
@@ -167,7 +167,7 @@ export function blockedReason(args: GateInput): string | null {
       ? `当前目标未经验证，只能预览不能应用：${args.targetRejectReason}`
       : '当前目标未经验证，只能预览不能应用；请重新检测目标。';
   }
-  if (!args.reportPassed) return '存在未达标的可读性项，请先调高遮罩或面板不透明度。';
+  // W3：对比度不再是按钮禁用理由——点击后由服务端拦下并弹出显式确认区（默认仍不放行）
   return null;
 }
 
@@ -178,6 +178,7 @@ export function readyText(args: GateInput): string {
   if (!args.hasPreview) return '正在提取配色…';
   const blocked = blockedReason(args);
   if (blocked) return blocked;
+  if (!args.reportPassed) return '存在未达标的可读性项：仍可点「应用」，但需要你在确认区显式接受后果。';
   return '配色与可读性均已通过，可以应用；应用前请先退出 OpenCode。';
 }
 

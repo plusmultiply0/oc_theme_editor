@@ -74,11 +74,14 @@ describe('应用按钮可用条件（T54、R6、R7）', () => {
     ['未选图片', { hasImage: false }],
     ['配色尚未生成', { hasPreview: false }],
     ['目标未验证', { targetSupported: false }],
-    ['可读性未达标', { reportPassed: false }],
     ['存在待处理事务', { recoveryBlocking: true }],
     ['正在忙', { busy: true }],
   ])('%s 时一律不允许应用', (_name, patch) => {
     expect(canStage({ ...readyArgs, ...patch })).toBe(false);
+  });
+
+  it('W3：可读性未达标不再是按钮级硬闸——可点，由服务端拦下要显式确认', () => {
+    expect(canStage({ ...readyArgs, reportPassed: false })).toBe(true);
   });
 
   it('被阻断时给出具体、可行动的中文原因', () => {
@@ -87,9 +90,10 @@ describe('应用按钮可用条件（T54、R6、R7）', () => {
     expect(
       blockedReason({ ...readyGate, targetSupported: false, targetRejectReason: '版本 9.9.9 未经验证' }),
     ).toContain('9.9.9');
-    expect(blockedReason({ ...readyGate, reportPassed: false })).toContain('遮罩');
     expect(blockedReason({ ...readyGate, recoveryBlocking: true })).toContain('待处理');
     expect(blockedReason(readyGate)).toBeNull();
+    // W3：对比度未达标不属于禁用原因
+    expect(blockedReason({ ...readyGate, reportPassed: false })).toBeNull();
   });
 
   it('就绪文案与禁用原因一致，不说「可直接应用」', () => {
@@ -97,6 +101,10 @@ describe('应用按钮可用条件（T54、R6、R7）', () => {
     expect(readyText({ ...readyGate, targetCount: 0, targetSupported: false })).toContain('选择安装目录');
     expect(readyText({ ...readyGate, recoveryBlocking: true })).toContain('暂停写入');
     expect(readyText({ ...readyGate, hasImage: false, hasPreview: false })).toContain('选择一张本地图片');
+    // W3：未达标时如实说明要走显式确认，既不谎称「均已通过」也不说死「不能应用」
+    const warn = readyText({ ...readyGate, reportPassed: false });
+    expect(warn).toContain('未达标');
+    expect(warn).toContain('确认');
   });
 });
 

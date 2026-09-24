@@ -14,6 +14,7 @@ import Preview from './components/Preview';
 import ContrastPanel from './components/ContrastPanel';
 import ApplyDialog from './components/ApplyDialog';
 import StructuralConfirmDialog from './components/StructuralConfirmDialog';
+import ContrastOverrideDialog from './components/ContrastOverrideDialog';
 import RestorePanel from './components/RestorePanel';
 import RecoveryPanel from './components/RecoveryPanel';
 import {
@@ -120,6 +121,8 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   /** structural 目标的应用前置确认（S3），不影响 UiState 九类状态 */
   const [pendingStructural, setPendingStructural] = useState(false);
+  /** 可读性未达标的显式放行确认（W3）：不记住选择，每次拦截都重新确认 */
+  const [pendingContrast, setPendingContrast] = useState<{ items: string[]; confirmStructural: boolean } | null>(null);
   /** 实际内容格式的显示名（由主进程按 magic bytes 识别，不是后缀） */
   const [imageFormat, setImageFormat] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -388,24 +391,35 @@ export default function App() {
     }
   }, [fail, previewUrl, result, spec, updateSpec]);
 
-  const stage = useCallback(async (confirmStructural: boolean) => {
-    if (!target) return;
-    if (!canStage({ ...gate, busy: isBusy(ui) })) return;
-    setUi({ kind: 'staging' });
-    const r = await window.themeSwitcher.stageTheme({
-      targetId: target.targetId,
-      imageId: spec.imageId,
-      spec,
-      confirmStructural,
-    });
-    if (!r.success) {
-      await refreshRecovery();
-      fail(r.error);
-      return;
-    }
-    setSummary(r.data.summary);
-    setUi({ kind: 'confirming' });
-  }, [fail, gate, refreshRecovery, spec, target, ui]);
+  const stage = useCallback(
+    async (confirmStructural: boolean, allowContrastOverride = false) => {
+      if (!target) return;
+      if (!canStage({ ...gate, busy: isBusy(ui) })) return;
+      setUi({ kind: 'staging' });
+      const r = await window.themeSwitcher.stageTheme({
+        targetId: target.targetId,
+        imageId: spec.imageId,
+        spec,
+        confirmStructural,
+        ...(allowContrastOverride ? { allowContrastOverride: true } : {}),
+      });
+      if (!r.success) {
+        await refreshRecovery();
+        // 对比度不达标：不直接报错，改为弹出显式放行确认区（W3）
+        if (r.error.code === 'CONTRAST_BELOW_TARGET' && !allowContrastOverride) {
+          const items = (r.error.detail ?? '').split('；').filter(Boolean);
+          setUi({ kind: 'ready' });
+          setPendingContrast({ items, confirmStructural });
+          return;
+        }
+        fail(r.error);
+        return;
+      }
+      setSummary(r.data.summary);
+      setUi({ kind: 'confirming' });
+    },
+    [fail, gate, refreshRecovery, spec, target, ui],
+  );
 
   const apply = useCallback(async () => {
     if (!summary) return;
@@ -800,6 +814,19 @@ export default function App() {
           onConfirm={() => {
             setPendingStructural(false);
             void stage(true);
+          }}
+        />
+      ) : null}
+
+      {pendingContrast ? (
+        <ContrastOverrideDialog
+          items={pendingContrast.items}
+          onCancel={() => setPendingContrast(null)}
+          onConfirm={() => {
+            const { confirmStructural } = pendingContrast;
+            // 不记住选择：先清空再带 override 重提，本次点击只授权这一单（W3）
+            setPendingContrast(null);
+            void stage(confirmStructural, true);
           }}
         />
       ) : null}

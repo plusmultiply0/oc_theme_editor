@@ -143,6 +143,11 @@ export interface StageThemeInput {
   spec: ThemeSpec;
   /** structural 通道（非名单版本经结构验证放行）必须显式确认，缺省拒绝（S2） */
   confirmStructural?: boolean;
+  /**
+   * 可读性未达标时经用户显式确认后放行（W3）。
+   * 缺省=false 照旧拒绝；只绕对比度门，结构验证/基线/进程锁一律不绕。
+   */
+  allowContrastOverride?: boolean;
 }
 
 /**
@@ -178,6 +183,8 @@ export interface StageSummary {
 export interface StagedTheme {
   operationId: string;
   summary: StageSummary;
+  /** 带 allowContrastOverride 放行时如实返回未达标项清单（W3；未放行时缺省） */
+  contrastOverride?: { failedItems: string[] };
 }
 
 export interface ApplyThemeInput {

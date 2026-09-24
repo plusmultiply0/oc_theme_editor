@@ -193,6 +193,67 @@ describe('主进程服务：识别 → 生成 → 准备 → 应用 → 恢复',
     expect(staged.error.message).toContain('主色控件');
   });
 
+  it('W3：显式放行后主色不合格可应用，未达标清单随操作记录可查', async () => {
+    const c = ctx as Ctx;
+    const discovered = await c.targets.discover();
+    if (!discovered.success) throw new Error('discover failed');
+    const target = discovered.data.targets[0];
+
+    const picked = await c.images.pick();
+    if (!picked.success) throw new Error('pick failed');
+    await c.images.import(picked.data.imageId);
+
+    const badSpec = spec(picked.data.imageId, { primary: '#6a6a6a' });
+    const beforeHash = await sha256File(c.install.archivePath);
+
+    const staged = await c.operations.stage({
+      targetId: target.targetId,
+      imageId: picked.data.imageId,
+      spec: badSpec,
+      allowContrastOverride: true,
+    });
+    expect(staged.success).toBe(true);
+    if (!staged.success) return;
+    expect(staged.data.contrastOverride?.failedItems.some((i) => i.includes('主色控件'))).toBe(true);
+    // 放行只影响门，准备阶段依旧不动目标
+    expect(await sha256File(c.install.archivePath)).toBe(beforeHash);
+
+    const applied = await c.operations.apply({ operationId: staged.data.operationId });
+    expect(applied.success).toBe(true);
+    if (!applied.success) return;
+    expect(applied.data.status).toBe('applied');
+    // 应用事务由 coreApply 另起标识，与准备记录的不是同一个
+    expect(applied.data.operationId).not.toBe(staged.data.operationId);
+
+    const op = await c.operations.getOperation(applied.data.operationId);
+    expect(op.success).toBe(true);
+    if (!op.success) return;
+    expect(op.data.contrastOverride?.failedItems.some((i) => i.includes('主色控件'))).toBe(true);
+  });
+
+  it('W3：放行标志不是布尔值时按参数非法拒绝，不落准备记录', async () => {
+    const c = ctx as Ctx;
+    const discovered = await c.targets.discover();
+    if (!discovered.success) throw new Error('discover failed');
+    const target = discovered.data.targets[0];
+
+    const picked = await c.images.pick();
+    if (!picked.success) throw new Error('pick failed');
+    await c.images.import(picked.data.imageId);
+
+    const beforeHash = await sha256File(c.install.archivePath);
+    const staged = await c.operations.stage({
+      targetId: target.targetId,
+      imageId: picked.data.imageId,
+      spec: spec(picked.data.imageId),
+      allowContrastOverride: 'yes' as unknown as boolean,
+    });
+    expect(staged.success).toBe(false);
+    if (staged.success) return;
+    expect(staged.error.code).toBe('INVALID_PARAMS');
+    expect(await sha256File(c.install.archivePath)).toBe(beforeHash);
+  });
+
   it('准备阶段产出摘要但不改动目标，应用后才写入归档', async () => {
     const c = ctx as Ctx;
     const discovered = await c.targets.discover();

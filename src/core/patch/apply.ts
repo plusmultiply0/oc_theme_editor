@@ -81,6 +81,8 @@ export interface ApplyInput {
   themeSummary: string;
   /** 主题内容指纹；不传则由 css + 图片计算 */
   themeHash?: string;
+  /** W3：可读性门经用户显式确认放行时的未达标项清单，如实写入事务日志 */
+  contrastOverride?: { failedItems: string[] };
   onEvent?: (e: OperationEvent) => void;
   hooks?: ApplyHooks;
   now?: () => string;
@@ -294,6 +296,8 @@ async function runApply(
     ...(baselineGate.data.rebaselined && baselineGate.data.previousVersion
       ? { baselineFromVersion: baselineGate.data.previousVersion }
       : {}),
+    // 可读性门放行落证据：谁在何时明确接受了对比度不达标（W3）
+    ...(input.contrastOverride ? { contrastOverride: input.contrastOverride } : {}),
     phases: [{ phase: 'inspected', at: new Date().toISOString() }],
     targetPath: archivePath,
   };

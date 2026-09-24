@@ -57,6 +57,8 @@ interface StagedRecord {
   createdAt: string;
   /** 准备时刻的归档指纹，提交前复核 */
   beforeHash: string;
+  /** W3：经用户显式确认放行对比度门时，如实记录未达标项清单 */
+  contrastOverride?: { failedItems: string[] };
 }
 
 export interface OperationServiceOptions {
@@ -108,6 +110,11 @@ export class OperationService {
       return fail('INVALID_PARAMS', '主题参数不合法', '请重置为默认参数后重试。', parsed.error.message);
     }
     const spec = parsed.data;
+    // W3：放行标志只接受布尔 true；任何其他值（包括字符串）按缺省 false 处理并在类型层拒绝
+    if (input?.allowContrastOverride !== undefined && typeof input.allowContrastOverride !== 'boolean') {
+      return fail('INVALID_PARAMS', '放行标志不合法', 'allowContrastOverride 必须是布尔值。');
+    }
+    const allowContrastOverride = input?.allowContrastOverride === true;
 
     const target = await this.opts.targets.refresh(input.targetId);
     if (!target.success) return target;
@@ -145,17 +152,21 @@ export class OperationService {
     });
     if (!generated.success) return generated;
 
-    // 对比度不合格不允许进入应用流程（T25、T54）
+    // 对比度不合格默认不进入应用流程（T25、T54）；仅当带显式放行标志才继续，并如实记录未达标项（W3）
+    let contrastOverride: { failedItems: string[] } | undefined;
     if (!generated.data.report.passed) {
-      const failed = generated.data.report.entries
+      const failedItems = generated.data.report.entries
         .filter((e) => !e.pass)
-        .map((e) => `${e.element} ${e.ratio.toFixed(2)}（需 ${e.required}）`)
-        .join('、');
-      return fail(
-        'CONTRAST_BELOW_TARGET',
-        `以下元素未达到可读性目标：${failed}`,
-        '请调高背景遮罩或面板不透明度，或换一个明度差异更大的主色。',
-      );
+        .map((e) => `${e.element} ${e.ratio.toFixed(2)}（需 ${e.required}）`);
+      if (!allowContrastOverride) {
+        return fail(
+          'CONTRAST_BELOW_TARGET',
+          `以下元素未达到可读性目标：${failedItems.join('、')}`,
+          '请调高背景遮罩或面板不透明度，或换一个明度差异更大的主色。',
+          failedItems.join('；'),
+        );
+      }
+      contrastOverride = { failedItems };
     }
 
     const archivePath = path.join(target.data.installPath, ...adapter.layout.archive.split('/'));
@@ -212,6 +223,7 @@ export class OperationService {
       themeSummary,
       createdAt: new Date().toISOString(),
       beforeHash: snapshot.data.sha256,
+      ...(contrastOverride ? { contrastOverride } : {}),
     };
     try {
       await fs.writeFile(
@@ -240,7 +252,7 @@ export class OperationService {
       legacyThemes,
       keptAssets: layers.knownLegacy.flatMap((l) => l.source?.assets ?? []),
     };
-    return ok({ operationId, summary });
+    return ok({ operationId, summary, ...(contrastOverride ? { contrastOverride } : {}) });
   }
 
   async apply(input: ApplyThemeInput): Promise<Result<OperationManifest>> {
@@ -361,6 +373,7 @@ export class OperationService {
         imageBytes,
         themeSummary: record.themeSummary,
         themeHash: computeThemeHash(record.css, imageBytes),
+        ...(record.contrastOverride ? { contrastOverride: record.contrastOverride } : {}),
         ...(this.opts.probe ? { hooks: { probe: this.opts.probe } } : {}),
         onEvent: (e) => this.opts.bus.emit({ ...e, operationId }),
       });

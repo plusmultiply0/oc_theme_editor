@@ -34,6 +34,9 @@ function createWindow(): BrowserWindow {
     },
   });
 
+  // 工具窗口无菜单需求：彻底去掉默认 File/Edit/View/Window/Help 菜单栏
+  win.setMenu(null);
+
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
     void win.loadURL(devUrl);

@@ -17,16 +17,21 @@ import StructuralConfirmDialog from './components/StructuralConfirmDialog';
 import RestorePanel from './components/RestorePanel';
 import RecoveryPanel from './components/RecoveryPanel';
 import {
+  AUTO_TUNE,
+  autoTuneParams,
   blockedReason,
   canStage,
   clampSpec,
+  edgeFractionFromRgba,
   errorScope,
   formatDateTime,
   isBusy,
   makeSpec,
+  overlayStepUp,
   readyText,
   resetSpec,
   scopeText,
+  worstMargin,
   type GateInput,
   type UiState,
 } from './logic';
@@ -71,6 +76,32 @@ function detectReducedTransparency(): boolean {
   }
 }
 
+/**
+ * 从界面已有的缩略图（data URL）算边缘占比，供「自动调整」决定模糊值。
+ * 缩略图 ≤ 数百像素，这里再画到 ≤128px 做 Sobel；任何一步失败都按「平坦图」处理，
+ * 推不出边缘只影响模糊给不给，不该让整个调整失败。
+ */
+async function measureEdgeFractionFromUrl(url: string | null): Promise<number> {
+  if (!url) return 0;
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const scale = Math.min(1, 128 / Math.max(img.naturalWidth, img.naturalHeight, 1));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || w < 3 || h < 3) return 0;
+    ctx.drawImage(img, 0, 0, w, h);
+    return edgeFractionFromRgba(ctx.getImageData(0, 0, w, h).data, w, h);
+  } catch {
+    return 0;
+  }
+}
+
 export default function App() {
   const [spec, setSpec] = useState<ThemeSpec>(() => {
     const stored = loadSpec();
@@ -93,6 +124,8 @@ export default function App() {
   const [imageFormat, setImageFormat] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
+  /** F3「自动调整」进行中：只禁用该按钮本身，不占用九类界面状态 */
+  const [autoTuning, setAutoTuning] = useState(false);
   /** 右栏选项卡：仅内存态，不持久化（T2） */
   const [sideTab, setSideTab] = useState<'checks' | 'restore'>('checks');
   const genRef = useRef(0);
@@ -312,6 +345,49 @@ export default function App() {
     });
   }, []);
 
+  /**
+   * F3「自动调整」：按图片代表色与边缘占比推导三个滑杆值（确定性，不随机），
+   * 再复用生成层的对比度自检逐步上调遮罩——每次 +0.05、封顶后如实停在最优值。
+   * 只改参数，不触发应用；探参走的是和滑杆完全相同的 generateTheme 通道。
+   */
+  const autoAdjust = useCallback(async () => {
+    if (!result || !spec.imageId) return;
+    setAutoTuning(true);
+    try {
+      const edgeFrac = await measureEdgeFractionFromUrl(previewUrl);
+      const tuned = autoTuneParams(result.palette, edgeFrac);
+      let overlay = tuned.overlayOpacity;
+      let best: { overlay: number; margin: number } | null = null;
+      for (let attempt = 0; attempt < AUTO_TUNE.maxAttempts; attempt++) {
+        const trial = clampSpec({ ...spec, ...tuned, overlayOpacity: overlay });
+        const r = await window.themeSwitcher.generateTheme({ imageId: trial.imageId, spec: trial });
+        if (r.success) {
+          const margin = worstMargin(r.data.report);
+          if (!best || margin > best.margin) best = { overlay, margin };
+          if (r.data.report.passed) {
+            updateSpec({ ...tuned, overlayOpacity: overlay });
+            setNotice(
+              `自动调整完成：遮罩 ${overlay.toFixed(2)}、面板 ${tuned.panelOpacity.toFixed(2)}、模糊 ${tuned.blurPx}px。`,
+            );
+            return;
+          }
+        } else if (r.error.code !== 'CONTRAST_BELOW_TARGET') {
+          fail(r.error);
+          return;
+        }
+        const nextOverlay = overlayStepUp(overlay);
+        if (nextOverlay === overlay) break;
+        overlay = nextOverlay;
+      }
+      // 全程没有一项 trial 通过：落到余量最好的遮罩值，并如实说明仍需手动微调
+      const fallback = best ? best.overlay : overlay;
+      updateSpec({ ...tuned, overlayOpacity: fallback });
+      setNotice(`已按图片推导并把遮罩提到 ${fallback.toFixed(2)}，仍存在未达标项：请手动微调遮罩或面板不透明度。`);
+    } finally {
+      setAutoTuning(false);
+    }
+  }, [fail, previewUrl, result, spec, updateSpec]);
+
   const stage = useCallback(async (confirmStructural: boolean) => {
     if (!target) return;
     if (!canStage({ ...gate, busy: isBusy(ui) })) return;
@@ -442,9 +518,20 @@ export default function App() {
             )}
           </div>
 
-          <button className="btn primary" type="button" onClick={() => void pickImage()} disabled={isBusy(ui)}>
-            选择图片
-          </button>
+          <div className="btn-row">
+            <button className="btn primary" type="button" onClick={() => void pickImage()} disabled={isBusy(ui)}>
+              选择图片
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => void autoAdjust()}
+              disabled={!result || isBusy(ui) || autoTuning}
+              title="按图片明暗与边缘自动推导遮罩、面板不透明度与模糊，并自检可读性"
+            >
+              {autoTuning ? '调整中…' : '自动调整'}
+            </button>
+          </div>
           <p className="scope">
             {imageName || '尚未选择图片'}
             {imageFormat ? ` · 实际格式 ${imageFormat}` : ''}

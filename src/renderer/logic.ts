@@ -4,7 +4,7 @@
  * 而不是埋在组件里靠肉眼看。
  */
 import type { ErrorCode } from '../shared/errors';
-import type { ThemeSpec } from '../shared/schema';
+import type { ContrastReport, ThemeSpec } from '../shared/schema';
 
 export const DEFAULT_SPEC: Omit<ThemeSpec, 'imageId'> = {
   schemaVersion: 1,
@@ -179,4 +179,89 @@ export function readyText(args: GateInput): string {
   const blocked = blockedReason(args);
   if (blocked) return blocked;
   return '配色与可读性均已通过，可以应用；应用前请先退出 OpenCode。';
+}
+
+/* ---------- F3「自动调整」：确定性推导，纯函数便于单测 ---------- */
+
+export const AUTO_TUNE = {
+  overlayMin: 0.55,
+  overlayMax: 0.85,
+  panelOpacity: 0.85,
+  blurLow: 4,
+  blurHigh: 8,
+  /** 有边缘感的像素占比低于此值视为平坦图，不给模糊 */
+  edgeFracLow: 0.15,
+  /** 占比达到此值即给满 blurHigh */
+  edgeFracHigh: 0.4,
+  /** 对比度不达标时遮罩的步进与上限（宁停上限不越界） */
+  stepUp: 0.05,
+  stepUpCap: 0.95,
+  maxAttempts: 8,
+} as const;
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** BT.601 相对亮度（与 core 的图片亮度口径一致），无法解析时按中灰 0.5 */
+export function hexLuminance(hex: string): number {
+  const m = /^#?([\da-f]{6})$/i.exec(hex.trim());
+  if (!m) return 0.5;
+  const n = parseInt(m[1], 16);
+  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+}
+
+/** Sobel 梯度可感（幅值 >0.5，纯黑白边约 4.9）的边缘像素占比，0..1 */
+export function edgeFractionFromRgba(data: Uint8ClampedArray, width: number, height: number): number {
+  if (width < 3 || height < 3 || data.length < width * height * 4) return 0;
+  const gray = new Float64Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    gray[i] = (0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]) / 255;
+  }
+  let edgePixels = 0;
+  let total = 0;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      const gx =
+        -gray[i - width - 1] - 2 * gray[i - 1] - gray[i + width - 1] +
+        gray[i - width + 1] + 2 * gray[i + 1] + gray[i + width + 1];
+      const gy =
+        -gray[i - width - 1] - 2 * gray[i - width] - gray[i - width + 1] +
+        gray[i + width - 1] + 2 * gray[i + width] + gray[i + width + 1];
+      total++;
+      if (Math.hypot(gx, gy) > 0.5) edgePixels++;
+    }
+  }
+  return total > 0 ? edgePixels / total : 0;
+}
+
+/**
+ * 按图片代表色与边缘占比推导三个滑杆值（不随机、不读网络）：
+ * 浅图高遮罩、深图低遮罩（0.55–0.85 线性）；面板固定 0.85 减少自由度；
+ * 边缘占比达门槛才给 4–8px 模糊，平坦图 0。
+ */
+export function autoTuneParams(
+  palette: string[],
+  edgeFrac: number,
+): { overlayOpacity: number; panelOpacity: number; blurPx: number } {
+  const lums = palette.map(hexLuminance);
+  const brightness = lums.length > 0 ? lums.reduce((a, b) => a + b, 0) / lums.length : 0.5;
+  const overlayOpacity = round2(
+    AUTO_TUNE.overlayMin + Math.min(1, Math.max(0, brightness)) * (AUTO_TUNE.overlayMax - AUTO_TUNE.overlayMin),
+  );
+  let blurPx = 0;
+  if (edgeFrac >= AUTO_TUNE.edgeFracLow) {
+    const t = Math.min(1, (edgeFrac - AUTO_TUNE.edgeFracLow) / (AUTO_TUNE.edgeFracHigh - AUTO_TUNE.edgeFracLow));
+    blurPx = Math.round(AUTO_TUNE.blurLow + t * (AUTO_TUNE.blurHigh - AUTO_TUNE.blurLow));
+  }
+  return { overlayOpacity, panelOpacity: AUTO_TUNE.panelOpacity, blurPx };
+}
+
+/** 推导值未达标时的遮罩步进：每次 +0.05，封顶 stepUpCap 后原地不动 */
+export function overlayStepUp(v: number): number {
+  return Math.min(AUTO_TUNE.stepUpCap, round2(v + AUTO_TUNE.stepUp));
+}
+
+/** 报告里余量最差的一项（ratio/required 最小值）；空报告按 Infinity */
+export function worstMargin(report: ContrastReport): number {
+  return report.entries.reduce((a, e) => Math.min(a, e.ratio / e.required), Infinity);
 }

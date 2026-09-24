@@ -43,7 +43,6 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
     '--p-neutral-surface': alpha(tokens.text, REGION_ALPHAS.neutral),
     '--p-hover-overlay': alpha(tokens.hover, REGION_ALPHAS.hover),
     '--p-pressed-overlay': alpha(tokens.pressed, REGION_ALPHAS.pressed),
-    '--p-selected-overlay': alpha(tokens.selection, REGION_ALPHAS.selected),
     '--p-user-bubble': alpha(tokens.selection, REGION_ALPHAS.userBubble),
     '--p-text': tokens.text,
     '--p-muted': tokens.muted,

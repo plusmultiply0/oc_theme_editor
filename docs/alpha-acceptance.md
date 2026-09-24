@@ -695,4 +695,42 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   （**追加 2026-09-24**：ago 残留清理已于当日闭环，见 `release-checklist.md` §2.7
   「遗留清理闭环」；本项遗留清零。）
 
+### 9.10 候选登记（2026-09-24，alpha.7，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 指令「继续，执行恢复命令并起 alpha.7 候选轮」（2026-09-24）。
+  本轮增量源码为界面修复轮 F1–F4（`0694937`…`fa12cd0`：删「启动 OpenCode」按钮全链、
+  删工具窗口菜单栏、「自动调整」按钮、预览与真机观感对齐九处）+ handoff 文档；
+  行为层与 IPC 契约零改动（F1 属删除已证实有害的废弃通道）。**与 9.9 不同：登记前
+  没有对新界面的整体观感回执**——F4 预览对齐做过真机同图同参取证（apply→截图→对比→
+  restore，`handoff/ui-fix-plan-2026-09-24/F4-DIFF.md` §7），但「自动调整」按钮与
+  删按钮后的整体操作观感待 jc 用本候选回执，登记时如实标注。不宣称 A8 全签核（A6 仍跳过）。
+- **真机收尾**：F4 取证留下的应用态已恢复——`live-cli restore previous`（操作
+  `op-20260924T103309437Z-k7n2kz`，状态 applied），提交后指纹 `8ec559dadac15ecf…`
+  与测前（2026-09-23 态）一致；OpenCode 安装不再带本轮演示主题。
+- **链运行**：`npm run release:build` 由 agent 会话后台跑。第一次被**源码冻结检查**
+  拒绝（仓库内混入一个 shell 变量未展开造成的字面量 `$TEMP/` 未跟踪目录，内含一张
+  误写入的截图；整体移出仓库、未删文件，如实记录）；清理后重跑一次跑满 12 步全绿，
+  末行 `ALL_GREEN buildId=20260924103659-afdd5dc-c6e390`。`smoke:gui`（空参数，27s）、
+  `test:e2e:electron`（22.8s）均真实通过。发布级只读终检 18 项 0 失败，
+  `RELEASE_GREEN`、`publishable=true`。
+- **候选身份**：buildId `20260924103659-afdd5dc-c6e390`，来源提交 `afdd5dc`（版本号
+  bump + 发布说明草案），`packMethod: electron-builder`，可重复构建。
+  zip SHA256 `8fa07a421e3257f4f714f242c3e06ba67b9ca80e643714c05f2938224fef5e49`、
+  exe SHA256 `91078dbc14459ab8b9269a1e8b1a21d6cd4126470cb8008469e2d5799960c60c`、
+  app.asar SHA256 `f8a5bf8b038dd7ef1d671c14e6c21916b3d297830a18aa774863512ae47bcc1e`
+  （1064 条目 / unpacked 7）。zip 127.2 MB / 82 条目。
+- **登记**：`release-checklist.md` §1 权威入口块换为上述 buildId 与哈希，§2.9 把 alpha.6
+  转历史（其 manifest/哈希原样保留，并注明 F1–F4 不在 alpha.6 包内），§3 门禁表按本轮
+  build-record 改写；README 候选指针同步（当前候选 buildId/目录两处 + 修复轮随
+  alpha.7 分发一条新增，T1–T5 条目改「随 alpha.6 分发」）。侧车 `.zip.sha256.txt`
+  生成于登记后、分发前（不入库，同先例）。
+  `doc-candidate-entry.cjs --manifest candidate-20260924103659-afdd5dc-c6e390/
+  candidate-manifest.json --check` 得 `DOC_ENTRY_OK`。
+- **tag / Release**：tag `v0.1.0-alpha.7` 打在候选登记 HEAD 并推送 `origin`（打点后补记，
+  同 9.9 先例）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.9 先例），
+  **wb 侧不上传、不宣称已发布**，待 jc 网页回执后补记页面 URL 并将发布说明状态行转
+  「已发布」。**本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
+- 遗留：新界面整体观感回执（本轮特有缺口，登记时未闭合）、真机逐项视觉走查、
+  A6 干净环境、P3 色块外观缺陷口径不变。
+
 

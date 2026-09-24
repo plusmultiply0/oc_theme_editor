@@ -1,8 +1,8 @@
 # OpenCodeThemeSwitcher 0.1.0-alpha.7（Alpha 体验版）
 
-> **状态：已登记，待发布（2026-09-24，pre-release）**。`npm run release:build` 一次
+> **状态：已发布（2026-09-24，pre-release，tag `v0.1.0-alpha.7`）**。`npm run release:build` 一次
 > 跑满 12 步 `ALL_GREEN`，登记后核验 `RELEASE_GREEN`、`publishable=true`；本轮特有缺口
-> 如实标注：新界面整体观感回执在登记**前**未做（预览对齐的真机取证另见
+> 如实保留：新界面整体观感回执在发布时**仍未做**（预览对齐的真机取证另见
 > `handoff/ui-fix-plan-2026-09-24/F4-DIFF.md` §7）。不宣称 A8 全签核（A6 仍跳过）。
 > 发布执行记录见 `docs/alpha-acceptance.md` §9.10。
 

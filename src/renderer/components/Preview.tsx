@@ -53,6 +53,10 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
     '--p-hover': tokens.hover,
     '--p-pressed': tokens.pressed,
     '--p-border': tokens.border,
+    // 与注入层弹窗/菜单同一表达式（tokens.ts --border-base：border 色 0.9 叠加），F4a §2.5
+    '--p-border-soft': alpha(tokens.border, 0.9),
+    // 主按钮禁用边框与 css.ts button[variant=primary]:disabled 同一表达式（border 色 0.5），F4a §3.3
+    '--p-border-disabled': alpha(tokens.border, 0.5),
     '--p-focus': tokens.focus,
     '--p-selection': tokens.selection,
     '--p-error': tokens.status.error,
@@ -60,6 +64,9 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
     '--p-success': tokens.status.success,
     '--p-diff-add': tokens.diff.added,
     '--p-diff-del': tokens.diff.removed,
+    // diff 行底与 tokens.ts --surface-diff-add/delete-base 同色同 alpha（0.16），F4a §4.4
+    '--p-diff-add-surface': alpha(tokens.diff.added, 0.16),
+    '--p-diff-del-surface': alpha(tokens.diff.removed, 0.16),
   };
 
   return (
@@ -134,7 +141,8 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
               <button className="btn primary pressed" type="button">按下</button>
               <button className="btn primary focus" type="button">焦点</button>
               <button className="btn neutral" type="button">次级</button>
-              <button className="btn" type="button" disabled>禁用</button>
+              {/* 注入层只覆盖 primary 的禁用三值，预览演示的就是这条被覆盖的路径（F4a §3.3） */}
+              <button className="btn primary" type="button" disabled>禁用</button>
             </div>
 
             <div className="feedback">

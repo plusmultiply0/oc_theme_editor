@@ -1,8 +1,8 @@
 # OpenCodeThemeSwitcher 0.1.0-alpha.6（Alpha 体验版）
 
-> **状态：候选已登记（2026-09-24）**。`npm run release:build` 一次跑满 12 步 `ALL_GREEN`，
-> 登记后核验 `RELEASE_GREEN`、`publishable=true`；界面重整 T1–T5 的真机观感整体回执在登记前
-> 已落账（未宣称 A8 全签核，A6 仍跳过）。tag 与 Release 进展见 `docs/alpha-acceptance.md` §9.9。
+> **状态：已发布（2026-09-24，pre-release，tag `v0.1.0-alpha.6`）**。`npm run release:build` 一次
+> 跑满 12 步 `ALL_GREEN`，登记后核验 `RELEASE_GREEN`、`publishable=true`；界面重整 T1–T5 的真机
+> 观感整体回执在登记前已落账（未宣称 A8 全签核，A6 仍跳过）。发布执行记录见 `docs/alpha-acceptance.md` §9.9。
 
 ## 发布物
 

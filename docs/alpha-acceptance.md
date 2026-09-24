@@ -686,5 +686,11 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   （`* [new tag]`，注释如实标注「真机观感整体回执归使用者」口径）；GitHub pre-release
   由 jc 在网页创建（本机无 gh CLI，同 9.4–9.8 先例），**wb 侧不上传、不宣称已发布**，
   待 jc 网页回执后补记页面 URL 并将发布说明状态行转「已发布」。
+  **2026-09-24 jc 网页回执（页面 URL）**：
+  `https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v0.1.0-alpha.6`。
+  附件可见性以该回执为准（私有仓库，wb 侧无匿名核验通道，同 9.4–9.8 口径）。
+  **本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
+- 至此 alpha.6 发布轮 agent 侧与上传侧均闭环。**遗留**：真机逐项视觉走查、A6 干净环境、
+  P3 色块外观缺陷口径不变；`ago$B/` 与 `ago/` 内被锁 asar 待锁释放后清理。
 
 

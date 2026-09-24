@@ -38,8 +38,8 @@ async function paletteOf(color: { r: number; g: number; b: number }): Promise<st
   return analyzed.data.palette;
 }
 
-describe('亮度与遮罩映射（F3）', () => {
-  it('深图落在映射段低位、浅图落在高位，面板恒为 0.85', async () => {
+describe('亮度与遮罩映射（F3，W2 下移到 0.35–0.60）', () => {
+  it('深图落在映射段低位、浅图落在高位，面板恒为 0.65', async () => {
     const darkPalette = await paletteOf({ r: 12, g: 14, b: 20 });
     const lightPalette = await paletteOf({ r: 240, g: 240, b: 245 });
 
@@ -50,9 +50,13 @@ describe('亮度与遮罩映射（F3）', () => {
     expect(dark.overlayOpacity).toBeLessThan(AUTO_TUNE.overlayMin + 0.10);
     expect(light.overlayOpacity).toBeGreaterThan(AUTO_TUNE.overlayMax - 0.10);
     expect(light.overlayOpacity).toBeLessThanOrEqual(AUTO_TUNE.overlayMax);
+    // W2 定案区间的绝对断言：常量被改回去时这里必须响
+    expect(dark.overlayOpacity).toBeLessThan(0.45);
+    expect(light.overlayOpacity).toBeLessThanOrEqual(0.6);
+    expect(light.overlayOpacity).toBeGreaterThan(0.5);
     expect(dark.overlayOpacity).toBeLessThan(light.overlayOpacity);
-    expect(dark.panelOpacity).toBe(AUTO_TUNE.panelOpacity);
-    expect(light.panelOpacity).toBe(AUTO_TUNE.panelOpacity);
+    expect(dark.panelOpacity).toBe(0.65);
+    expect(light.panelOpacity).toBe(0.65);
   });
 
   it('hexLuminance：黑 0、白 1、无法解析按中灰', () => {

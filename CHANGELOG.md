@@ -9,6 +9,16 @@
 
 ## 未发布（当前）
 
+### 观感修复与功能回合 W1–W2（2026-09-24，随下一候选生效）
+
+- **W1**：注入层为输入区停靠容器补透明规则（`#root [data-component="session-prompt-dock"]`），
+  半透明主题下输入框两侧的全宽实底「白条」消失；取证与定案见
+  `handoff/visual-fix-plan-2026-09-24/W1-EVIDENCE.md`。
+- **W2（默认行为变化）**：「自动调整」遮罩映射段 0.55–0.85 → 0.35–0.60，面板固定不透明度
+  0.85 → 0.65；出厂默认面板 0.86 → 0.65。方向由三组小样交 jc 拍板（选样 B），
+  对比度阈值与逐步上调兜底不变。小样与真机前后对比见
+  `handoff/visual-fix-plan-2026-09-24/W2-SAMPLES.md`。
+
 ### 第一批：JPEG 别名（.jfif/.jpe）入口支持（2026-09-12 第六轮）
 
 依据 `handoff/format-review-2026-09-12/NEXT_EXECUTION_PLAN.md`：

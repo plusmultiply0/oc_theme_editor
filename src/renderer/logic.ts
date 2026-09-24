@@ -11,7 +11,8 @@ export const DEFAULT_SPEC: Omit<ThemeSpec, 'imageId'> = {
   mode: 'auto',
   palette: ['#404558', '#787e9f', '#a0a7c9'],
   overlayOpacity: 0.35,
-  panelOpacity: 0.86,
+  // W2（2026-09-24 jc 定方向 B）：0.86 在半透明主题下把壁纸糊成白底，默认降到 0.65
+  panelOpacity: 0.65,
   blurPx: 0,
   reducedTransparency: false,
 };
@@ -185,9 +186,14 @@ export function readyText(args: GateInput): string {
 /* ---------- F3「自动调整」：确定性推导，纯函数便于单测 ---------- */
 
 export const AUTO_TUNE = {
-  overlayMin: 0.55,
-  overlayMax: 0.85,
-  panelOpacity: 0.85,
+  /*
+   * W2（2026-09-24，jc 选样 B）：原 0.55–0.85 段在半透明壁纸图上把画面糊死
+   * （「遮罩 0.63 + 面板 0.85 → 壁纸存在感过低」）。整段下移到 0.35–0.60；
+   * 可读性不靠高遮罩硬扛——推导后仍由逐步上调循环（stepUp/stepUpCap）兜底。
+   */
+  overlayMin: 0.35,
+  overlayMax: 0.6,
+  panelOpacity: 0.65,
   blurLow: 4,
   blurHigh: 8,
   /** 有边缘感的像素占比低于此值视为平坦图，不给模糊 */
@@ -237,7 +243,7 @@ export function edgeFractionFromRgba(data: Uint8ClampedArray, width: number, hei
 
 /**
  * 按图片代表色与边缘占比推导三个滑杆值（不随机、不读网络）：
- * 浅图高遮罩、深图低遮罩（0.55–0.85 线性）；面板固定 0.85 减少自由度；
+ * 浅图高遮罩、深图低遮罩（0.35–0.60 线性，W2 下移）；面板固定 0.65 减少自由度；
  * 边缘占比达门槛才给 4–8px 模糊，平坦图 0。
  */
 export function autoTuneParams(

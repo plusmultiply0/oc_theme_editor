@@ -726,8 +726,9 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   生成于登记后、分发前（不入库，同先例）。
   `doc-candidate-entry.cjs --manifest candidate-20260924103659-afdd5dc-c6e390/
   candidate-manifest.json --check` 得 `DOC_ENTRY_OK`。
-- **tag / Release**：tag `v0.1.0-alpha.7` 打在候选登记 HEAD 并推送 `origin`（打点后补记，
-  同 9.9 先例）；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.9 先例），
+- **tag / Release**：tag `v0.1.0-alpha.7`（annotated）已打在候选登记 HEAD `eecea37` 并推送
+  `origin`（`* [new tag]`，注释如实标注「新界面整体观感回执归使用者、登记前未闭合」口径）；
+  GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.9 先例），
   **wb 侧不上传、不宣称已发布**，待 jc 网页回执后补记页面 URL 并将发布说明状态行转
   「已发布」。**本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
 - 遗留：新界面整体观感回执（本轮特有缺口，登记时未闭合）、真机逐项视觉走查、

@@ -401,16 +401,6 @@ export default function App() {
         </div>
 
         <div className="topbar-right">
-          <button
-            className="btn primary"
-            type="button"
-            disabled={!target || isBusy(ui)}
-            onClick={() => void launchTarget()}
-          >
-            {target && (launchedId === target.targetId || target.processState === 'running')
-              ? '打开 OpenCode'
-              : '启动 OpenCode'}
-          </button>
           <div className="target">
             {target ? (
               <>
@@ -422,8 +412,10 @@ export default function App() {
                   <span className={`badge ${target.support}`}>{target.support}</span>
                 )}
                 <span className="mono">{target.version}</span>
-                <span className="muted">{target.installPath}</span>
-                {target.rejectReason ? <span className="reason">{target.rejectReason}</span> : null}
+                <span className="muted truncate" title={target.installPath}>{target.installPath}</span>
+                {target.rejectReason ? (
+                  <span className="reason truncate" title={target.rejectReason}>{target.rejectReason}</span>
+                ) : null}
               </>
             ) : (
               <span className="muted">未发现目标</span>
@@ -653,6 +645,18 @@ export default function App() {
       </main>
 
       <footer className={`status ${ui.kind}`}>
+        <span className="status-launch">
+          <button
+            className="btn primary small"
+            type="button"
+            disabled={!target || isBusy(ui)}
+            onClick={() => void launchTarget()}
+          >
+            {target && (launchedId === target.targetId || target.processState === 'running')
+              ? '打开 OpenCode'
+              : '启动 OpenCode'}
+          </button>
+        </span>
         {ui.kind === 'empty' || ui.kind === 'ready' ? readyText(gate) : null}
         {ui.kind === 'analyzing' ? '正在提取配色…' : null}
         {ui.kind === 'staging' ? '正在检查目标与生成准备内容…' : null}

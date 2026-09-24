@@ -67,7 +67,7 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.5rem 1.25rem;
+  padding: 0.375rem 1.25rem;
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-sm);
@@ -103,6 +103,12 @@ a:focus-visible {
   gap: 1rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
+  flex: 1;
+}
+
+.topbar-title {
+  flex: none;
 }
 
 .target {
@@ -110,8 +116,18 @@ a:focus-visible {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.8125rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  min-width: 0;
+}
+
+/* 长路径/长拒绝原因单行截断，全文走 title tooltip */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 18rem;
 }
 
 .badge {
@@ -961,6 +977,13 @@ a:focus-visible {
   align-items: baseline;
   flex-wrap: wrap;
   min-height: 2.5rem;
+}
+
+/* 状态栏最左侧的「启动 OpenCode」按钮：与状态文字保持同一基线 */
+.status-launch {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* 状态圆点：颜色随状态文字色（error/success/applying…），一眼可辨 */

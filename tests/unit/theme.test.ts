@@ -421,6 +421,14 @@ describe('token 映射与输出一致性（R3、R5）', () => {
     expect(css).not.toMatch(/\[data-component="button"\]\s*\{/);
   });
 
+  it('输入区停靠容器透明，全宽底色带不再露出（W1 回归）', () => {
+    const css = generateCss(tokens, makeSpec());
+    // dock 本体透明（新旧布局两条工具类都由这一条属性选择器盖住），且不需要 !important
+    expect(css).toContain('#root [data-component="session-prompt-dock"] {\n  background-color: transparent;\n}');
+    // 输入框本体的面板底色规则仍在，透明只作用于外层容器
+    expect(css).toContain('[data-component="prompt-input-v2"]');
+  });
+
   it('占位文字稀释混向不透明的次要文字色，不再混向 transparent（P2 回归）', () => {
     const css = generateCss(tokens, makeSpec());
     // 官方预置的形状是 50% 混向 transparent（浅输入底上实测只剩 2.07:1）；

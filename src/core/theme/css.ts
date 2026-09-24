@@ -150,6 +150,23 @@ ${renderTokenCss(tokens, spec)}
   background-color: transparent;
 }
 
+/*
+ * 输入区停靠容器去横带（W1，2026-09-24 真机坐实）。
+ *
+ * 官方 SessionComposerRegion 的根是 data-component="session-prompt-dock"：
+ * 全宽、实底（新版布局挂 bg-v2-background-bg-base，旧版挂 bg-background-stronger），
+ * 里面才是居中限宽的输入列（md:max-w-200 / 2xl:max-w-[1000px]）。
+ * 官方实底设计下这条底色带看不出来；换成半透明主题后，
+ * 输入框两侧的容器底色就成了横贯的「白条」。
+ * 让容器透明，面板色只由输入框本体承担——与 mock 预览同构（预览里输入框本就浮在壁纸上）。
+ *
+ * 选择器取自 1.18.32 实际 DOM（main-*.js classList 证据见 handoff W1-EVIDENCE.md），
+ * 升级后需重新核对；两种布局变体由同一条属性选择器一并覆盖。
+ */
+#root [data-component="session-prompt-dock"] {
+  background-color: transparent;
+}
+
 [data-component="dialog"],
 [data-component="dialog-v2"],
 [data-component="menu-v2-content"],

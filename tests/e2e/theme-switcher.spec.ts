@@ -166,7 +166,7 @@ async function setImageByDragAndDrop(): Promise<void> {
 }
 
 /**
- * 按标题精确锁定侧栏面板。
+ * 按标题精确锁定侧栏面板（仅「恢复」选项卡激活时可见）。
  * 不能用 `filter({ hasText: '目标' })`：可读性面板里「全部条目达到目标值」也含「目标」，
  * 结果会选中错的面板。
  */
@@ -174,6 +174,13 @@ function panelWithHeading(name: string) {
   return page.locator('.side-column .panel').filter({
     has: page.getByRole('heading', { name, exact: true }),
   });
+}
+
+/** 切到右栏「恢复」选项卡（目标/待恢复/恢复三块自 U-重整 T2 起在此页内） */
+async function openRestoreTab(): Promise<void> {
+  const tab = page.getByRole('tab', { name: '恢复' });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
 /**
@@ -209,15 +216,16 @@ test.describe('图形界面闭环（先不碰用户安装）', () => {
      * 成功的记录与之吻合）。这里改用有界自动重试的轮询断言（取规范化文本以兼容
      * 路径大小写），并在超时时把可诊断证据落进报告；不是「加固定 sleep」或
      * 「重试到绿」。
+     * U-重整 T1 后 installPath 可见文本单行截断，全文改由 title 属性承载——断言跟
+     * 着改读 title。
      */
-    const targetPath = page.locator('.target .muted');
+    const targetChip = page.locator('.target .muted');
+    const chipTitle = async () => ((await targetChip.getAttribute('title')) ?? '').toLowerCase();
     try {
-      await expect
-        .poll(async () => (await targetPath.innerText()).toLowerCase(), {
-          timeout: 30_000,
-          message: `等待目标发现完成（应显示隔离临时目录 ${baseDir}）`,
-        })
-        .toContain(baseDir.toLowerCase());
+      await expect.poll(chipTitle, {
+        timeout: 30_000,
+        message: `等待目标发现完成（应显示隔离临时目录 ${baseDir}）`,
+      }).toContain(baseDir.toLowerCase());
     } catch (e) {
       const diagnostics = await collectDiscoveryDiagnostics();
       await testInfo.attach('discover-timeout.json', {
@@ -231,7 +239,7 @@ test.describe('图形界面闭环（先不碰用户安装）', () => {
 
     // 发现完成后才断言徽标与包名；隔离保险：路径必须落在临时目录内
     await expect(page.locator('.target .badge')).toHaveText('supported', { timeout: 30_000 });
-    const installText = (await targetPath.innerText()).toLowerCase();
+    const installText = await chipTitle();
     expect(installText).toContain(baseDir.toLowerCase());
     expect(installText).toContain('@opencode-aidesktop');
   });
@@ -249,11 +257,14 @@ test.describe('图形界面闭环（先不碰用户安装）', () => {
     // 配色与预览同源
     await expect(page.locator('.preview .mock-window')).toBeVisible();
     await expect(page.locator('.preview-note')).toContainText('同一份 token');
-    await expect(page.locator('.entries li').first()).toBeVisible();
 
     const report = page.locator('.side-column .panel').first();
     await expect(report).toContainText('可读性检查');
     await expect(report).toContainText('估算');
+    await expect(report).toContainText('余量最差');
+    // U-重整 T3：24 行明细默认折叠进「明细与判定依据」——展开后再断言逐条内容
+    await report.locator('details.scan-details > summary').click();
+    await expect(page.locator('.entries li').first()).toBeVisible();
     // R4：覆盖了非 default 状态与多点采样
     await expect(report).toContainText('（hover）');
     await expect(report).toContainText('（pressed）');
@@ -284,14 +295,17 @@ test.describe('图形界面闭环（先不碰用户安装）', () => {
   });
 
   test('恢复面板区分「原版」与「首次接管快照」，无出厂证据时不给恢复原版按钮', async () => {
+    await openRestoreTab();
     const restore = panelWithHeading('恢复');
     await expect(restore).toContainText('首次接管快照');
-    await expect(restore).toContainText('没有可证明的出厂原版');
+    // U-重整 T4：出厂指纹长说明收进折叠「说明」，可见处是一行摘要
+    await expect(restore).toContainText('没有可证明的出厂原版 —— 用首次接管快照');
     await expect(restore.getByRole('button', { name: '恢复原版' })).toHaveCount(0);
     await expect(restore.getByRole('button', { name: '恢复到首次接管时' })).toBeVisible();
   });
 
   test('恢复到首次接管快照后，旧主题链接回到 HTML', async () => {
+    await openRestoreTab();
     const restore = panelWithHeading('恢复');
     await restore.getByRole('button', { name: '恢复到首次接管时' }).click();
     await expect(page.locator('.status')).toContainText('首次接管时的状态', { timeout: 60_000 });
@@ -299,18 +313,23 @@ test.describe('图形界面闭环（先不碰用户安装）', () => {
   });
 
   test('「重新检测」与「选择安装目录」入口存在，检测失败时不是死路（R6）', async () => {
+    await openRestoreTab();
     const target = panelWithHeading('目标');
     await expect(target.getByRole('button', { name: '重新检测' })).toBeVisible();
     await expect(target.getByRole('button', { name: '选择安装目录' })).toBeVisible();
 
     await target.getByRole('button', { name: '重新检测' }).click();
-    // 重新检测后仍应认出同一个合成目标，且不弹错误
-    await expect(page.locator('.target .muted')).toContainText('@opencode-aidesktop');
+    // 重新检测后仍应认出同一个合成目标，且不弹错误（T1 后全文在 title 里）
+    await expect
+      .poll(async () => ((await page.locator('.target .muted').getAttribute('title')) ?? '').toLowerCase())
+      .toContain('@opencode-aidesktop');
     await expect(page.locator('.status')).not.toContainText('未发现');
   });
 
-  test('待恢复面板在无未完成事务时明确说明「没有」，不冒充有', async () => {
-    const recovery = panelWithHeading('待恢复');
-    await expect(recovery).toContainText('没有未完成的操作');
+  test('待恢复区在无未完成事务时明确说明「没有」，不冒充有', async () => {
+    await openRestoreTab();
+    // U-重整 T4：空态从整块面板压缩为一行
+    await expect(page.locator('.recovery-empty')).toContainText('没有未完成的操作');
+    await expect(panelWithHeading('待恢复')).toHaveCount(0);
   });
 });

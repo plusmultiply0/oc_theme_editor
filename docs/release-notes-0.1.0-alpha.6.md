@@ -1,18 +1,18 @@
 # OpenCodeThemeSwitcher 0.1.0-alpha.6（Alpha 体验版）
 
-> **状态：候选登记前草案（2026-09-24 起草）**。本文件随版本 bump 与 UI 重整改动一同进入构建；
-> 发布物表（buildId / zip / 哈希）待 `npm run release:build` 跑满 12 步 `ALL_GREEN` 并登记后回填，
-> 发布执行记录届时落 `docs/alpha-acceptance.md` §9.9。**回填前本包不可分发。**
+> **状态：候选已登记（2026-09-24）**。`npm run release:build` 一次跑满 12 步 `ALL_GREEN`，
+> 登记后核验 `RELEASE_GREEN`、`publishable=true`；界面重整 T1–T5 的真机观感整体回执在登记前
+> 已落账（未宣称 A8 全签核，A6 仍跳过）。tag 与 Release 进展见 `docs/alpha-acceptance.md` §9.9。
 
 ## 发布物
 
 | 项 | 值 |
 |---|---|
-| buildId | 待回填 |
-| 分发 zip | 待回填 |
-| zip SHA256 | 待回填 |
-| exe SHA256 | 待回填 |
-| app.asar SHA256 | 待回填 |
+| buildId | `20260924060658-064cc08-cfcc98` |
+| 分发 zip | `candidate-20260924060658-064cc08-cfcc98.zip`（127.2 MB，82 条目） |
+| zip SHA256 | `e409984c7fafe775c14b0930d865ce3da620a17ba7a25bbe9090c49444d97bef` |
+| exe SHA256 | `91bf018a9b899c96aceb153b053b14703c891ea80a9f58e452e83738a63a2745` |
+| app.asar SHA256 | `e682d1f5d240e510bdbcae9422fdf7205c13f46c56d88203ed33bfe349f9ebe8`（968 条目 / unpacked 7） |
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 

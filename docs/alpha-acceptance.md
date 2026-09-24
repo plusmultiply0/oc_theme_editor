@@ -660,4 +660,28 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
 - 至此 alpha.5 发布轮 agent 侧与上传侧均闭环。**遗留**：alpha.4 用户升级本候选才脱离基线门恒拒；发布说明「已知限制」中真机逐项
   视觉走查、A6 干净环境、P3 色块外观缺陷口径不变。
 
+### 9.9 候选登记（2026-09-24，alpha.6，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 指令「开工 alpha.6 发布链」（2026-09-24，继 T1–T5 重整真机观感
+  整体回执「通过」之后）。本轮增量源码为界面信息架构重整 T1–T5（`475c295`…`e6500d5`，
+  纯呈现层，行为/IPC/服务层零改动）+ 文档口径同步；**登记前已有 jc 对新布局的整体观感
+  回执**（§6，2026-09-24，非逐项）。不宣称 A8 全签核（A6 仍跳过），延续 9.6–9.8 口径。
+- **链运行**：`npm run release:build` 在 **agent 会话**一次跑满 12 步全绿，末行
+  `ALL_GREEN buildId=20260924060658-064cc08-cfcc98`；`smoke:gui`（空参数，29.3s）与
+  `test:e2e:electron`（28.4s，38/38）均真实通过。发布级只读终检 18 项 0 失败，
+  `RELEASE_GREEN`、`publishable=true`。
+- **候选身份**：buildId `20260924060658-064cc08-cfcc98`，来源提交 `064cc08`（版本号
+  bump + 发布说明草案），`packMethod: electron-builder`，可重复构建。
+  zip SHA256 `e409984c7fafe775c14b0930d865ce3da620a17ba7a25bbe9090c49444d97bef`、
+  exe SHA256 `91bf018a9b899c96aceb153b053b14703c891ea80a9f58e452e83738a63a2745`、
+  app.asar SHA256 `e682d1f5d240e510bdbcae9422fdf7205c13f46c56d88203ed33bfe349f9ebe8`
+  （968 条目 / unpacked 7）。zip 127.2 MB / 82 条目。
+- **登记**：`release-checklist.md` §1 权威入口块换为上述 buildId 与哈希，§2.8 把 alpha.5
+  转历史（其 manifest/哈希原样保留，并注明 T1–T5 不在 alpha.5 包内），§3 门禁表按本轮
+  build-record 改写；README 候选指针三处同步（重整改为「随 alpha.6 分发」）。侧车
+  `.zip.sha256.txt` 已生成于登记后、分发前（不入库，同先例）。
+  `doc-candidate-entry.cjs --manifest candidate-20260924060658-064cc08-cfcc98/
+  candidate-manifest.json --check` 得 `DOC_ENTRY_OK`。
+- **tag / Release**：待执行（tag `v0.1.0-alpha.6` + 推送 + jc 网页回执，同 9.4–9.8 先例）。
+
 

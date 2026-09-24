@@ -5,28 +5,28 @@ Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件�
 
 ## 1. 当前候选（Alpha）
 
-版本 **`0.1.0-alpha.5`**（Windows x64），由 `npm run release:build` 的正式发布链产出
+版本 **`0.1.0-alpha.6`**（Windows x64），由 `npm run release:build` 的正式发布链产出
 （`packMethod: electron-builder`，**可重复构建**）。本轮为 agent 会话一次跑满全链（见 §3 注）。
 
 下面这段是本文件的**唯一权威入口**，由 `tools/doc-candidate-entry.cjs` 从选中
 manifest 加磁盘实算生成：
 
 <!-- CURRENT-CANDIDATE:BEGIN -->
-buildId: 20260923081342-001342d-30fc1c
-sourceCommit: 001342dcf7c03c5c5de7b8ef40c4edac7ce97fe5
+buildId: 20260924060658-064cc08-cfcc98
+sourceCommit: 064cc082ab1d56852f45f6c326310867e09b577f
 schema: candidate-manifest/3
 packMethod: electron-builder
-manifest: candidate-20260923081342-001342d-30fc1c/candidate-manifest.json
-candidateDir: candidate-20260923081342-001342d-30fc1c/win-unpacked
-zip: candidate-20260923081342-001342d-30fc1c.zip
-zipSha256: addb45120d265cf7de84d2bace5f7dfbe62404363849b4b914580962086ba1b9
-exeSha256: ed0f8595ffb62cca7d2e373f5626336af8badacd2269c720579df914b61456f3
-asarSha256: 743b37bb9a5b3379bfef4ac34950438e879a705608c24d19ff7e82029490a869
+manifest: candidate-20260924060658-064cc08-cfcc98/candidate-manifest.json
+candidateDir: candidate-20260924060658-064cc08-cfcc98/win-unpacked
+zip: candidate-20260924060658-064cc08-cfcc98.zip
+zipSha256: e409984c7fafe775c14b0930d865ce3da620a17ba7a25bbe9090c49444d97bef
+exeSha256: 91bf018a9b899c96aceb153b053b14703c891ea80a9f58e452e83738a63a2745
+asarSha256: e682d1f5d240e510bdbcae9422fdf7205c13f46c56d88203ed33bfe349f9ebe8
 <!-- CURRENT-CANDIDATE:END -->
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `candidate-20260923081342-001342d-30fc1c.zip` | 127.2 MB | 分发以 zip 为准（82 条目，整目录压缩） |
+| `candidate-20260924060658-064cc08-cfcc98.zip` | 127.2 MB | 分发以 zip 为准（82 条目，整目录压缩） |
 | ├ `OpenCodeThemeSwitcher.exe` | 193.3 MB | 未签名 |
 | └ `resources/app.asar` | 17.7 MB | 968 条目 / unpacked 7 |
 
@@ -39,7 +39,7 @@ asarSha256: 743b37bb9a5b3379bfef4ac34950438e879a705608c24d19ff7e82029490a869
 
 ```bash
 node tools/doc-candidate-entry.cjs \
-  --manifest candidate-20260923081342-001342d-30fc1c/candidate-manifest.json --check
+  --manifest candidate-20260924060658-064cc08-cfcc98/candidate-manifest.json --check
 ```
 
 该命令把「文档块 / manifest 登记 / 磁盘实算哈希」三方对齐；任一不符即非 0 退出。
@@ -222,34 +222,55 @@ asar），锁释放后直接删除；②`ago/` 内被锁的旧 `app.asar` 同 §
 目的地点验，再跑循环；`MSYS2_ARG_CONV_EXCL='*'` 下含 `\` 的目标路径字面量
 可能静默不展开，首轮必须 `ls` 验证去向；robocopy 返回码「成功」不代表目标正确。
 
-## 3. 当前门禁结果（buildId `20260923081342-001342d-30fc1c`）
+### 2.8 历史候选：v0.1.0-alpha.5 正式包（electron-builder，已对外发布）
+
+2026-09-23 由正式链产出（agent 会话跑满全链）、曾为第 1 节当前候选并对外发布的包。
+已打 tag `v0.1.0-alpha.5` 并发布到私有仓库 Release（登记见 `docs/alpha-acceptance.md` 9.8）。
+**自 2026-09-24 起转为历史**：alpha.6（第 1 节）取代它成为唯一入口；
+其 manifest、build-record、receipt 与哈希原样保留，未做任何改写。
+
+| 项 | 值 |
+|---|---|
+| 候选版本 | `0.1.0-alpha.5` |
+| buildId | `20260923081342-001342d-30fc1c` |
+| 来源提交 | `001342dcf7c03c5c5de7b8ef40c4edac7ce97fe5` |
+| 分发 zip | `candidate-20260923081342-001342d-30fc1c.zip` |
+| zip SHA256 | `addb45120d265cf7de84d2bace5f7dfbe62404363849b4b914580962086ba1b9` |
+| exe SHA256 | `ed0f8595ffb62cca7d2e373f5626336af8badacd2269c720579df914b61456f3` |
+| app.asar SHA256 | `743b37bb9a5b3379bfef4ac34950438e879a705608c24d19ff7e82029490a869` |
+
+注：界面信息架构重整 T1–T5（`475c295`…`e6500d5`，2026-09-24 真机观感整体回执）完成于
+alpha.5 登记**之后**，不在 alpha.5 包内，随 alpha.6 分发——alpha.5 用户界面上看到的
+仍是重整前的三区长布局，行为层无差异。
+
+## 3. 当前门禁结果（buildId `20260924060658-064cc08-cfcc98`）
 
 以下数字**只属于第 1 节那一个候选**，取自其 `build-record.json`；
 包有改动必须重建并更新第 1 节哈希，旧数字不作数。
 
 | 命令 | 退出码 | 耗时 | 结果 |
 |---|---|---|---|
-| `npm run typecheck` | 0 | 35.5s | 通过 |
-| `npm run lint` | 0 | 11.2s | 通过 |
-| `npm run test:unit` | 0 | 51.0s | 通过（见文末数量注） |
-| `npm run build` | 0 | 10.6s | 通过 |
-| `npm run test:integration` | 0 | 91.4s | 通过 |
-| `npm run test:e2e` | 0 | 56.8s | 通过 |
-| `npm run test:e2e:electron` | 0 | 19.6s | 通过 |
-| `npm run audit` | 0 | 3.4s | FAIL 0 / WARN 0 |
-| `npm run dist` | 0 | 195.2s | 通过 |
-| `npm run smoke:gui` | 0 | 34.2s | 通过 |
-| `npm run verify-package` | 0 | 2.8s | 通过 |
+| `npm run typecheck` | 0 | 7.5s | 通过 |
+| `npm run lint` | 0 | 13.2s | 通过 |
+| `npm run test:unit` | 0 | 15.8s | 通过（见文末数量注） |
+| `npm run build` | 0 | 12.4s | 通过 |
+| `npm run test:integration` | 0 | 93.0s | 通过 |
+| `npm run test:e2e` | 0 | 68.7s | 通过 |
+| `npm run test:e2e:electron` | 0 | 28.4s | 通过 |
+| `npm run audit` | 0 | 1.9s | FAIL 0 / WARN 0 |
+| `npm run dist` | 0 | 96.3s | 通过 |
+| `npm run smoke:gui` | 0 | 29.3s | 通过 |
+| `npm run verify-package` | 0 | 2.3s | 通过 |
 | `zip`（链内步骤） | 0 | — | 通过 |
 
 注：上表「结果」只记通过与否，**具体测试数量以该次构建的原始日志为准**，
 不在本文另抄一份（抄写必然滞后，正是本文件此前出错的成因）。
 
-注（本轮执行环境与 smoke:gui 语义，2026-09-23）：本链由 **agent 会话**一次跑满，
-无拦停轮；`smoke:gui` 默认参数为空（与双击等价）并通过（34.2s），`test:e2e:electron`
-亦在本轮真实通过（19.6s）。此为 alpha.3 轮修订（「agent 会话必崩」不成立、以每次链运行的
-真实退出码为准）之后的又一次实证；真机 GUI 视觉观察仍归 jc（机器退出码证明不了观感）——
-本轮登记前 jc 已对 1.18.32 重新接管后的画面给过**整体**回执（`docs/alpha-acceptance.md` §6）。
+注（本轮执行环境与 smoke:gui 语义，2026-09-24）：本链由 **agent 会话**一次跑满，
+无拦停轮；`smoke:gui` 默认参数为空（与双击等价）并通过（29.3s），`test:e2e:electron`
+亦在本轮真实通过（28.4s），延续「以每次链运行的真实退出码为准」口径（alpha.3 轮修订后
+的又一次实证；alpha.5 轮同此）。真机 GUI 视觉观察仍归 jc——本轮登记前 jc 已对
+界面重整 T1–T5 的新布局给过**整体**观感回执（`docs/alpha-acceptance.md` §6，2026-09-24）。
 
 一条命令跑全链（`bash tools/release-gate.sh` 是薄入口，任一步非 0 即停）：
 

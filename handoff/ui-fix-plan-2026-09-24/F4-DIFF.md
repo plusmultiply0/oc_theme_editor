@@ -78,3 +78,37 @@ core/surfaces 同一函数（panelAlpha/bubbleLayerAlpha/overlayAlpha/REGION_ALP
 
 同一张图：真实应用后 OpenCode 截图 vs 工具内预览截图并排对比；
 截图存临时目录，不入库。本清单 + F4b 修复各自成提交。
+
+## 7. 「核」组定案（2026-09-24 补记，真机截图对比 + 官方 CSS 静态取证）
+
+取证路径（截图与取证脚本输出均在临时目录，不入库）：
+
+- 静态：1.18.32 安装内 `main-C-FJvlHS.css`（与 1.18.29 同名同文件）只读导出后逐项 grep；
+  对照 JS 包确认 token 使用点。
+- 真机：`tools/live-cli.cjs apply`（用户当次授权）操作 `op-20260924T082520376Z-ebntx4`，
+  参数与预览侧完全一致（wallpaper.png 同图 · 深色 · 遮罩 0.35 · 面板 0.86 · blur 0）；
+  启动 OpenCode 1.18.32 后窗口截图；另打开模型选择弹层与「OpenCode 菜单」弹层各一张，Esc 关闭。
+- 预览侧：`tools/capture-ui.cjs` 同图同参截图。
+
+| # | 项 | 定案 | 依据 |
+|---|----|------|------|
+| 2.3 | 气泡边框 | **实无框**。真机助手回复与顶部半露的用户消息均无可见边线；mock `.msg`/`.msg.user` 的 1px 边框系虚构 → F4c 删除 | CSS：`[data-slot="session-turn-assistant-content"]` 仅布局规则；`[data-slot="user-message-text"]` 显式 `border:none`。真机截图同口径 |
+| 2.7 | 圆角 | 用户气泡 **10px**（CSS 直接给出）；代码块、输入框真机目测 **≈8px**；菜单 **6px**（CSS）。mock 随 F4c 对齐 | CSS radius 声明 + 真机截图量取（±1px） |
+| 2.8 | 弹层阴影 | 菜单**无 border**，观感为「0.5px 暗环 + 柔和投影」：`box-shadow: var(--v2-elevation-floating)` = `0 8px 16px #0000000a, 0 4px 8px #00000014, 0 0 0 .5px #0000001f`（深色系环色 dark-30=#0000004d）；dialog 用 `--v2-elevation-overlay`。注入层 `border-color !important` 对 menu-v2 空转（元素本无 border），**注入层不动**；mock `.mock-menu` 去 1px 边框、改同近似阴影。官方阴影为固定黑色系、与主题 token 无关，mock 用固定 rgba(0,0,0,·) 近似不违反同源红线 | CSS 值 + 两个真机弹层截图均未见 1px 实线框 |
+| 3.6 | 侧栏选中 scrim | 官方 `--v2-overlay-simple-tab-active-scrim` 定义**全透明**（#fafafa00 / #24242400），CSS 与 JS 均无使用点 → tokens.ts 的覆盖当前空转。真机左栏当前会话标题无彩色块，活动标签为中性提亮 chip（layer 系，非 primary scrim）。定案：**预览侧选中示意改中性表面**（复用同源 `--p-neutral-surface`，不硬写色值）；tokens.ts 空转覆盖与报告 regionsFor 'sidebar-selected'（按 selection 计）**本轮不动**，各登记为后续独立事项 | CSS/JS grep + 真机截图 |
+
+附带确认：菜单项悬停/选中行为中性 surface 高亮（真机弹层截图），与 3.5 既有同构结论一致。
+
+### F4c 施工范围（仅 mock 外观，红线不变：token 与 alpha 继续同源）
+
+1. `.msg`/`.msg.user` 去边框；`.msg.user` 圆角 10px（2.3/2.7）；
+2. `.mock-menu` 去 1px 边框，改 elevation-floating 近似（0.5px 环 + 两级投影），圆角 6px（2.7/2.8）；
+3. `.code`/`.input` 圆角对齐 8px（2.7）；
+4. 预览侧选中示意改用 `--p-neutral-surface`（3.6）。
+
+### 后续登记（超出本轮范围，只记不做）
+
+- tokens.ts 对空转 scrim token 的覆盖是否移除：属生成层变更，另行评估；
+- 报告 'sidebar-selected' 区域模型与预览观感不再一致：动报告逻辑需单独立项；
+- 真机留态：本轮 apply 后 OpenCode 处于「深色 · 遮罩 0.35 · 面板 0.86」主题态，
+  恢复命令 `node tools/live-cli.cjs restore previous`（回到 2026-09-23 态），待 jc 定夺。

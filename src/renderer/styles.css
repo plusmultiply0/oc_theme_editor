@@ -239,6 +239,48 @@ a:focus-visible {
   min-width: 0;
 }
 
+/* ---------- 右栏选项卡（检查 / 恢复） ---------- */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: none;
+  padding: 0.375rem 1rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ui-muted);
+  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
+  cursor: pointer;
+  transition: var(--ui-transition);
+}
+
+.tab:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover-soft);
+}
+
+.tab.active {
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  margin-bottom: -1px;
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.side-column [role='tabpanel'] {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
 /* ---------- 控件 ---------- */
 .dropzone {
   border: 1.5px dashed var(--ui-border-strong);

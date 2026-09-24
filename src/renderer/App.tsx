@@ -93,6 +93,8 @@ export default function App() {
   const [imageFormat, setImageFormat] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [scanning, setScanning] = useState(false);
+  /** 右栏选项卡：仅内存态，不持久化（T2） */
+  const [sideTab, setSideTab] = useState<'checks' | 'restore'>('checks');
   const genRef = useRef(0);
 
   const targets = useMemo(() => discovered?.targets ?? [], [discovered]);
@@ -563,84 +565,115 @@ export default function App() {
         </section>
 
         <div className="side-column">
-          <ContrastPanel report={result?.report ?? null} effectiveBackground={result?.effectiveBackground ?? null} />
+          <div className="tabs" role="tablist" aria-label="诊断与恢复">
+            <button
+              type="button"
+              role="tab"
+              id="tab-checks"
+              aria-selected={sideTab === 'checks'}
+              aria-controls="tabpanel-checks"
+              className={`tab ${sideTab === 'checks' ? 'active' : ''}`}
+              onClick={() => setSideTab('checks')}
+            >
+              检查
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-restore"
+              aria-selected={sideTab === 'restore'}
+              aria-controls="tabpanel-restore"
+              className={`tab ${sideTab === 'restore' ? 'active' : ''}`}
+              onClick={() => setSideTab('restore')}
+            >
+              恢复
+            </button>
+          </div>
 
-          <section className="panel">
-            <div className="panel-head">
-              <h2>目标</h2>
-              <div className="panel-actions">
-                <button
-                  className="btn small"
-                  type="button"
-                  onClick={() => void refreshTargets()}
-                  disabled={scanning || isBusy(ui)}
-                >
-                  {scanning ? '检测中…' : '重新检测'}
-                </button>
-                <button
-                  className="btn small"
-                  type="button"
-                  onClick={() => void chooseTargetDirectory()}
-                  disabled={scanning || isBusy(ui)}
-                >
-                  选择安装目录
-                </button>
-              </div>
+          {sideTab === 'checks' ? (
+            <div role="tabpanel" id="tabpanel-checks" aria-labelledby="tab-checks">
+              <ContrastPanel report={result?.report ?? null} effectiveBackground={result?.effectiveBackground ?? null} />
             </div>
+          ) : (
+            <div role="tabpanel" id="tabpanel-restore" aria-labelledby="tab-restore">
+              <section className="panel">
+                <div className="panel-head">
+                  <h2>目标</h2>
+                  <div className="panel-actions">
+                    <button
+                      className="btn small"
+                      type="button"
+                      onClick={() => void refreshTargets()}
+                      disabled={scanning || isBusy(ui)}
+                    >
+                      {scanning ? '检测中…' : '重新检测'}
+                    </button>
+                    <button
+                      className="btn small"
+                      type="button"
+                      onClick={() => void chooseTargetDirectory()}
+                      disabled={scanning || isBusy(ui)}
+                    >
+                      选择安装目录
+                    </button>
+                  </div>
+                </div>
 
-            {targets.length > 1 ? (
-              <label className="field">
-                <span>检测到多个安装，选择要操作的目标</span>
-                <select value={target?.targetId ?? ''} onChange={(e) => setTargetId(e.target.value)}>
-                  {targets.map((t) => (
-                    <option key={t.targetId} value={t.targetId}>
-                      {t.installPath}（{t.version} · {t.support}）
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+                {targets.length > 1 ? (
+                  <label className="field">
+                    <span>检测到多个安装，选择要操作的目标</span>
+                    <select value={target?.targetId ?? ''} onChange={(e) => setTargetId(e.target.value)}>
+                      {targets.map((t) => (
+                        <option key={t.targetId} value={t.targetId}>
+                          {t.installPath}（{t.version} · {t.support}）
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
 
-            {targets.length === 0 ? (
-              <p className="scope">
-                未发现 OpenCode 安装。请点「重新检测」；若仍找不到，用「选择安装目录」手动指定安装目录
-                （目录里应有 resources 文件夹）。
-              </p>
-            ) : null}
+                {targets.length === 0 ? (
+                  <p className="scope">
+                    未发现 OpenCode 安装。请点「重新检测」；若仍找不到，用「选择安装目录」手动指定安装目录
+                    （目录里应有 resources 文件夹）。
+                  </p>
+                ) : null}
 
-            {discovered && discovered.rejected.length > 0 ? (
-              <ul className="entries">
-                {discovered.rejected.map((r) => (
-                  <li key={r.path} className="fail">
-                    <span className="entry-name">
-                      [{r.code}] {r.message}
-                    </span>
-                    <span className="mono">{r.path}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+                {discovered && discovered.rejected.length > 0 ? (
+                  <ul className="entries">
+                    {discovered.rejected.map((r) => (
+                      <li key={r.path} className="fail">
+                        <span className="entry-name">
+                          [{r.code}] {r.message}
+                        </span>
+                        <span className="mono">{r.path}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
 
-            {discovered && discovered.scanned.length > 0 ? (
-              <details className="scan-details">
-                <summary>已检查 {discovered.scanned.length} 个登记位置（不做全盘搜索）</summary>
-                <ul className="entries">
-                  {discovered.scanned.map((p) => (
-                    <li key={p} className="mono">{p}</li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </section>
+                {discovered && discovered.scanned.length > 0 ? (
+                  <details className="scan-details">
+                    <summary>已检查 {discovered.scanned.length} 个登记位置（不做全盘搜索）</summary>
+                    <ul className="entries">
+                      {discovered.scanned.map((p) => (
+                        <li key={p} className="mono">{p}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </section>
 
-          <RecoveryPanel status={recovery} busy={isBusy(ui)} onResolve={resolveRecovery} />
+              <RecoveryPanel status={recovery} busy={isBusy(ui)} onResolve={resolveRecovery} />
 
-          <RestorePanel
-            backups={backups}
-            busy={isBusy(ui)}
-            onRestore={(kind) => void restore(kind)}
-            onRefresh={() => void refreshBackups(target?.targetId ?? '')}
-          />
+              <RestorePanel
+                backups={backups}
+                busy={isBusy(ui)}
+                onRestore={(kind) => void restore(kind)}
+                onRefresh={() => void refreshBackups(target?.targetId ?? '')}
+              />
+            </div>
+          )}
         </div>
       </main>
 
@@ -679,7 +712,7 @@ export default function App() {
           <>
             <strong>{ui.message}</strong>
             <span>{ui.hint}</span>
-            <span>请先在上方「待恢复」面板处理；不要手动替换应用文件。</span>
+            <span>请先切到右侧「恢复」选项卡处理；不要手动替换应用文件。</span>
           </>
         ) : null}
         {notice ? <span className="notice">{notice}</span> : null}

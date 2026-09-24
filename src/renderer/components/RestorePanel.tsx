@@ -98,10 +98,16 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
             </>
           )
         ) : (
-          <p className="warn-line">
-            没有可证明的出厂原版：本工具没有登记过该版本的出厂指纹，
-            因此不提供「恢复原版」入口。可用的诚实入口见下面的「首次接管快照」。
-          </p>
+          <>
+            <p className="warn-line">没有可证明的出厂原版 —— 用首次接管快照。</p>
+            <details className="scan-details">
+              <summary>说明</summary>
+              <p className="warn-line">
+                本工具没有登记过该版本的出厂指纹，因此不提供「恢复原版」入口。
+                可用的诚实入口见下面的「首次接管快照」。
+              </p>
+            </details>
+          </>
         )}
       </div>
 
@@ -123,7 +129,11 @@ export default function RestorePanel({ backups, busy, onRestore, onRefresh }: Re
               <button className="btn" type="button" disabled={busy} onClick={() => onRestore('takeover')}>
                 恢复到首次接管时
               </button>
-              <p className="warn-line">{takeover.evidenceNote}</p>
+              <p className="warn-line">此快照是本工具首次接管时的磁盘状态，不是出厂界面。</p>
+              <details className="scan-details">
+                <summary>说明</summary>
+                <p className="warn-line">{takeover.evidenceNote}</p>
+              </details>
             </>
           )
         ) : (

@@ -32,15 +32,12 @@ export default function RecoveryPanel({ status, busy, onResolve }: RecoveryPanel
 
   if (items.length === 0) {
     return (
-      <section className="panel">
-        <h2>待恢复</h2>
-        <p className="muted">
-          没有未完成的操作。
-          {status && status.stagesCleaned > 0
-            ? `启动时清理了 ${status.stagesCleaned} 个残留准备区。`
-            : ''}
-        </p>
-      </section>
+      <p className="muted recovery-empty">
+        没有未完成的操作。
+        {status && status.stagesCleaned > 0
+          ? `启动时清理了 ${status.stagesCleaned} 个残留准备区。`
+          : ''}
+      </p>
     );
   }
 

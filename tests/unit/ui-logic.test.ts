@@ -13,6 +13,8 @@ import {
   formatDateTime,
   isBusy,
   makeSpec,
+  MOCK_REAL_BASE_WIDTH_PX,
+  mockBlurPx,
   readyText,
   resetSpec,
   scopeText,
@@ -160,5 +162,30 @@ describe('格式化', () => {
   it('时间显示到分钟，非法输入原样返回', () => {
     expect(formatDateTime('2026-09-10T08:30:00.000Z')).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
     expect(formatDateTime('not-a-date')).toBe('not-a-date');
+  });
+});
+
+describe('预览模糊缩比折算（W5）', () => {
+  it('blurPx=0 恒为 0，不引入滤镜', () => {
+    expect(mockBlurPx(0, 640)).toBe(0);
+    expect(mockBlurPx(0, 0)).toBe(0);
+  });
+
+  it('按容器宽/基准宽线性折算，保留一位小数', () => {
+    // 4px × (640/1280) = 2px
+    expect(mockBlurPx(4, 640)).toBe(2);
+    // 4px × (601/1280) = 1.878 → 1.9
+    expect(mockBlurPx(4, 601)).toBe(1.9);
+    // 容器与基准同宽时不改变原值
+    expect(mockBlurPx(8, MOCK_REAL_BASE_WIDTH_PX)).toBe(8);
+  });
+
+  it('宽度未测得时退回旧口径（原值），不小于原值的折算不存在', () => {
+    expect(mockBlurPx(6, 0)).toBe(6);
+    expect(mockBlurPx(6, -1)).toBe(6);
+    // 折算只保留一位小数：差值不足 0.05px 的（如 1279/1280）按持平处理，观感不可辨
+    expect(mockBlurPx(8, MOCK_REAL_BASE_WIDTH_PX - 1)).toBe(8);
+    // 明显更窄的容器 → 折算后必然更弱
+    expect(mockBlurPx(8, 600)).toBe(3.8);
   });
 });

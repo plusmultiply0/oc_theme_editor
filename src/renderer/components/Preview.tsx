@@ -9,8 +9,10 @@
  * 场景覆盖长文本、代码、链接、输入 placeholder、弹出菜单、选中/悬停/按下/焦点、
  * 错误与 diff；终端与语法高亮明确标注不在覆盖范围内（T27）。
  */
+import { useEffect, useRef, useState } from 'react';
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
 import { bubbleLayerAlpha, panelAlpha, REGION_ALPHAS } from '../../core/theme/surfaces';
+import { mockBlurPx } from '../logic';
 
 export interface PreviewProps {
   tokens: ThemeTokens;
@@ -31,11 +33,27 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
   // 累计效果（1-(1-p)²）是报告的事，不能拿来当局部 alpha
   const bubble = alpha(tokens.panel, bubbleLayerAlpha(spec));
 
+  // W5：mock 容器远小于真机窗口，同 px 模糊在 mock 里相对更糊，按容器宽折算。
+  // 已知残余差距（缩比渲染的物理极限，不硬凑）：
+  //  - 底图是 512/320 缩略图（image-store previewDataUrl），比真机全分辨率壁纸软；
+  //  - cover 以中心裁切，mock 宽高比与真机窗口不同，看到的不是同一块画面（F4-DIFF §1.5）。
+  const windowRef = useRef<HTMLDivElement>(null);
+  const [mockWidth, setMockWidth] = useState(0);
+  useEffect(() => {
+    const el = windowRef.current;
+    if (!el) return;
+    setMockWidth(el.offsetWidth);
+    const ro = new ResizeObserver(() => setMockWidth(el.offsetWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const effBlur = mockBlurPx(spec.blurPx, mockWidth);
+
   const vars: Record<string, string> = {
     '--p-bg-image': imageUrl ? `url("${imageUrl}")` : 'none',
     '--p-overlay': alpha(tokens.background, spec.overlayOpacity),
-    '--p-blur': spec.blurPx > 0 ? `blur(${spec.blurPx}px)` : 'none',
-    '--p-blur-inset': spec.blurPx > 0 ? `-${spec.blurPx * 2}px` : '0',
+    '--p-blur': effBlur > 0 ? `blur(${effBlur}px)` : 'none',
+    '--p-blur-inset': effBlur > 0 ? `-${effBlur * 2}px` : '0',
     '--p-background': tokens.background,
     // 面板与侧栏同层：早先侧栏用 panelOpacity-0.06，报告按 panelOpacity 算，两边对不上
     '--p-panel': panel,
@@ -71,7 +89,7 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
   return (
     <div className="preview">
       <div className="preview-note">模拟预览：与写入归档使用同一份 token 与不透明度参数</div>
-      <div className="mock-window" style={vars as React.CSSProperties}>
+      <div ref={windowRef} className="mock-window" style={vars as React.CSSProperties}>
         {/* 图片层与遮罩层分开：模糊只作用于图片，遮罩叠在图片之上 */}
         <div className="mock-bg-image" aria-hidden="true" />
         <div className="mock-overlay" aria-hidden="true" />

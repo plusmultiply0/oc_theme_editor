@@ -272,3 +272,22 @@ export function overlayStepUp(v: number): number {
 export function worstMargin(report: ContrastReport): number {
   return report.entries.reduce((a, e) => Math.min(a, e.ratio / e.required), Infinity);
 }
+
+/* ---------- W5：模拟预览的模糊缩比折算 ---------- */
+
+/**
+ * 折算基准：假定的真机窗口宽。本轮真机参照为 1219×766（op-20260924 系列截图），
+ * 取整到 1280 作典型档；误差 <5%，远小于「按整幅壁纸观感」的敏感性。
+ */
+export const MOCK_REAL_BASE_WIDTH_PX = 1280;
+
+/**
+ * 模糊是空间尺度效应：同一个 px 半径，画在比真机窗口小得多的 mock 容器上
+ * 会显得更糊（W5 点名的差距源）。按容器宽/基准宽线性折算，保留一位小数；
+ * 宽度未测得（<=0）时不折算，退回旧口径。
+ */
+export function mockBlurPx(blurPx: number, mockWidthPx: number, baseWidthPx = MOCK_REAL_BASE_WIDTH_PX): number {
+  if (blurPx <= 0) return 0;
+  if (mockWidthPx <= 0) return blurPx;
+  return Math.round(((blurPx * mockWidthPx) / baseWidthPx) * 10) / 10;
+}

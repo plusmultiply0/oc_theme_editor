@@ -66,3 +66,62 @@ W1 同款：只读导出真机 1.18.32 asar 内官方渲染层 bundle
 - 真机：`npm run build` 后 live-cli 应用本仓库构建，封面截图前后对比（标语可读、输入框不发虚、
   会话内输入框观感不变），截图留本目录；测后 restore previous 归位（本轮收尾执行）。
 - 取证脚本与导出件为一次性产物，用毕即删，不入库。
+
+---
+
+# 追加取证节（X3c，2026-09-25 下午，静态只读）
+
+触发：jc 把 X3 精确化为「新建会话页大字 opencode 标语与输入框：透明度**固定**、
+不随面板不透明度滑杆变化、尽可能不透明」。本轮把官方 bundle **全部 836 个渲染层 js chunk**
+逐一关键字扫描（此前 X3a 只查了主 bundle——这是漏判根因），定位真正的封面页代码。
+
+## 更正：结论二只适用于旧布局，新布局封面是**另一条路由、另一个组件树**
+
+- 主 bundle 的 `sessionPanelContent` 结构（`main-Br7gF0DK.js` @5588644 起）：
+  Switch（有会话→MessageTimeline；无会话兜底→`NewSessionView`「Build anything」）
+  之后是 `Show when: !!(params.id || !newSessionDesign()) && !mobileChanges()` 才渲染
+  `SessionComposerRegion`（dock）。即**新布局下该 Show 恒 false**，dock 与「Build anything」
+  根本不出现在新布局封面——X3a 结论二「封面与会话内是同一套 dock、无区分属性」
+  只对**旧布局**封面成立，对新布局封面不成立。
+- 新布局封面 = 懒加载 chunk `out/renderer/assets/new-session-zKhGmbH8.js`（57,632 B），
+  导出 `NewSessionPage`（默认导出，独立路由页）。其内部**另有一个同名 `NewSessionView`**
+  （@46954，与主 bundle 那个是不同函数），模板 `_tmpl$2`（@45.9k 附近）：
+  `<div class="@container …"><div data-component="session-new-design" class="relative flex-1 min-h-0 overflow-hidden rounded-[10px] bg-v2-background-bg-deep">`
+  → 绝对定位内容列 `top-[25.375%] … .mt-8 flex flex-col gap-8` 内依次：
+  1. `WordmarkV2`（class `h-auto w-full text-v2-background-bg-inverse`）——**jc 说的「大字 opencode 标语」就是它**；
+  2. `PromptInputV2Composer`（渲染 `form[data-component="prompt-input-v2"]`，主 bundle @4594576 模板，
+     官方底 `bg-v2-background-bg-base`）——**封面输入框**，不经过 dock/SessionComposerRegion。
+- **锚点唯一性（本轮坐实）**：`session-new-design` 在主 bundle 出现 **0 次**，仅存在于该 chunk；
+  `wordmark` 组件在该 chunk 仅一个调用点。故
+  `#root [data-component="session-new-design"] …` 是天然封面限定、零误伤会话内的选择器，
+  **不需要 `:has()`，定案 2 的「留真机坐实结构」缺口就此闭合**。
+
+## 大字标语发虚的真因：wordmark 是三层 opacity 连乘 + 底部渐隐 mask 的 SVG
+
+`WordmarkV2` 模板（chunk `_tmpl$$3`）：`svg[viewBox=0 0 720 129] > g[opacity=0.6] > g[mask=url(#动态)] > g[opacity=0.16] > path×8[opacity=0.7, fill=currentColor]`；
+mask 内容为 rect 填充线性渐变（`stop-opacity 0.7 → 0`，y=68→129 即下半截渐隐）。
+合成后字母有效不透明度 ≈ 0.6×0.16×0.7 ≈ **6.7%**，且一半面积被 mask 拉到 0——官方本就把它画成
+接近水印的淡字。`text-v2-background-bg-inverse` = `tokens.text`（tokens.ts:160），色本身是实色。
+另注：`session-new-design` 容器类同时含 `bg-v2-background-bg-deep` 与 `flex-1`，
+**恰好命中 F2 外壳透明规则**（`css.ts` `#root .bg-v2-background-bg-deep.flex-1`→transparent），
+整张封面卡底下透出的就是壁纸本体。
+
+## X3c 定案（固定值，不接 `panelAlpha(spec)`）
+
+1. **封面输入框**：`#root [data-component="session-new-design"] [data-component="prompt-input-v2"]`
+   （连同内层 `[data-component="prompt-input"]`，避免内外两层半透明叠色残留）→
+   `background-color: tokens.panel`（**alpha=1 实色**，底色仍随 mode 推导）+ border 0.9 不变；
+   特异性（#root+双属性）压过共享半透明组的 `!important` 同族规则，只命中封面树。
+2. **大字标语**：`#root [data-component="session-new-design"] svg.h-auto.w-full` 下
+   `g/path → opacity: 1`、`stop → stop-opacity: 1`（呈现属性低于任何作者层 CSS 规则，无需 `!important`）——
+   即「固定 opacity=1 的实色文字」，**不塞衬底不加阴影**（改动最小档，色为 tokens.text 实色）。
+3. **报告模型同步**：`surfaces.ts` 新增固定区域 `cover-input`（panelAlpha 写死 1，不读 spec）、
+   `cover-wordmark`（图片+遮罩起算、无面板层）；`report.ts` 增「封面输入文字」「封面大字标语」
+   两条目（前景 tokens.text）。单测钉死：调 `panelOpacity` 时这两条 ratio 不变、会话内「输入文字」照变。
+4. **旧布局封面**（「Build anything」+dock）：**不做**固定加深——它与会话内同树、无区分属性，
+   维持 X3b 现状（text-shadow）。jc 截图为新布局 wordmark 页，本轮要求已由 1–3 满足。
+5. mock 预览：预览无封面路由，补一个「封面示意」小块——大字与输入行按同一固定值渲染
+   （`tokens.panel` 实色 + `tokens.text` 实色），拖面板不透明度滑杆该块纹丝不动，与注入层同构。
+
+验证层级照 PLAN：本机 typecheck/lint/unit；真机并入 #76 同一窗口
+（封面两块清晰 + 滑杆脱钩 + 会话内输入框回归不变）。取证件用毕即删。

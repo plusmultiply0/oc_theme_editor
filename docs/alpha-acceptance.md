@@ -739,4 +739,44 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   缺口，发布时仍未闭合，如实保留）、真机逐项视觉走查、A6 干净环境、
   P3 色块外观缺陷口径不变。
 
+### 9.11 候选登记（2026-09-25，alpha.8，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 指令为执行 `handoff/visual-fix-plan-2026-09-24/PLAN.md` 的 W1–W5
+  （2026-09-24 起，一项一提交，顺序 W3→W1→W2→W5→W4a→W4b，完成后起 alpha.8 候选轮，
+  真机写入随该指令当次授权）。本轮增量源码=观感修复与功能回合 W1–W5
+  （`f97514b` W3、`0ca3472` W1、`fe4025a` W2、`6e04380` W5、`5cca56d` W4a 证据、
+  `2c553cb` W4b）+ 本发布轮文档。W3 动 IPC 契约（`StageThemeInput.allowContrastOverride`
+  新可选字段，向后兼容）、W4b 恢复启动通道（只拉进程不碰文件），其余行为层不变。
+  **与 9.10 同款缺口：登记前没有 W1–W5 后的整体观感回执**——W1/W2 做过真机同图取证、
+  W4b 做过按钮拉起+会话加载截图核验，但整体操作观感待 jc 用本候选回执，登记时如实标注。
+  不宣称 A8 全签核（A6 仍跳过）。
+- **真机收尾**：W2 留态（深色·遮罩 0.42·面板 0.65·模糊 4）已恢复——
+  `live-cli restore previous`（操作 `op-20260925T024944346Z-lcyqr7`，状态 applied，
+  提交后指纹 `0e4b640a68a39634…`），restore 后 `status`/`precheck` 复核：进程 idle、
+  可写 true、磁盘余量充足；OpenCode 安装不再带本轮演示主题。
+- **链运行**：`npm run release:build` 由 agent 会话后台跑，**首跑即一次跑满 12 步全绿、
+  无拦停轮**，末行 `ALL_GREEN buildId=20260925025400-047ce1f-d4519a`。`smoke:gui`
+  （空参数，25.3s）、`test:e2e:electron`（23.3s）均真实通过。发布级只读终检 18 项
+  0 失败，`RELEASE_GREEN`、`publishable=true`。
+- **候选身份**：buildId `20260925025400-047ce1f-d4519a`，来源提交 `047ce1f`（版本号
+  bump + 发布说明草案），`packMethod: electron-builder`，可重复构建。
+  zip SHA256 `93c2edc66a5d7032815aec34f02be00bf433f03ce2cfef3035424fec167afb9c`、
+  exe SHA256 `0f168e5de52216bfa0ad864b2d20cdce69022c4415c8c40200a66bcb464756e7`、
+  app.asar SHA256 `5f22903d69fca6ccfe95552d74330b094ae8bc0e3e7025d5553afbdcdf9a45df`
+  （1064 条目 / unpacked 7）。zip 127.2 MB / 82 条目。
+- **登记**：`release-checklist.md` §1 权威入口块换为上述 buildId 与哈希，§2.10 把 alpha.7
+  转历史（其 manifest/哈希原样保留，并注明 W1–W5 不在 alpha.7 包内），§3 门禁表按本轮
+  build-record 改写；README 候选指针同步（当前候选 buildId/目录两处 + 修复轮随
+  alpha.7 分发口径改写 + W1–W5 随 alpha.8 分发新增条目）。侧车 `.zip.sha256.txt`
+  生成于登记后、分发前（不入库，同先例）。
+  `doc-candidate-entry.cjs --manifest candidate-20260925025400-047ce1f-d4519a/
+  candidate-manifest.json --check` 结果以提交信息为准。
+- **tag / Release**：tag `v0.1.0-alpha.8`（annotated）打在候选登记 HEAD 并推送
+  `origin`；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.10 先例），
+  **wb 侧不上传、不宣称已发布**，待 jc 网页回执后补记页面 URL 并将发布说明状态行转
+  「已发布」。**本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
+- 至此 alpha.8 发布轮 agent 侧闭环，上传待 jc。**遗留**：W1–W5 后整体观感回执
+  （本轮特有缺口，登记前未闭合，如实保留）、W4a「可发消息」实发核验（只到输入框
+  就绪）、真机逐项视觉走查、A6 干净环境、P3 色块外观缺陷口径不变。
+
 

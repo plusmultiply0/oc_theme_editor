@@ -184,14 +184,19 @@
 
 - **真机视觉走查未完成**：功能闭环已在「真实 Electron 主进程 + 真实窗口 + 合成安装」上验证，
   但 OpenCode 真实安装上的画面观感仍需人工逐项确认。当前候选
-  （buildId `20260924103659-afdd5dc-c6e390`，`0.1.0-alpha.7`）与待办见 `docs/alpha-acceptance.md`
+  （buildId `20260925025400-047ce1f-d4519a`，`0.1.0-alpha.8`）与待办见 `docs/alpha-acceptance.md`
   （A5/A6 在授权前保持「待执行」）。
 - **界面信息架构重整（2026-09-24，右栏选项卡化等 T1–T5）随 `0.1.0-alpha.6` 分发**，
   真机观感已整体回执（`docs/alpha-acceptance.md` §6）；计划见 `handoff/ui-restructure-plan-2026-09-24/PLAN.md`。
 - **界面修复轮（2026-09-24，F1–F4：删启动按钮全链、删菜单栏、「自动调整」按钮、
-  预览与真机观感对齐）随当前候选 `0.1.0-alpha.7` 分发**；预览对齐已做真机同图取证
+  预览与真机观感对齐）随 `0.1.0-alpha.7` 分发**；预览对齐已做真机同图取证
   （`handoff/ui-fix-plan-2026-09-24/F4-DIFF.md` §7），新按钮/新布局的整体观感回执**待做**；
   计划见 `handoff/ui-fix-plan-2026-09-24/PLAN.md`。
+- **观感修复与功能回合（2026-09-24/25，W1–W5：输入框白条、遮罩/面板推导调优、
+  可读性门软化、「启动 OpenCode」按钮回归、预览模糊缩比折算）随当前候选
+  `0.1.0-alpha.8` 分发**；W1/W2/W4 已做真机取证与核验（`handoff/visual-fix-plan-2026-09-24/`
+  各 EVIDENCE 文档，真机已 restore 恢复原状），W1–W5 后的整体观感回执**待做**；
+  计划见 `handoff/visual-fix-plan-2026-09-24/PLAN.md`。
 - **没有「恢复原版」入口，除非登记出厂指纹**：原版必须由证据证明，不能靠「没看到本工具的标记」
   推断（详见 `docs/original-evidence.md`）。没有证据时可用的是「恢复到首次接管时」。
 - 完整真机验证过的版本只有 1.18.29；其余版本走「结构验证」通道放行——能识别注入点、
@@ -211,8 +216,8 @@
   同样不是候选。自 2026-09-23 起以上目录连同各历史 `candidate-*` 目录已移入 `ago/`
   本地归档区（不入库，迁移定损见 `docs/release-checklist.md` §2.7）。
   **唯一可用于验证与分发的是当前候选**
-  `candidate-20260924103659-afdd5dc-c6e390/`（buildId
-  `20260924103659-afdd5dc-c6e390`）；候选目录、zip 与哈希的唯一权威入口见
+  `candidate-20260925025400-047ce1f-d4519a/`（buildId
+  `20260925025400-047ce1f-d4519a`）；候选目录、zip 与哈希的唯一权威入口见
   `docs/release-checklist.md` 第 1 节（该处由机器核对，不靠人工抄写）。
 - 图片只支持 PNG / JPEG（.jpg/.jpeg/.jfif/.jpe）/ WebP，≤ 20 MiB，不支持 SVG。
   GIF / AVIF / TIFF / BMP / HEIC 尚未开放（GIF、AVIF、TIFF 的解码器本机可用，属于第二批；

@@ -914,10 +914,12 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   更新。侧车 `.zip.sha256.txt` 生成于登记后、分发前（不入库，同先例）。
   `doc-candidate-entry.cjs --manifest candidate-20260925081334-0160900-e4b156/
   candidate-manifest.json --check` 得 `DOC_ENTRY_OK`（文档、manifest、磁盘三方一致）。
-- **tag / Release**：tag `v1.0.0` 的落点与推送结果以 V-4 补记为准。GitHub Release
-  是否由 jc 网页创建**待定**（alpha.8/9/10 已按决定跳过补记；正式版如需对外可见
-  由 jc 决定）；**wb 侧不上传、不宣称已发布**。**本节登记时不宣称 1.0.0 已发布**。
-- 至此正式版发布轮 agent 侧登记完成（tag/推送见上条补记）。**遗留**：
+- **tag / Release**：tag `v1.0.0`（annotated）已打在候选登记 HEAD `e85d1df` 并推送
+  `origin`（`* [new tag]`，注释写明「功能与 alpha.10 零改动、真机验证与整体观感已由
+  使用者回执闭合、链首跑全绿；未签名、1.18.29 完整验证、A6 跳过；本 tag 不代表已发布」
+  口径）。GitHub Release 是否由 jc 网页创建**待定**（alpha.8/9/10 已按决定跳过补记；
+  正式版如需对外可见由 jc 决定）；**wb 侧不上传、不宣称已发布**。
+- 至此正式版发布轮 agent 侧闭环（候选登记 + tag 已推）。**遗留**：
   「启动后实发消息」核验、真机逐项视觉走查（P3 色块外观缺陷口径不变）、A6 干净环境
   （按决定跳过，平台声明已按窄口径写死）——均已在发布说明「已知限制」如实列出，
   不阻塞本版本登记。

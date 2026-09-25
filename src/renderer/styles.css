@@ -723,7 +723,7 @@ a:focus-visible {
     0 8px 16px rgba(0, 0, 0, 0.04),
     0 4px 8px rgba(0, 0, 0, 0.08),
     0 0 0 0.5px rgba(0, 0, 0, 0.12);
-  background: var(--p-panel);
+  background: var(--p-menu-bg, var(--p-panel));
   padding: 0.25rem;
   font-size: 0.75rem;
   width: 12rem;
@@ -732,7 +732,7 @@ a:focus-visible {
 .mock-menu-item {
   padding: 0.3125rem 0.5rem;
   border-radius: 4px;
-  color: var(--p-text);
+  color: var(--p-menu-text, var(--p-text));
 }
 
 .mock-menu-item.hover {

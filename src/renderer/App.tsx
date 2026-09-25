@@ -655,7 +655,7 @@ export default function App() {
         <section className="panel preview-panel">
           <h2>模拟预览</h2>
           {result ? (
-            <Preview tokens={result.tokens} imageUrl={previewUrl} spec={spec} />
+            <Preview tokens={result.tokens} imageUrl={previewUrl} spec={spec} resolvedMode={result.mode} />
           ) : (
             <div className="empty-preview">
               <p className="muted">

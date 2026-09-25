@@ -16,9 +16,29 @@
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
 import { fail, ok, type Result } from '../../shared/errors';
 import { hexToRgb, composite, rgbToHex } from './contrast';
+import { darken, ensureContrast } from './color';
 import { bubbleLayerAlpha, overlayAlpha, panelAlpha, REGION_ALPHAS } from './surfaces';
 import { renderTokenCss } from './tokens';
 import { CSS_OWN_BANNER } from '../patch/markers';
+
+/**
+ * 菜单/弹层的不透明深色面（X1，2026-09-25）。
+ *
+ * 菜单与弹层原本和 dialog、prompt-input 共用同一半透明面板 alpha，
+ * 盖在壁纸上发闷、文字看不清。这里把它们单列成一组「不透明深色面」：
+ * - 深色模式：把面板色再加深一档做不透明底，读起来是一块实色浮层；
+ * - 浅色模式：只做轻微加深，保持浅色系但完全不透明；
+ * - 文字用 ensureContrast 兜底，保证对新底色 ≥4.5（明暗两模式都成立）。
+ * 导出以便单测直接断言对比度，不依赖正则抠 CSS。
+ */
+export function menuSurfaceColor(
+  tokens: ThemeTokens,
+  resolvedMode: 'light' | 'dark',
+): { bg: string; text: string; ratio: number } {
+  const bg = resolvedMode === 'dark' ? darken(tokens.panel, 0.22) : darken(tokens.panel, 0.06);
+  const { color: text, ratio } = ensureContrast(tokens.text, bg, 'text');
+  return { bg, text, ratio };
+}
 
 export interface RenderCssInput {
   tokens: ThemeTokens;
@@ -68,6 +88,8 @@ export function renderThemeCss(input: RenderCssInput): string {
   const panel = panelAlpha(spec);
   // 气泡叠在面板之上：这里画的是它**自己**那一层（局部 p），累计效果才是 1-(1-p)²
   const bubble = bubbleLayerAlpha(spec);
+  // 菜单/弹层的不透明深色面与文字（X1）
+  const menu = menuSurfaceColor(tokens, resolvedMode);
 
   /*
    * 背景层始终是「图片层 + 遮罩层」两个独立伪元素：
@@ -167,8 +189,25 @@ ${renderTokenCss(tokens, spec)}
   background-color: transparent;
 }
 
+/*
+ * 对话框与输入框：保留 W1/W2 定过的半透明面板观感，不随菜单一起改（X1 边界）。
+ */
 [data-component="dialog"],
 [data-component="dialog-v2"],
+[data-component="dock-prompt"],
+[data-component="prompt-input"],
+[data-component="prompt-input-v2"] {
+  background-color: ${rgba(tokens.panel, panel)} !important;
+  border-color: ${rgba(tokens.border, 0.9)} !important;
+  color: ${tokens.text} !important;
+}
+
+/*
+ * 菜单 / 弹层 / 提示：从上面共享半透明组里拆出来单列，改成不透明深色面（X1）。
+ * 这些是浮在内容之上的短时层，半透明会让它们「发闷、字看不清」；
+ * 底色用不透明深色、文字经对比度兜底（≥4.5），边框仍沿用 0.9 的面板边框色。
+ * 输入框与对话框不在此列——它们的半透明是 W1/W2 定过的观感。
+ */
 [data-component="menu-v2-content"],
 [data-component="dropdown-menu-content"],
 [data-component="dropdown-menu-sub-content"],
@@ -176,13 +215,10 @@ ${renderTokenCss(tokens, spec)}
 [data-component="context-menu-sub-content"],
 [data-component="tooltip"],
 [data-component="tooltip-v2"],
-[data-component="session-tab-popover"],
-[data-component="dock-prompt"],
-[data-component="prompt-input"],
-[data-component="prompt-input-v2"] {
-  background-color: ${rgba(tokens.panel, panel)} !important;
+[data-component="session-tab-popover"] {
+  background-color: ${menu.bg} !important;
   border-color: ${rgba(tokens.border, 0.9)} !important;
-  color: ${tokens.text} !important;
+  color: ${menu.text} !important;
 }
 
 [data-slot="session-turn-assistant-content"] {

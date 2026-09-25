@@ -9,7 +9,7 @@ import { analyzeImage, deriveTokens, generateTheme } from '../../src/core/theme/
 import { buildContrastReport } from '../../src/core/theme/report';
 import { bubbleAlpha, overlayAlpha, panelAlpha } from '../../src/core/theme/surfaces';
 import { renderTokenDeclarations as tokenDeclarations } from '../../src/core/theme/tokens';
-import { renderThemeCss } from '../../src/core/theme/css';
+import { renderThemeCss, menuSurfaceColor } from '../../src/core/theme/css';
 import { SCHEMA_VERSION, type ThemeSpec, type ThemeTokens } from '../../src/shared/schema';
 
 /** 直接渲染 CSS，跳过图片解码：层级与 token 的正确性不该依赖抓图 */
@@ -427,6 +427,33 @@ describe('token 映射与输出一致性（R3、R5）', () => {
     expect(css).toContain('#root [data-component="session-prompt-dock"] {\n  background-color: transparent;\n}');
     // 输入框本体的面板底色规则仍在，透明只作用于外层容器
     expect(css).toContain('[data-component="prompt-input-v2"]');
+  });
+
+  it('菜单/弹层拆成不透明深色面，与 dialog/prompt-input 的半透明组分开（X1 回归）', () => {
+    const css = generateCss(tokens, makeSpec());
+    const menu = menuSurfaceColor(tokens, 'dark');
+    // 菜单组底色是实色 hex（menu.bg），不是 rgba 半透明
+    expect(menu.bg).toMatch(/^#[0-9a-f]{6}$/);
+    expect(css).toContain(`[data-component="menu-v2-content"],`);
+    expect(css).toContain(`[data-component="session-tab-popover"] {\n  background-color: ${menu.bg} !important;`);
+    // dialog 与 prompt-input 仍在半透明面板组里，未随菜单一起变实色
+    const { r, g, b } = hexToRgb(tokens.panel);
+    const panelRgba = `rgba(${r}, ${g}, ${b}, ${0.86})`;
+    expect(css).toContain(`[data-component="dialog"],\n[data-component="dialog-v2"],\n[data-component="dock-prompt"],\n[data-component="prompt-input"],\n[data-component="prompt-input-v2"] {\n  background-color: ${panelRgba} !important;`);
+    // 菜单组里不应出现半透明 rgba 面板底（拆组前是这样）
+    const menuBlock = css.slice(css.indexOf('[data-component="menu-v2-content"]'));
+    expect(menuBlock.slice(0, menuBlock.indexOf('}') + 1)).not.toContain(`rgba(${r}, ${g}, ${b}`);
+  });
+
+  it('菜单文字对新底色在明暗两模式下都达到正文对比度（X1 自证）', () => {
+    const darkTokens = deriveTokens(['#404558'], 'dark', undefined, '#1b1f27');
+    const lightTokens = deriveTokens(['#cfd6dd'], 'light', undefined, '#eef1f4');
+    for (const [mode, tk] of [['dark', darkTokens], ['light', lightTokens]] as const) {
+      const m = menuSurfaceColor(tk, mode);
+      expect(m.bg).not.toBe(tk.panel); // 确实按 mode 加深了一档
+      expect(contrastRatio(m.text, m.bg)).toBeGreaterThanOrEqual(4.5);
+      expect(m.ratio).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it('占位文字稀释混向不透明的次要文字色，不再混向 transparent（P2 回归）', () => {

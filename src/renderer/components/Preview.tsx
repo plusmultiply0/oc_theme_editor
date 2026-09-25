@@ -12,12 +12,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ThemeSpec, ThemeTokens } from '../../shared/schema';
 import { bubbleLayerAlpha, panelAlpha, REGION_ALPHAS } from '../../core/theme/surfaces';
+import { menuSurfaceColor } from '../../core/theme/css';
 import { mockBlurPx } from '../logic';
 
 export interface PreviewProps {
   tokens: ThemeTokens;
   imageUrl: string | null;
   spec: ThemeSpec;
+  resolvedMode: 'light' | 'dark';
 }
 
 function alpha(hex: string, a: number): string {
@@ -26,12 +28,14 @@ function alpha(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
-export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
+export default function Preview({ tokens, imageUrl, spec, resolvedMode }: PreviewProps) {
   // 与写入归档、对比度报告共用同一套层级函数
   const panel = alpha(tokens.panel, panelAlpha(spec));
   // .msg 画在已经有 p 的 .mock-main 之上，所以这一层只画局部 p；
   // 累计效果（1-(1-p)²）是报告的事，不能拿来当局部 alpha
   const bubble = alpha(tokens.panel, bubbleLayerAlpha(spec));
+  // 菜单/弹层不透明深色面：与注入层同一函数（X1），预览与真机同构
+  const menu = menuSurfaceColor(tokens, resolvedMode);
 
   // W5：mock 容器远小于真机窗口，同 px 模糊在 mock 里相对更糊，按容器宽折算。
   // 已知残余差距（缩比渲染的物理极限，不硬凑）：
@@ -57,6 +61,9 @@ export default function Preview({ tokens, imageUrl, spec }: PreviewProps) {
     '--p-background': tokens.background,
     // 面板与侧栏同层：早先侧栏用 panelOpacity-0.06，报告按 panelOpacity 算，两边对不上
     '--p-panel': panel,
+    // 菜单/弹层的不透明深色面与兜底文字（X1）
+    '--p-menu-bg': menu.bg,
+    '--p-menu-text': menu.text,
     '--p-bubble': bubble,
     '--p-neutral-surface': alpha(tokens.text, REGION_ALPHAS.neutral),
     '--p-hover-overlay': alpha(tokens.hover, REGION_ALPHAS.hover),

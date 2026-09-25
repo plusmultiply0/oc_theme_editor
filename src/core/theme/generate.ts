@@ -253,6 +253,18 @@ export function deriveTokens(
   const focusRefsList = asList(pageRefBg);
   const focus = ensureAcross(primary, focusRefsList.length > 0 ? focusRefsList : [background], 'ui').color;
 
+  /*
+   * 封面大字标语（X3c）同样直接压在「图片+遮罩」上不经过面板，且固定不透明后
+   * 不再靠官方低透明度混色自救——正文色 tokens.text 只按面板底保障过，
+   * 亮壁纸上实测可低至 2.25 并被报告拦下。与焦点环共用同一批参照底，
+   * 按大字号 3:1 校正；参照底不含面板，所以滑杆怎么动它都不动。
+   */
+  const coverText = ensureAcross(
+    textFixed.color,
+    focusRefsList.length > 0 ? focusRefsList : refs,
+    'largeText',
+  ).color;
+
   const statusSource = {
     error: STATUS.error,
     warning: STATUS.warning,
@@ -297,6 +309,7 @@ export function deriveTokens(
       REGION_ALPHAS.userBubble,
     ),
     accentText,
+    coverText,
     status,
     diff,
   };

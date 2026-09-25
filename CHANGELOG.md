@@ -65,12 +65,23 @@
   **透明度固定、不随面板不透明度滑杆变化、尽可能不透明**。注入层新增封面限定规则：
   封面输入框（`session-new-design` 子树内 `prompt-input-v2`/`prompt-input`）底色钉为
   `tokens.panel` 实色（alpha 恒 1，随 mode 推导）、边框 0.9 不变；大字 wordmark svg 内
-  `g/path` 的 opacity 与 mask 渐变 `stop-opacity` 钉为 1（tokens.text 实色，不加衬底）。
+  `g/path` 的 opacity 与 mask 渐变 `stop-opacity` 钉为 1（不加衬底；钉满后的颜色见下方追加定案）。
   会话内输入框与旧布局封面不受影响。报告模型同步：`surfaces.ts` 新增固定区域
   `cover-input`（panelAlpha 写死 1）/`cover-wordmark`，`report.ts` 增「封面输入文字」
   「封面大字标语」两条目；单测钉死调 `panelOpacity` 时这两项 ratio/pass 不变、
   会话内「输入文字」照变。mock 预览补「封面示意」块按同一固定值渲染（拖滑杆不动，与真机同构）。
-  真机应用验证并入 #76 同一窗口，本机层级：typecheck/lint/unit（theme 53）/integration/e2e 全绿。
+- **X3c 追加定案（链首跑拦停）**：alpha.10 第一次 `release:build` 停在 `test:integration`——
+  `tools/electron-fixture-e2e.cjs` 的真 Electron 闭环在准备阶段被拒：
+  `CONTRAST_BELOW_TARGET: 封面大字标语 2.25（需 3）`。不是环境抖动：新增条目的前景直接用了
+  `tokens.text`，而它只在**面板之上**那批底色保障过，大字实际压在「图片+遮罩」上，亮壁纸必然不达标。
+  按「不达标就判失败不静默放行」的原口径，改法是让颜色自己站得住：`ThemeTokens` 单列
+  **`coverText`** token，推导时以正文色为起点、在**与焦点环同一批**图片+遮罩底色上按大字号 3:1
+  `ensureAcross` 校正（参照底不含面板，故仍与滑杆无关）；注入层在封面 wordmark svg 子树把
+  `--v2-background-bg-inverse` 与 `color` 指到 `tokens.coverText`，预览 `--p-cover-text` 同值。
+  这是 token 契约的**新增必填字段**（旧数据无 `coverText` 会被 schema 拒），报告与 mock 一并转过去。
+  真机观感变化：亮/花哨壁纸下封面大字不再靠低透明度混色侥幸，颜色按图自适应加深或提亮。
+  新增 fixture 场景最小复现单测（亮绿底 `ratio ≥ 3` 且整表 `passed`）与原 X3c 回归。
+  真机应用验证并入 #76 同一窗口，本机层级：typecheck/lint/unit（theme 54）/integration/e2e 全绿。
 
 ### 第一批：JPEG 别名（.jfif/.jpe）入口支持（2026-09-12 第六轮）
 

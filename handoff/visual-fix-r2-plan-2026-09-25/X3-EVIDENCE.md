@@ -125,3 +125,23 @@ mask 内容为 rect 填充线性渐变（`stop-opacity 0.7 → 0`，y=68→129 �
 
 验证层级照 PLAN：本机 typecheck/lint/unit；真机并入 #76 同一窗口
 （封面两块清晰 + 滑杆脱钩 + 会话内输入框回归不变）。取证件用毕即删。
+
+## 定案更正（2026-09-25，alpha.10 链首跑）
+
+上面定案 2/3/5 把大字颜色当作「`tokens.text` 实色」，**这是错的**，且被链跑直接抓出来：
+第一次 `release:build` 停在 `test:integration`，`tools/electron-fixture-e2e.cjs` 的真 Electron 闭环
+在准备阶段被拒 `CONTRAST_BELOW_TARGET: 封面大字标语 2.25（需 3）`（fixture 图是单像素亮绿 `#04fc04`，
+参数 dark / overlay 0.35 / panel 0.86，**完全确定性**，不是环境抖动）。
+
+根因：`tokens.text` 只在 `panelRefs`（图片+遮罩+**面板**那批合成底）上保障过 4.5，
+而封面大字按定案 3 的区域描述压在「图片+遮罩、无面板层」上——这批底色 `tokens.text` 从没测过。
+opacity 钉满等于撤掉了官方原来「6.7% 淡到看不见也就无所谓对比度」的隐性免责，颜色必须自己站得住。
+
+改法（与本文件既有推理同源，不新增猜测）：仿焦点环先例，`ThemeTokens` 单列 **`coverText`**，
+推导时以 `tokens.text` 为起点、在 `pageRefs`（即 `compositeFor(sample, 0)`，与焦点环同批参照底）上
+按 `largeText` 3:1 `ensureAcross`；参照底不含面板，所以「与滑杆无关」这个 X3c 核心口径原样成立。
+注入层在封面 wordmark svg 子树把 `--v2-background-bg-inverse` 与 `color` 指向 `tokens.coverText`
+（呈现属性的填色仍由 opacity 钉为 1 负责），报告与 mock 预览一并转过去。
+
+**#76 追加一项真机观感**：换一张偏亮的壁纸，确认封面大字颜色确实**按图自适应**（深/浅推开），
+而不是钉死某一边；同时确认输入框实色底与大字仍不受滑杆影响。

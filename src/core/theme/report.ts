@@ -108,12 +108,13 @@ const ENTRY_TABLE: EntrySpec[] = [
   },
   // 封面（新建会话页，新布局）固定不透明两处（X3c）：区域 panelAlpha 是固定值，
   // 面板不透明度滑杆不动这两条——与 css.ts 封面规则的实际渲染同口径。
+  // 大字直接压在图片+遮罩上，前景用单列的 coverText（推导时已按 3:1 在同批底色上保障）。
   { element: '封面输入文字', state: 'default', region: 'cover-input', foreground: (t) => t.text, target: 'text' },
   {
     element: '封面大字标语',
     state: 'default',
     region: 'cover-wordmark',
-    foreground: (t) => t.text,
+    foreground: (t) => t.coverText,
     target: 'largeText',
   },
   {

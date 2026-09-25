@@ -45,6 +45,13 @@ export const ThemeTokensSchema = z.object({
    * 因此单列一个 token，避免「链接读不清但报告说通过」（R4）。
    */
   accentText: hexColor,
+  /**
+   * 封面（新建会话页）大字标语的前景色（X3c）。
+   * 它直接压在「图片+遮罩」上、不经过面板，正文色 tokens.text 只按面板底
+   * 保障过，落在亮壁纸上实测可低至 2.25；与焦点环同理单列一个 token，
+   * 按大字号 3:1 在图片+遮罩底上校正，滑杆不影响它。
+   */
+  coverText: hexColor,
   status: StatusColorsSchema,
   diff: DiffColorsSchema,
 });

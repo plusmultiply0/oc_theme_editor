@@ -65,9 +65,10 @@ export default function Preview({ tokens, imageUrl, spec, resolvedMode }: Previe
     '--p-menu-bg': menu.bg,
     '--p-menu-text': menu.text,
     // 封面（新建会话页）固定不透明两处（X3c）：实色值，不接 panelAlpha——
-    // 与 css.ts 封面规则同一口径，拖面板不透明度滑杆这两块不变
+    // 与 css.ts 封面规则同一口径，拖面板不透明度滑杆这两块不变。
+    // 大字用单列 coverText（图片+遮罩底上按 3:1 保障过），输入框文字仍是 tokens.text
     '--p-cover-input-bg': tokens.panel,
-    '--p-cover-text': tokens.text,
+    '--p-cover-text': tokens.coverText,
     '--p-bubble': bubble,
     '--p-neutral-surface': alpha(tokens.text, REGION_ALPHAS.neutral),
     '--p-hover-overlay': alpha(tokens.hover, REGION_ALPHAS.hover),

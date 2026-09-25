@@ -253,6 +253,27 @@ describe('主题生成', () => {
     }
   });
 
+  it('亮壁纸上封面大字按 coverText 自证 ≥3，不再拦停整表（X3c 修复，fixture 场景最小复现）', async () => {
+    // 与 tools/electron-fixture-e2e.cjs 同参：单像素亮绿 + dark + overlay 0.35 + panel 0.86。
+    // 该组合在修复前实测 2.25 被准备阶段拦下（alpha.10 链首跑坐实）。
+    const buf = await solid(48, 48, { r: 4, g: 252, b: 4 });
+    const r = await generateTheme({
+      buffer: buf,
+      spec: makeSpec({ mode: 'dark', overlayOpacity: 0.35, panelOpacity: 0.86 }),
+      imageRef: './bg.jpg',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      const e = r.data.report.entries.find((x) => x.element === '封面大字标语');
+      expect(e).toBeDefined();
+      expect(e!.foreground).toBe(r.data.tokens.coverText);
+      expect(e!.ratio).toBeGreaterThanOrEqual(e!.required);
+      expect(e!.pass).toBe(true);
+      // 整表达标：准备阶段不该再因这条拦人
+      expect(r.data.report.passed).toBe(true);
+    }
+  });
+
   it('主色可覆盖，且 hover/pressed 三态互不相同', () => {
     const tokens = deriveTokens(['#404558'], 'light', '#2f6fd0');
     expect(tokens.primary).toBe('#2f6fd0');
@@ -515,6 +536,9 @@ describe('token 映射与输出一致性（R3、R5）', () => {
     // 大字标语：wordmark svg 的 g/path opacity 与 mask 渐变 stop 钉为 1
     expect(low).toContain('opacity: 1;');
     expect(low).toContain('stop-opacity: 1;');
+    // 钉满后大字颜色必须自站得住：子树内指向单列 coverText（同块随滑杆逐字节不变）
+    expect(low).toContain(`--v2-background-bg-inverse: ${tokens.coverText};`);
+    expect(low).toContain(`color: ${tokens.coverText};`);
     // 边界：会话内输入框仍随滑杆变（固定只限封面，用户控制权不缩水）
     expect(cssLow).toContain(`rgba(${r}, ${g}, ${b}, 0.2) !important;`);
     expect(cssHigh).toContain(`rgba(${r}, ${g}, ${b}, 0.95) !important;`);

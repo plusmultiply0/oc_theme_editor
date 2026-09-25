@@ -235,12 +235,21 @@ ${renderTokenCss(tokens, spec)}
  * 2) 大字 opencode 标语（WordmarkV2 水印 SVG）：官方三层 opacity 连乘 ≈6.7% + mask
  *    下半截渐隐，浮在壁纸上近乎不可读。这里把该 svg 内 g/path 的 opacity 与 mask
  *    渐变的 stop-opacity 钉为 1——呈现属性低于任何作者层 CSS 规则，无需 !important。
- *    色本就是 tokens.text 实色（--v2-background-bg-inverse），不塞衬底不加阴影。
+ *    钉满后大字不再靠低透明度混色「侥幸可读」，颜色必须自己站得住：tokens.text
+ *    只按面板底保障过，亮壁纸上实测 2.25 会被报告拦下（alpha.10 链首跑坐实）。
+ *    故封面 svg 子树内把 --v2-background-bg-inverse / currentColor 一并指到单列的
+ *    tokens.coverText（推导时已在图片+遮罩底上按大字号 3:1 校正，且与滑杆无关）。
+ *    不塞衬底不加阴影。
  */
 #root [data-component="session-new-design"] [data-component="prompt-input-v2"],
 #root [data-component="session-new-design"] [data-component="prompt-input"] {
   background-color: ${tokens.panel} !important;
   border-color: ${rgba(tokens.border, 0.9)} !important;
+}
+
+#root [data-component="session-new-design"] svg.h-auto.w-full {
+  --v2-background-bg-inverse: ${tokens.coverText};
+  color: ${tokens.coverText};
 }
 
 #root [data-component="session-new-design"] svg.h-auto.w-full g,

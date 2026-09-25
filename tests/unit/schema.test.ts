@@ -13,6 +13,7 @@ const validTokens = {
   panel: '#ffffff',
   text: '#1a1a1a',
   accentText: '#1a4fa0',
+  coverText: '#1a1a1a',
   muted: '#5a5a5a',
   primary: '#3b6fd4',
   onPrimary: '#ffffff',

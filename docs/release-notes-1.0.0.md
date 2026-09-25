@@ -1,10 +1,12 @@
 # OpenCodeThemeSwitcher 1.0.0（正式版）
 
-> **状态：已登记待发布（2026-09-25）**。本版本为**首个正式版**：
+> **状态：已发布（2026-09-25，GitHub Release [`v1.0.0`](https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.0)）**。本版本为**首个正式版**：
 > 相对 `0.1.0-alpha.10` 功能零改动（仅版本号与文档），alpha 轮的全部验收已闭合——
 > X1/X3/X3c 的同窗口真机应用验证与 W1–W5/X1–X3c 整体观感已由使用者回执确认
 > （2026-09-25）。发布执行记录见 `docs/alpha-acceptance.md` §9.14。
-> GitHub Release 是否创建由 jc 决定（alpha.8/9/10 的网页回执补记已按决定跳过）。
+> 分发物（zip + 哈希侧车）已上传至该 Release，匿名下载核验通过。
+> **可见性更正**：本次发布复核发现仓库实为**公开**（与此前 9.4–9.13 各节「私有仓库」
+> 表述不符，翻转时点不明），使用者拍板接受公开并按公开渠道上传。
 >
 > **版本号口径**：`0.1.0` 已被 Alpha 之前的首个标记版本占用（tag `v0.1.0`，提交
 > `8e6bd04`，已推送不可移动），正式版顺延为 `1.0.0`。
@@ -18,6 +20,8 @@
 | zip SHA256 | `7a812b3ea8b73b3bee2c77ede5c57c7d33e71fe851b70b161c1260da7facab91` |
 | exe SHA256 | `3b6584b7ded9f932f9c42529c4e0de765f2086113f4ad5f6e2d32c4196ef08aa` |
 | app.asar SHA256 | `d367a90abb34c85814e68faf2ebff8b95073a220468f4c1d39f93378ca8eb004` |
+| Release 页面 | https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.0 |
+| zip 下载 | https://github.com/plusmultiply0/oc_theme_editor/releases/download/v1.0.0/candidate-20260925081334-0160900-e4b156.zip |
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 

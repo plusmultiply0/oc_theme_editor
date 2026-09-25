@@ -47,7 +47,8 @@
 
 ### 打开换肤助手
 
-拿到当前候选包后，双击解压出的相对路径
+当前候选包（正式版 `1.0.0`）可从 GitHub Release [`v1.0.0`](https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.0)
+下载 `candidate-20260925081334-0160900-e4b156.zip`（附哈希侧车）。解压后双击相对路径
 `candidate-20260925081334-0160900-e4b156\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe`
 即可打开应用、进入使用（未签名便携包，Windows 可能弹安全提示，属已知情况）。
 

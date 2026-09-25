@@ -176,6 +176,10 @@ export function regionsFor(spec: ThemeSpec): RegionLayers[] {
       extra: { token: 'hover', alpha: REGION_ALPHAS.hover },
     },
     { id: 'input', label: '输入区', base: 'image', withOverlay: true, panelAlpha: p },
+    // 封面（新建会话页，新布局）两处按固定值参与计算（X3c，与 css.ts 封面规则同一口径）：
+    // 面板不透明度滑杆不动这两项——cover-input 的 panelAlpha 写死 1，不读 spec。
+    { id: 'cover-input', label: '封面输入区', base: 'image', withOverlay: true, panelAlpha: 1 },
+    { id: 'cover-wordmark', label: '封面大字', base: 'image', withOverlay: true, panelAlpha: 0 },
     {
       id: 'neutral-button',
       label: '次级按钮',

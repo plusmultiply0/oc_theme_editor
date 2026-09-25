@@ -30,7 +30,8 @@ import { regionBackground, regionsFor, type RegionLayers } from './surfaces';
 type MeasuredTarget = Extract<ContrastTarget, 'text' | 'largeText' | 'ui'>;
 
 export const CONTRAST_SCOPE =
-  '仅覆盖本工具写入的语义 token：正文、次要文字、侧栏与选中项、对话气泡、输入区、菜单、' +
+  '仅覆盖本工具写入的语义 token：正文、次要文字、侧栏与选中项、对话气泡、输入区、封面（新建会话页' +
+  '输入框与大字，按固定不透明计）、菜单、' +
   '次级按钮、主按钮三态、边框、焦点环、状态色、diff 色；不含终端配色与代码语法高亮。' +
   '按钮 disabled 状态按无障碍惯例豁免对比度要求，不参与测量。';
 
@@ -104,6 +105,16 @@ const ENTRY_TABLE: EntrySpec[] = [
     region: 'input',
     foreground: (t) => t.muted,
     target: 'text',
+  },
+  // 封面（新建会话页，新布局）固定不透明两处（X3c）：区域 panelAlpha 是固定值，
+  // 面板不透明度滑杆不动这两条——与 css.ts 封面规则的实际渲染同口径。
+  { element: '封面输入文字', state: 'default', region: 'cover-input', foreground: (t) => t.text, target: 'text' },
+  {
+    element: '封面大字标语',
+    state: 'default',
+    region: 'cover-wordmark',
+    foreground: (t) => t.text,
+    target: 'largeText',
   },
   {
     element: '次级按钮文字',

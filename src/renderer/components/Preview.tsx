@@ -64,6 +64,10 @@ export default function Preview({ tokens, imageUrl, spec, resolvedMode }: Previe
     // 菜单/弹层的不透明深色面与兜底文字（X1）
     '--p-menu-bg': menu.bg,
     '--p-menu-text': menu.text,
+    // 封面（新建会话页）固定不透明两处（X3c）：实色值，不接 panelAlpha——
+    // 与 css.ts 封面规则同一口径，拖面板不透明度滑杆这两块不变
+    '--p-cover-input-bg': tokens.panel,
+    '--p-cover-text': tokens.text,
     '--p-bubble': bubble,
     '--p-neutral-surface': alpha(tokens.text, REGION_ALPHAS.neutral),
     '--p-hover-overlay': alpha(tokens.hover, REGION_ALPHAS.hover),
@@ -102,8 +106,9 @@ export default function Preview({ tokens, imageUrl, spec, resolvedMode }: Previe
         <div className="mock-overlay" aria-hidden="true" />
 
         <div className="mock-body">
-          {/* 预览模拟的是「会话内」视图；X3 封面标语描边只在空会话首页生效，
-              预览无对应封面态，故不在此覆盖（与真机注入层差异见 X3-EVIDENCE.md）。 */}
+          {/* 预览主体模拟「会话内」视图；封面（新建会话页）单独在下方「封面示意」块
+              按固定不透明值演示（X3c）。旧布局封面的标语 text-shadow 只在真机生效，
+              预览无该封面态、不覆盖（差异口径见 X3-EVIDENCE.md）。 */}
           <aside className="mock-sidebar">
             <div className="mock-brand">会话</div>
             <div className="mock-item active">重构取色模块</div>
@@ -181,6 +186,14 @@ export default function Preview({ tokens, imageUrl, spec, resolvedMode }: Previe
               <div className="add">+ 按频次排序，去掉随机初始中心</div>
               <div className="del">- k-means(random_state=42)</div>
               <div className="ctx">  共 12 处改动</div>
+            </div>
+
+            <div className="cover-mock">
+              <div className="cover-head">封面（新建会话页）示意：大字与输入框为固定实色，不随面板不透明度滑杆变化</div>
+              <div className="cover-wordmark" aria-hidden="true">
+                opencode
+              </div>
+              <div className="cover-input">输入消息，或拖入图片…</div>
             </div>
 
             <div className="terminal">

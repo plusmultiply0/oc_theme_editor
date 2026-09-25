@@ -864,6 +864,42 @@ a:focus-visible {
   color: var(--p-muted);
 }
 
+/* 封面（新建会话页）示意（X3c）：大字与输入框按固定实色渲染——
+   与 css.ts 的 session-new-design 封面规则同一口径（tokens.panel/tokens.text 实色），
+   不引用 --p-panel，所以拖面板不透明度滑杆这两块不变（与真机同构）。 */
+.cover-mock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.cover-head {
+  align-self: flex-start;
+  font-size: 0.6875rem;
+  color: var(--p-muted);
+}
+
+.cover-wordmark {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--p-cover-text);
+}
+
+.cover-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  /* 真机封面输入框 form[data-component=prompt-input-v2] 圆角 rounded-xl ≈12px */
+  border-radius: 12px;
+  background: var(--p-cover-input-bg);
+  border: 1px solid var(--p-border-soft, var(--p-border));
+  color: var(--p-text);
+  font-size: 0.8125rem;
+}
+
 .terminal {
   border: 1px dashed var(--p-border);
   border-radius: 4px;

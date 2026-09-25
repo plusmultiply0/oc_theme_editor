@@ -53,6 +53,25 @@
   `:has()` 子树锚点静态无法确认命中，按「不猜」留待真机窗口由 jc 坐实结构后再定。
   取证与定案见 `handoff/visual-fix-r2-plan-2026-09-25/X3-EVIDENCE.md`。
 
+### 封面固定不透明 X3c（2026-09-25，随 alpha.9 之后的下一候选生效）
+
+- **取证更正**：把官方 bundle 全部 836 个渲染层 chunk 扫了一遍（X3a 只查了主 bundle），
+  坐实**新布局的「新建会话页」是独立路由**（`new-session-*.js`，根容器
+  `data-component="session-new-design"`，主 bundle 出现 0 次），其大字是 `WordmarkV2` 水印 SVG
+  （三层 opacity 连乘 ≈6.7% + mask 下半截渐隐）、输入框是直挂封面树的 `prompt-input-v2`——
+  **不经 `session-prompt-dock`**，X3a 结论二只对旧布局封面成立。`:has()` 缺口就此闭合。
+  追加取证节见 `handoff/visual-fix-r2-plan-2026-09-25/X3-EVIDENCE.md`。
+- **X3c（默认观感变化 + 行为口径变化）**：jc 精确化后的要求——新布局封面大字与输入框
+  **透明度固定、不随面板不透明度滑杆变化、尽可能不透明**。注入层新增封面限定规则：
+  封面输入框（`session-new-design` 子树内 `prompt-input-v2`/`prompt-input`）底色钉为
+  `tokens.panel` 实色（alpha 恒 1，随 mode 推导）、边框 0.9 不变；大字 wordmark svg 内
+  `g/path` 的 opacity 与 mask 渐变 `stop-opacity` 钉为 1（tokens.text 实色，不加衬底）。
+  会话内输入框与旧布局封面不受影响。报告模型同步：`surfaces.ts` 新增固定区域
+  `cover-input`（panelAlpha 写死 1）/`cover-wordmark`，`report.ts` 增「封面输入文字」
+  「封面大字标语」两条目；单测钉死调 `panelOpacity` 时这两项 ratio/pass 不变、
+  会话内「输入文字」照变。mock 预览补「封面示意」块按同一固定值渲染（拖滑杆不动，与真机同构）。
+  真机应用验证并入 #76 同一窗口，本机层级：typecheck/lint/unit（theme 53）/integration/e2e 全绿。
+
 ### 第一批：JPEG 别名（.jfif/.jpe）入口支持（2026-09-12 第六轮）
 
 依据 `handoff/format-review-2026-09-12/NEXT_EXECUTION_PLAN.md`：

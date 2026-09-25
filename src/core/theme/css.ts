@@ -199,10 +199,9 @@ ${renderTokenCss(tokens, spec)}
  * 因此这条选择器天然「封面上下文限定」，不碰会话内任何元素——
  * 只给它加一层与主题背景同源的柔和描边（不凭空塞底框，保持官方浮层观感）。
  *
- * 封面输入框加深不在这里做：真机上封面与会话内是同一套
- * session-prompt-dock > prompt-input-v2，DOM 层无 cover/session 区分属性，
- * :has() 子树锚点在静态取证下无法确认命中，按「不猜」原则留待真机窗口由 jc
- * 坐实结构后再定（见 handoff/visual-fix-r2-plan-2026-09-25/X3-EVIDENCE.md 定案 2）。
+ * 注：追加取证（X3c，见下方封面固定不透明块与 X3-EVIDENCE.md 追加取证节）坐实
+ * 本条只命中**旧布局**封面；新布局封面是独立路由（session-new-design + WordmarkV2
+ * 大字），其固定不透明处理在下方 X3c 规则里做，不在本条。
  */
 #root .text-20-medium.text-text-strong {
   text-shadow: 0 1px 2px ${rgba(tokens.background, 0.9)}, 0 0 6px ${rgba(tokens.background, 0.7)};
@@ -219,6 +218,38 @@ ${renderTokenCss(tokens, spec)}
   background-color: ${rgba(tokens.panel, panel)} !important;
   border-color: ${rgba(tokens.border, 0.9)} !important;
   color: ${tokens.text} !important;
+}
+
+/*
+ * 封面（新建会话页，新布局）固定不透明（X3c，2026-09-25 全量 chunk 取证）。
+ *
+ * 真机新布局封面是独立路由（new-session chunk），根容器 data-component="session-new-design"
+ * 在主 bundle 出现 0 次——天然封面限定，不需要 :has()（证据见
+ * handoff/visual-fix-r2-plan-2026-09-25/X3-EVIDENCE.md 追加取证节）。
+ * 两处按 jc 要求写成**固定值**，不接 panelAlpha(spec)：面板不透明度滑杆不动这两块。
+ *
+ * 1) 封面输入框（form[data-component="prompt-input-v2"] 与内层 prompt-input 一起钉，
+ *    避免内外两层半透明叠色残留）：底色 tokens.panel 实色（随 mode 推导，alpha 恒 1），
+ *    边框沿用 0.9。#root + 双属性选择器特异性压过上面共享半透明组的 !important 规则，
+ *    且只命中封面子树——会话内输入框观感不变。
+ * 2) 大字 opencode 标语（WordmarkV2 水印 SVG）：官方三层 opacity 连乘 ≈6.7% + mask
+ *    下半截渐隐，浮在壁纸上近乎不可读。这里把该 svg 内 g/path 的 opacity 与 mask
+ *    渐变的 stop-opacity 钉为 1——呈现属性低于任何作者层 CSS 规则，无需 !important。
+ *    色本就是 tokens.text 实色（--v2-background-bg-inverse），不塞衬底不加阴影。
+ */
+#root [data-component="session-new-design"] [data-component="prompt-input-v2"],
+#root [data-component="session-new-design"] [data-component="prompt-input"] {
+  background-color: ${tokens.panel} !important;
+  border-color: ${rgba(tokens.border, 0.9)} !important;
+}
+
+#root [data-component="session-new-design"] svg.h-auto.w-full g,
+#root [data-component="session-new-design"] svg.h-auto.w-full path {
+  opacity: 1;
+}
+
+#root [data-component="session-new-design"] svg.h-auto.w-full stop {
+  stop-opacity: 1;
 }
 
 /*

@@ -229,6 +229,30 @@ describe('主题生成', () => {
     }
   });
 
+  it('封面两条报告项按固定不透明计，面板滑杆调参不动这两项（X3c 回归）', async () => {
+    const buf = await solid(48, 48, { r: 64, g: 96, b: 160 });
+    const low = await generateTheme({ buffer: buf, spec: makeSpec({ panelOpacity: 0.2 }), imageRef: './bg.jpg' });
+    const high = await generateTheme({ buffer: buf, spec: makeSpec({ panelOpacity: 0.95 }), imageRef: './bg.jpg' });
+    expect(low.success && high.success).toBe(true);
+    if (low.success && high.success) {
+      const pick = (rep: typeof low.data.report, name: string) =>
+        rep.entries.find((e) => e.element === name);
+      for (const name of ['封面输入文字', '封面大字标语']) {
+        const a = pick(low.data.report, name);
+        const b = pick(high.data.report, name);
+        expect(a).toBeDefined();
+        expect(b).toBeDefined();
+        // 与 css.ts 封面固定值同口径：ratio/pass 不随 panelOpacity 变
+        expect(b!.ratio).toBe(a!.ratio);
+        expect(b!.pass).toBe(a!.pass);
+      }
+      // 边界：会话内「输入文字」仍随滑杆变
+      const inLow = pick(low.data.report, '输入文字');
+      const inHigh = pick(high.data.report, '输入文字');
+      expect(inHigh!.ratio).not.toBe(inLow!.ratio);
+    }
+  });
+
   it('主色可覆盖，且 hover/pressed 三态互不相同', () => {
     const tokens = deriveTokens(['#404558'], 'light', '#2f6fd0');
     expect(tokens.primary).toBe('#2f6fd0');
@@ -456,20 +480,44 @@ describe('token 映射与输出一致性（R3、R5）', () => {
     }
   });
 
-  it('封面标语加主题背景同源描边，且不误伤会话内（X3 回归）', () => {
+  it('旧布局封面标语加主题背景同源描边，且不用 :has()/宽选择器（X3b 回归）', () => {
     const css = generateCss(tokens, makeSpec());
     const { r, g, b } = hexToRgb(tokens.background);
     // 唯一锚点 .text-20-medium.text-text-strong 只作用标语本身，text-shadow 与背景同源
     expect(css).toContain(
       `#root .text-20-medium.text-text-strong {\n  text-shadow: 0 1px 2px rgba(${r}, ${g}, ${b}, 0.9), 0 0 6px rgba(${r}, ${g}, ${b}, 0.7);\n}`,
     );
-    // 封面输入框加深本轮不做（与会话内同组件、无区分属性，留待真机坐实）：
-    // 任何选择器行都不得出现 :has() 式的封面限定规则（注释里提到不算，仅看选择器行）
+    // 封面限定靠 session-new-design 直取（X3c 取证），任何选择器行都不得出现 :has()
+    // （注释里提到不算，仅看选择器行）
     const selectorLines = css
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.endsWith('{'));
     for (const line of selectorLines) expect(line).not.toContain(':has(');
+  });
+
+  it('封面大字与输入框固定不透明，不随面板不透明度滑杆变化（X3c 回归）', () => {
+    const cssLow = generateCss(tokens, makeSpec({ panelOpacity: 0.2 }));
+    const cssHigh = generateCss(tokens, makeSpec({ panelOpacity: 0.95 }));
+    const block = (css: string) => {
+      const start = css.indexOf('#root [data-component="session-new-design"]');
+      expect(start).toBeGreaterThan(-1);
+      const end = css.indexOf('}', css.indexOf('stop-opacity: 1', start));
+      return css.slice(start, end + 1);
+    };
+    const low = block(cssLow);
+    // 两个滑杆位下封面规则逐字节一致——它就是「固定」二字的口径
+    expect(low).toBe(block(cssHigh));
+    // 输入框：tokens.panel 实色（不是 rgba(panel, p)），边框沿用 0.9
+    const { r, g, b } = hexToRgb(tokens.panel);
+    expect(low).toContain(`background-color: ${tokens.panel} !important;`);
+    expect(low).not.toContain(`rgba(${r}, ${g}, ${b}`);
+    // 大字标语：wordmark svg 的 g/path opacity 与 mask 渐变 stop 钉为 1
+    expect(low).toContain('opacity: 1;');
+    expect(low).toContain('stop-opacity: 1;');
+    // 边界：会话内输入框仍随滑杆变（固定只限封面，用户控制权不缩水）
+    expect(cssLow).toContain(`rgba(${r}, ${g}, ${b}, 0.2) !important;`);
+    expect(cssHigh).toContain(`rgba(${r}, ${g}, ${b}, 0.95) !important;`);
   });
 
   it('占位文字稀释混向不透明的次要文字色，不再混向 transparent（P2 回归）', () => {

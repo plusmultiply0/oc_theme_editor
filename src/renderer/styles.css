@@ -1074,6 +1074,13 @@ a:focus-visible {
   min-height: 2.5rem;
 }
 
+/* 状态栏最左侧的「启动 OpenCode」按钮：与状态文字保持同一基线 */
+.status-launch {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* 状态圆点：颜色随状态文字色（error/success/applying…），一眼可辨 */
 .status::before {
   content: '';

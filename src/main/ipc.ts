@@ -117,6 +117,15 @@ export function registerHandlers(ipcMain: IpcMain, deps: HandlerDeps): void {
     }),
   );
 
+  /** 启动目标：只接收 ID，路径一律由主进程按适配器解析（U2；W4b 复活，走 ShellExecute 等价路径） */
+  ipcMain.handle('launchTarget', (_e, targetId: unknown) =>
+    wrap(async () => {
+      const id = requireString(targetId, '目标标识');
+      if (!id.success) return id;
+      return deps.targets.launch(id.data);
+    }),
+  );
+
   ipcMain.handle('stageTheme', (_e, input: StageThemeInput) =>
     wrap(() => deps.operations.stage(input)),
   );

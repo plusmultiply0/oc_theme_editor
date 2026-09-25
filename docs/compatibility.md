@@ -199,3 +199,16 @@ structural 目标的 stage 与 apply **两个入口**都要求 `confirmStructura
 真机 OpenCode 已自动更新到 **1.18.31**（不在白名单）。probe 只读复跑：结构 6 项 PASS、
 白名单检查 WARN；`inspectRoot` 实测返回 `support: 'supported', verifiedBy: 'structural'`——
 两通道模型对真实漂移版本的直接实证。
+
+## 更新（2026-09-25）：启动按钮链路定论（W4）
+
+F1（alpha.7）删除「启动 OpenCode」按钮的原因是 `spawn` 直拉起的 OpenCode 加载不了对话。
+本轮（W4a 探测 + W4b 复活）定论如下，取证细节见 `handoff/visual-fix-plan-2026-09-24/W4A-EVIDENCE.md`：
+
+- **可行**：ShellExecute 等价路径。`cmd /c start "" "<exe>"` 与 `explorer.exe "<exe>"`
+  两种方式真机实测均正常——主窗口出现、上次会话（多标签页与消息内容）完整恢复；
+- **不可行（维持 F1 结论）**：直接 `spawn(exe)`。子进程环境残缺导致会话加载失败，不再使用；
+- 产品链路（W4b）采用 `cmd /c start`：语义与用户双击同路径、node 包装可靠、不依赖 PowerShell。
+  PowerShell `Start-Process` 本体同样可行，但经 node detached 包装后可复现地不执行，弃用；
+- 安全边界不变：renderer 只传 `targetId`，exe 路径由主进程按适配器声明解析并复验落在安装根内；
+  启动动作不写任何文件，失败收敛为 `LAUNCH_FAILED`（归类「安装未被修改」）。

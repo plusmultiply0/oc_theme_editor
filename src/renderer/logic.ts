@@ -67,6 +67,8 @@ const UNMODIFIED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   'PERMISSION_DENIED',
   'DISK_FULL',
   'FILE_LOCKED',
+  // W4b：启动只是拉进程，失败同样不碰安装
+  'LAUNCH_FAILED',
   'TRANSACTION_IN_PROGRESS',
   'STAGE_FAILED',
   'BACKUP_FAILED',

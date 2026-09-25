@@ -33,6 +33,8 @@ export const ERROR_CODES = [
   'PERMISSION_DENIED',
   'DISK_FULL',
   'FILE_LOCKED',
+  /** 「启动 OpenCode」失败：安装根下找不到 exe 或拉起报错；不写任何东西，纯动作失败 */
+  'LAUNCH_FAILED',
   /** 运行时无法按物理文件访问归档（Electron 未提供 original-fs）；工具自身问题，不得当成目标不受支持 */
   'RUNTIME_IO_UNAVAILABLE',
   /** 归档内容与头部不符 / 条目边界异常 / 含无法解析的脚本 —— 输入不可信，必须拒绝继续 */

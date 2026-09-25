@@ -16,7 +16,26 @@ import { systemProcessProbe, type ProcessProbe } from '../../core/patch/precheck
 import { ok, fail, type Result } from '../../shared/errors';
 import type { TargetInfo } from '../../shared/schema';
 import type { DiscoveredTargets, RejectedTargetInfo, RegisterDirectoryResult } from '../../shared/ipc';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+
+/**
+ * W4a 定案（handoff/visual-fix-plan-2026-09-24/W4A-EVIDENCE.md）：
+ * 直接 spawn exe（F1 老路）拉起的 OpenCode 环境不完整、加载不了对话；
+ * `cmd /c start "" "<exe>"` 走 ShellExecute、与用户双击同路径，实测会话完整恢复。
+ * start 的第一枚参数是窗口标题占位（空串），缺了它带引号的路径会被当成标题吞掉。
+ */
+export function buildLaunchCommand(exePath: string): {
+  command: string;
+  args: string[];
+  options: { detached: true; stdio: 'ignore'; env: NodeJS.ProcessEnv };
+} {
+  const env = { ...process.env };
+  // 工具若被 node 链路拉起，这个变量会把目标的 Electron 应用变成纯 Node 进程
+  delete env.ELECTRON_RUN_AS_NODE;
+  return { command: 'cmd.exe', args: ['/c', 'start', '', exePath], options: { detached: true, stdio: 'ignore', env } };
+}
 
 export interface TargetServiceOptions {
   localAppData?: string;
@@ -26,6 +45,8 @@ export interface TargetServiceOptions {
   useRegistry?: boolean;
   /** 进程探针（与 precheck 同口径），测试注入避免真的查系统 */
   processProbe?: ProcessProbe;
+  /** 启动通道注入点：测试不真起进程 */
+  launchIo?: { exists: (p: string) => boolean; start: (exePath: string) => void };
 }
 
 export class TargetService {
@@ -146,5 +167,43 @@ export class TargetService {
     } catch {
       return { ...target, processState: 'unknown' };
     }
+  }
+
+  /**
+   * 「启动 OpenCode」：ShellExecute 等价路径拉起（W4a 定案），不等待、不持句柄；
+   * 单实例下二次启动会聚焦已有窗口。失败只返回干净错误——不动归档、不改任何目标内容。
+   */
+  async launch(targetId: string): Promise<Result<{ launched: boolean }>> {
+    const t = this.get(targetId);
+    if (!t.success) return t;
+
+    const exe = this.resolveExePath(t.data);
+    if (!exe.success) return exe;
+
+    const io = this.opts.launchIo ?? {
+      exists: existsSync,
+      start: (exePath: string) => {
+        const cmd = buildLaunchCommand(exePath);
+        spawn(cmd.command, cmd.args, cmd.options).unref();
+      },
+    };
+    if (!io.exists(exe.data)) {
+      return fail(
+        'LAUNCH_FAILED',
+        '安装根下找不到目标可执行文件',
+        '目标可能已被移动或卸载，请重新检测后重试。',
+      );
+    }
+    try {
+      io.start(exe.data);
+    } catch (e) {
+      return fail(
+        'LAUNCH_FAILED',
+        `启动失败：${e instanceof Error ? e.message : String(e)}`,
+        '请从系统里手动打开 OpenCode，再回到本工具重试。',
+      );
+    }
+    this.cache.set(targetId, { ...t.data, processState: 'running' });
+    return ok({ launched: true });
   }
 }

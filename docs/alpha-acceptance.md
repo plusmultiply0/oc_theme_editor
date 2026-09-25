@@ -770,9 +770,10 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   alpha.7 分发口径改写 + W1–W5 随 alpha.8 分发新增条目）。侧车 `.zip.sha256.txt`
   生成于登记后、分发前（不入库，同先例）。
   `doc-candidate-entry.cjs --manifest candidate-20260925025400-047ce1f-d4519a/
-  candidate-manifest.json --check` 结果以提交信息为准。
-- **tag / Release**：tag `v0.1.0-alpha.8`（annotated）打在候选登记 HEAD 并推送
-  `origin`；GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.10 先例），
+  candidate-manifest.json --check` 得 `DOC_ENTRY_OK`（文档、manifest、磁盘三方一致）。
+- **tag / Release**：tag `v0.1.0-alpha.8`（annotated）已打在候选登记 HEAD `40831fd` 并推送
+  `origin`（`* [new tag]`，注释如实标注「整体观感回执归使用者、登记前未闭合」口径）；
+  GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.10 先例），
   **wb 侧不上传、不宣称已发布**，待 jc 网页回执后补记页面 URL 并将发布说明状态行转
   「已发布」。**本节登记时不宣称 A8 签核**，远程可见性以 jc 网页回执为准。
 - 至此 alpha.8 发布轮 agent 侧闭环，上传待 jc。**遗留**：W1–W5 后整体观感回执

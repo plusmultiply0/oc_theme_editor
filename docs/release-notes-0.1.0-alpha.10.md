@@ -1,19 +1,20 @@
 # OpenCodeThemeSwitcher 0.1.0-alpha.10（Alpha 体验版）
 
-> **状态：草案（2026-09-25，发布物表待候选登记后回填）**。登记前如实标注：X1/X3/X3c
-> 的**同窗口真机应用验证未做**（依赖 jc 在场的真机窗口，任务 #76），整体观感回执同样
-> 未闭合。不宣称 A10 全签核（A6 仍跳过）。发布执行记录见 `docs/alpha-acceptance.md` §9.13。
+> **状态：已登记待发布（2026-09-25）**。本链**首跑被可读性门拦停**（Electron 闭环拒
+> 「封面大字标语 2.25（需 3）」，确定性失败），修复 `a36c38d` 后第二跑跑满全链。
+> 登记前如实标注：X1/X3/X3c 的**同窗口真机应用验证未做**（依赖 jc 在场的真机窗口，
+> 任务 #76），整体观感回执同样未闭合。不宣称 A10 全签核（A6 仍跳过）。
 > Release 上传与网页回执补记归 jc。
 
 ## 发布物
 
 | 项 | 值 |
 |---|---|
-| buildId | 待回填 |
-| 分发 zip | 待回填 |
-| zip SHA256 | 待回填 |
-| exe SHA256 | 待回填 |
-| app.asar SHA256 | 待回填 |
+| buildId | `20260925064032-a36c38d-3694d2` |
+| 分发 zip | `candidate-20260925064032-a36c38d-3694d2.zip` |
+| zip SHA256 | `521e2546ff777faebafdb792a89e8e51381066f74f135982d7e9f315c019db35` |
+| exe SHA256 | `6811fb0e9bfd23b8dbfb56325fd37c09ac16f8d81d12f8a02dbdca4bbed0feff` |
+| app.asar SHA256 | `461e6c8e8d880e2b5b48a37974f55232a8a6cca4cac5e8beaf113bf7272c6c16` |
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 

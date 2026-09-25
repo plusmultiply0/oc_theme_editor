@@ -827,4 +827,52 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   封面输入框加深（待真机坐实结构后定）、W1–W5 与 X1–X3 后整体观感回执、
   真机逐项视觉走查、A6 干净环境、P3 色块外观缺陷口径不变。
 
+### 9.13 候选登记（2026-09-25，alpha.10，渠道：GitHub 私有仓库 Release）
+
+- **签核口径**：jc 指令「走下一候选发布轮」。本轮增量源码=X3c（`54ba951` 追加取证更正 +
+  `264c0f0` 封面固定不透明实施）与链首跑拦停后的 `a36c38d`（`coverText` 修复）+
+  本发布轮文档。定性同 9.12 的镜像：判定、事务、备份、恢复逻辑与**应用输入契约**
+  （`StageThemeInput` 等）零改动；变化在注入 CSS 呈现层、`surfaces`/`report` 可读性模型、
+  mock 预览与 `ThemeTokens` **内部结构**（新增必填字段 `coverText`，随生成物一路贯通，
+  不构成对外兼容负担）。X3c 同时把 alpha.9 记录的「封面与会话内同组件、无区分属性」
+  更正为「仅旧布局成立，新布局封面=独立路由 `session-new-design`」。**登记前缺口（同 9.12
+  口径）**：X1/X3/X3c 的**同窗口真机应用验证未做**（jc 未在场、本轮未获真机写入授权），
+  #76 并新增「封面大字颜色随亮/暗壁纸自适应」一项；整体观感回执同样未闭合。
+  不宣称 A10 全签核（A6 仍跳过）。
+- **本机验收**：typecheck / lint / unit（22 文件 389 条，theme 54）/ integration
+  （16 文件 190 条，含真 Electron 闭环 fixture 38/38）/ e2e（16 条）全绿；
+  X3c 的「滑杆不动」由 CSS 块逐字节相等 + 报告 ratio/pass 两处单测钉死；
+  fixture 场景（单像素亮绿）最小复现单测钉住「封面大字 ≥3 且整表 passed」。
+- **链运行（本轮与 9.8–9.12 不同：首跑有拦停轮，如实入档）**：第一次
+  `npm run release:build` 停在 `test:integration`——真 Electron 闭环准备阶段被本工具
+  自己的可读性门拒绝（`CONTRAST_BELOW_TARGET: 封面大字标语 2.25（需 3）`，确定性失败、
+  非环境抖动；根因与定案见 `X3-EVIDENCE.md`「定案更正」节）。**未绕门、未改判据**，
+  以 `a36c38d` 修复推导层后第二跑跑满 12 步全绿，末行
+  `ALL_GREEN buildId=20260925064032-a36c38d-3694d2`。`smoke:gui`（空参数，31.4s）、
+  `test:e2e:electron`（24s）均真实通过。发布级只读终检 18 项 0 失败，
+  `RELEASE_GREEN`、`publishable=true`。
+- **候选身份**：buildId `20260925064032-a36c38d-3694d2`，来源提交 `a36c38d`（coverText
+  修复，即候选登记 HEAD 的前一提交），`packMethod: electron-builder`，可重复构建。
+  zip SHA256 `521e2546ff777faebafdb792a89e8e51381066f74f135982d7e9f315c019db35`、
+  exe SHA256 `6811fb0e9bfd23b8dbfb56325fd37c09ac16f8d81d12f8a02dbdca4bbed0feff`、
+  app.asar SHA256 `461e6c8e8d880e2b5b48a37974f55232a8a6cca4cac5e8beaf113bf7272c6c16`
+  （1064 条目 / unpacked 7）。zip 127.2 MB / 82 条目。
+- **真机状态**：本机 OpenCode 安装自 9.11 的 restore（`op-20260925T024944346Z-lcyqr7`）
+  后保持原状，本轮**未做任何真机写入**；X3c 取证为只读（解包读官方 bundle 全量 chunk）。
+- **登记**：`release-checklist.md` §1 权威入口块换为上述 buildId 与哈希（首跑拦停注记
+  写明），§2.12 把 alpha.9 转历史（其 manifest/哈希原样保留，注明 X3c 与 coverText
+  修复不在 alpha.9 包内），§3 门禁表按本轮 build-record 改写；README 候选指针同步三处
+  + X3c 随 alpha.10 分发新增条目。侧车 `.zip.sha256.txt` 生成于登记后、分发前
+  （不入库，同先例）。
+  `doc-candidate-entry.cjs --manifest candidate-20260925064032-a36c38d-3694d2/
+  candidate-manifest.json --check` 得 `DOC_ENTRY_OK`（文档、manifest、磁盘三方一致）。
+- **tag / Release**：GitHub pre-release 由 jc 在网页创建（本机无 gh CLI，同 9.4–9.12 先例），
+  **wb 侧不上传、不宣称已发布**，待 jc 网页回执后补记页面 URL 并将发布说明状态行转
+  「已发布」。**本节登记时不宣称 A10 签核**，远程可见性以 jc 网页回执为准。
+  **tag 落账（A10-4 补记）**：tag `v0.1.0-alpha.10` 的落点与推送结果以 A10-4 补记为准。
+- 至此 alpha.10 发布轮 agent 侧登记完成（tag/推送见上条补记）。**遗留**：
+  X1/X3/X3c 同窗口真机应用验证（含大字随图自适应新增项，登记前未闭合，如实保留）、
+  W1–W5 与 X1–X3c 后整体观感回执、alpha.8/9/10 的 Release 上传与网页回执补记（jc）、
+  「启动后实发消息」核验、真机逐项视觉走查、A6 干净环境、P3 色块外观缺陷——口径不变。
+
 

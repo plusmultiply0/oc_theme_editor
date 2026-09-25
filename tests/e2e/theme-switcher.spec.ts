@@ -167,7 +167,7 @@ async function setImageByDragAndDrop(): Promise<void> {
 
 /**
  * 按标题精确锁定侧栏面板（仅「恢复」选项卡激活时可见）。
- * 不能用 `filter({ hasText: '目标' })`：可读性面板里「全部条目达到目标值」也含「目标」，
+ * 不能用 `filter({ hasText: '目标' })`：可读性面板里「全部条目达标（估算）」也含「达标」，
  * 结果会选中错的面板。
  */
 function panelWithHeading(name: string) {
@@ -261,8 +261,14 @@ test.describe('图形界面闭环（先不碰用户安装）', () => {
     const report = page.locator('.side-column .panel').first();
     await expect(report).toContainText('可读性检查');
     await expect(report).toContainText('估算');
+    // X2：面板级折叠——全达标默认收起（结论条含「余量最差」），未达标默认展开。
+    // report 元素本身就是 details.panel-collapse；收起态 summary 内没有「余量最差」行，
+    // 先按 open 态展开面板卡再断言卡内内容（对已展开态无副作用）。
+    if (!(await report.evaluate((el) => el.hasAttribute('open')))) {
+      await report.locator('> summary').click();
+    }
     await expect(report).toContainText('余量最差');
-    // U-重整 T3：24 行明细默认折叠进「明细与判定依据」——展开后再断言逐条内容
+    // U-重整 T3：明细默认折叠进「明细与判定依据」——展开后再断言逐条内容
     await report.locator('details.scan-details > summary').click();
     await expect(page.locator('.entries li').first()).toBeVisible();
     // R4：覆盖了非 default 状态与多点采样

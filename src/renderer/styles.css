@@ -948,6 +948,69 @@ a:focus-visible {
   color: var(--ui-muted);
 }
 
+/* ---------- X2：可读性面板整体折叠 ---------- */
+/* 默认收成一行结论条：标题 + 结论 + 余量最差；再点展开整卡。
+   内容结构（底色/最差行/明细）原样保留在展开区内。 */
+details.panel-collapse {
+  padding: 0;
+}
+
+details.panel-collapse > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 1.125rem;
+  flex-wrap: wrap;
+}
+
+details.panel-collapse > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.panel-collapse > summary h2 {
+  margin: 0;
+}
+
+details.panel-collapse > summary .conclusion {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+details.panel-collapse > summary .worst {
+  font-size: 0.75rem;
+  color: var(--ui-muted);
+  margin-left: auto;
+}
+
+/* 展开指示：与「明细与判定依据」同族的轻量记号 */
+details.panel-collapse > summary::after {
+  content: '▸';
+  color: var(--ui-muted);
+  font-size: 0.75rem;
+  transition: transform 0.12s ease;
+}
+
+details.panel-collapse[open] > summary {
+  border-bottom: 1px solid var(--ui-border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+details.panel-collapse[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+details.panel-collapse > :not(summary) {
+  margin-left: 1.125rem;
+  margin-right: 1.125rem;
+}
+
+details.panel-collapse > .scan-details {
+  margin-bottom: 1.125rem;
+}
+
 .fail {
   color: var(--ui-danger);
 }

@@ -190,6 +190,25 @@ ${renderTokenCss(tokens, spec)}
 }
 
 /*
+ * 封面标语可读性描边（X3，2026-09-25 取证）。
+ *
+ * 封面（新会话首页）标语「Build anything」是 NewSessionView 里的
+ * .text-20-medium.text-text-strong，官方不给底色、直接浮在壁纸上；
+ * W1 又让停靠容器透明，于是亮主题浅壁纸 / 暗主题深壁纸上文字都可能发虚。
+ * 取证坐实 .text-20-medium 在整份官方 bundle 里只出现一次（仅此标语），
+ * 因此这条选择器天然「封面上下文限定」，不碰会话内任何元素——
+ * 只给它加一层与主题背景同源的柔和描边（不凭空塞底框，保持官方浮层观感）。
+ *
+ * 封面输入框加深不在这里做：真机上封面与会话内是同一套
+ * session-prompt-dock > prompt-input-v2，DOM 层无 cover/session 区分属性，
+ * :has() 子树锚点在静态取证下无法确认命中，按「不猜」原则留待真机窗口由 jc
+ * 坐实结构后再定（见 handoff/visual-fix-r2-plan-2026-09-25/X3-EVIDENCE.md 定案 2）。
+ */
+#root .text-20-medium.text-text-strong {
+  text-shadow: 0 1px 2px ${rgba(tokens.background, 0.9)}, 0 0 6px ${rgba(tokens.background, 0.7)};
+}
+
+/*
  * 对话框与输入框：保留 W1/W2 定过的半透明面板观感，不随菜单一起改（X1 边界）。
  */
 [data-component="dialog"],

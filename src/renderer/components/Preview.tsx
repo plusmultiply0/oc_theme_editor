@@ -102,6 +102,8 @@ export default function Preview({ tokens, imageUrl, spec, resolvedMode }: Previe
         <div className="mock-overlay" aria-hidden="true" />
 
         <div className="mock-body">
+          {/* 预览模拟的是「会话内」视图；X3 封面标语描边只在空会话首页生效，
+              预览无对应封面态，故不在此覆盖（与真机注入层差异见 X3-EVIDENCE.md）。 */}
           <aside className="mock-sidebar">
             <div className="mock-brand">会话</div>
             <div className="mock-item active">重构取色模块</div>

@@ -456,6 +456,22 @@ describe('token 映射与输出一致性（R3、R5）', () => {
     }
   });
 
+  it('封面标语加主题背景同源描边，且不误伤会话内（X3 回归）', () => {
+    const css = generateCss(tokens, makeSpec());
+    const { r, g, b } = hexToRgb(tokens.background);
+    // 唯一锚点 .text-20-medium.text-text-strong 只作用标语本身，text-shadow 与背景同源
+    expect(css).toContain(
+      `#root .text-20-medium.text-text-strong {\n  text-shadow: 0 1px 2px rgba(${r}, ${g}, ${b}, 0.9), 0 0 6px rgba(${r}, ${g}, ${b}, 0.7);\n}`,
+    );
+    // 封面输入框加深本轮不做（与会话内同组件、无区分属性，留待真机坐实）：
+    // 任何选择器行都不得出现 :has() 式的封面限定规则（注释里提到不算，仅看选择器行）
+    const selectorLines = css
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.endsWith('{'));
+    for (const line of selectorLines) expect(line).not.toContain(':has(');
+  });
+
   it('占位文字稀释混向不透明的次要文字色，不再混向 transparent（P2 回归）', () => {
     const css = generateCss(tokens, makeSpec());
     // 官方预置的形状是 50% 混向 transparent（浅输入底上实测只剩 2.07:1）；

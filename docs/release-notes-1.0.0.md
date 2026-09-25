@@ -1,10 +1,10 @@
 # OpenCodeThemeSwitcher 1.0.0（正式版）
 
-> **状态：草案（2026-09-25，发布物表待候选登记后回填）**。本版本为**首个正式版**：
+> **状态：已登记待发布（2026-09-25）**。本版本为**首个正式版**：
 > 相对 `0.1.0-alpha.10` 功能零改动（仅版本号与文档），alpha 轮的全部验收已闭合——
 > X1/X3/X3c 的同窗口真机应用验证与 W1–W5/X1–X3c 整体观感已由使用者回执确认
 > （2026-09-25）。发布执行记录见 `docs/alpha-acceptance.md` §9.14。
-> Release 上传与网页回执补记归 jc（按决定，alpha.8/9/10 的补记已跳过）。
+> GitHub Release 是否创建由 jc 决定（alpha.8/9/10 的网页回执补记已按决定跳过）。
 >
 > **版本号口径**：`0.1.0` 已被 Alpha 之前的首个标记版本占用（tag `v0.1.0`，提交
 > `8e6bd04`，已推送不可移动），正式版顺延为 `1.0.0`。
@@ -13,11 +13,11 @@
 
 | 项 | 值 |
 |---|---|
-| buildId | 待回填 |
-| 分发 zip | 待回填 |
-| zip SHA256 | 待回填 |
-| exe SHA256 | 待回填 |
-| app.asar SHA256 | 待回填 |
+| buildId | `20260925081334-0160900-e4b156` |
+| 分发 zip | `candidate-20260925081334-0160900-e4b156.zip` |
+| zip SHA256 | `7a812b3ea8b73b3bee2c77ede5c57c7d33e71fe851b70b161c1260da7facab91` |
+| exe SHA256 | `3b6584b7ded9f932f9c42529c4e0de765f2086113f4ad5f6e2d32c4196ef08aa` |
+| app.asar SHA256 | `d367a90abb34c85814e68faf2ebff8b95073a220468f4c1d39f93378ca8eb004` |
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 
@@ -46,7 +46,7 @@
 ## 五步使用
 
 0. **打开换肤助手**：拿到候选包解压后，双击相对路径
-   `candidate-<buildId>\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe`
+   `candidate-20260925081334-0160900-e4b156\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe`
    即可进入使用（未签名便携包，Windows 可能弹安全提示，属已知情况）。
 1. **完全退出 OpenCode**：不是关窗口 —— 检查托盘区（时间旁边的小箭头）里有没有它的图标，
    有就右键退出。运行中工具会拒绝写入（这是保护，不是故障）。

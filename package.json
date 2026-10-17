@@ -31,7 +31,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "start": "electron .",
+    "start": "node tools/start.cjs",
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && tsc -p tsconfig.node.json",
     "build:renderer": "vite build",
@@ -74,6 +74,6 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.0",
     "vite": "^6.3.5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   }
 }

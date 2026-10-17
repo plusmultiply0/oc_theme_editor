@@ -14,7 +14,7 @@
  *     能拦住「内容自洽但本身就是截断/坏文件」——本次事故的形态，
  *     坏内容的 hash 是打包器重新算出来的，自校验必然通过。
  *  3. `compareWithBaseline`：与首次接管快照的逐条基线比对，产出**结构化差异**。
- *     输入侧由调用方分类裁决（官方整体更新→重新接管；零星改动→拒绝，见 classifyDrift）；
+ *     输入侧由调用方分类裁决（结构可行→重新接管；结构不可行→拒绝，见 classifyDrift）；
  *     产物侧（`verifyPackedResult`）不放宽——staged 有任何差异即拒绝提交。
  *
  * 另有 `findSharedOffsetConflicts`：同 offset 条目必须同内容同长度。
@@ -26,6 +26,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fail, ok, type Result } from '../../shared/errors';
+import type { CompatReport } from './compat-check';
 // 注意：这里必须用物理 fs。Electron 主进程的 `node:fs` 被包装过，
 // `.asar` 路径会被当成虚拟目录，校验会直接 ENOENT（与事故 R1 同源）。
 import { physicalFs, physicalFsp } from './physical-fs';
@@ -547,14 +548,15 @@ export async function compareWithBaseline(
 }
 
 /*
- * 重新接管（re-baseline）判据阈值 —— 命名常量，单测固定，不散落逻辑。
- * 官方整体更新会换掉绝大多数条目；零星改动不是。取保守值：
- * 差异规模不足一半、又没到「package.json 变了且 ≥100 条」的量级，一律按可疑处理。
+ * 差异规模阈值 —— 命名常量，单测固定，不散落逻辑。
+ * 两轮之后它的角色是「证据」而非「闸门」：只用于拒绝文案里如实说明差异量级，
+ * 以及真机排查时判断「这是整体替换还是零星改动」，**不再决定放行与否**。
  */
 export const REBASELINE_DRIFT_RATIO = 0.5;
 export const REBASELINE_DRIFT_MIN_COUNT = 100;
 
-export type DriftVerdictKind = 'official-update' | 'suspicious';
+/** 放行（injectable）＝结构可行、可注入；suspicious＝结构不可行，维持拒绝 */
+export type DriftVerdictKind = 'injectable' | 'suspicious';
 
 export interface DriftConditionResult {
   key: 'versionChanged' | 'anchorUnique' | 'changeSetClean' | 'driftScale' | 'unpackedSet';
@@ -565,36 +567,43 @@ export interface DriftConditionResult {
 export interface DriftVerdict {
   verdict: DriftVerdictKind;
   driftCount: number;
-  /** 五条件的逐条判定依据（通过与否都要留痕，供明细与文案消费） */
+  /** 各判据的逐条留痕（角色是「证据」而非闸门：放行只由 structure.compatible 决定） */
   conditions: DriftConditionResult[];
 }
 
 export interface DriftClassifyInput {
   drift: BaselineDrift;
-  /** 基线条目总数（比例阈值分母） */
+  /** 基线条目总数（比例阈值的分母，仅用于证据明细） */
   baselineCount: number;
-  /** 当前归档 package.json 的 version；读不到为 null */
+  /** 当前归档 package.json 的 version；读不到为 null（证据，不参与否决） */
   archiveVersion: string | null;
-  /** 基线对应归档的 version；旧基线无记录时为 null */
+  /** 基线对应归档的 version；旧基线无记录时为 null（证据，不参与否决） */
   baselineVersion: string | null;
-  /** verifyStructure 检查 1：注入锚点恰好 1 处 */
-  anchorUnique: boolean;
-  /** verifyStructure 检查 2：css/jpg 变更集合干净（不存在或本工具产物） */
-  changeSetClean: boolean;
+  /**
+   * 注入可行性结构验证报告（单一判据源 compat-check.verifyStructure）。
+   * 放行判据 = `structure.compatible`——与 discover 的 structural 通道完全同源。
+   */
+  structure: CompatReport;
   currentUnpacked: readonly string[];
-  /** 基线侧 unpacked 路径集合；旧基线无记录时为 null（按不可判定处理） */
+  /** 基线侧 unpacked 路径集合；旧基线无记录时为 null（证据，不参与否决） */
   baselineUnpacked: readonly string[] | null;
 }
 
 /**
- * 差异分类裁决（纯函数，无 IO）：五条件**同时满足**才判 official-update，
- * 任一不过即 suspicious —— 宁拒勿纵。拒绝路径仍由调用方维持硬门禁语义。
+ * 差异分类裁决（纯函数，无 IO）。
+ *
+ * 放行判据与 discover 的 structural 通道**完全同源**：只要结构验证无 FAIL
+ * （锚点唯一、变更集合干净），即判 `injectable` 并重新接管——版本号陌生、
+ * 差异量级、unpacked 集合增减都不再是否决理由（它们只进证据明细与文案）。
+ *
+ * 本轮之前这里把 ①④⑤ 也当闸门，与 S 轮确立的「版本陌生不否决」直接冲突
+ * （同一件事两扇门两套口径）。降维后单来源：`verifyStructure`。
  */
 export function classifyDrift(input: DriftClassifyInput): DriftVerdict {
   const driftCount = countDrift(input.drift);
   const conditions: DriftConditionResult[] = [];
 
-  // ① 版本确实变了（双方都得有记录才可比）
+  // ① 版本变化（证据：仅用于文案说明是「更新」还是「版本相同的重打包」）
   const versionChanged =
     input.archiveVersion !== null &&
     input.baselineVersion !== null &&
@@ -604,55 +613,58 @@ export function classifyDrift(input: DriftClassifyInput): DriftVerdict {
     passed: versionChanged,
     detail:
       input.archiveVersion === null
-        ? '当前归档读不到 version，无法与基线比对'
+        ? '当前归档读不到 version（不影响放行，仅作提示）'
         : input.baselineVersion === null
-          ? '基线无对应 version 记录，无法证明版本变化'
-          : `归档 version=${input.archiveVersion} 基线 version=${input.baselineVersion}${versionChanged ? '（不同）' : '（相同，非更新）'}`,
+          ? '基线无对应 version 记录（不影响放行，仅作提示）'
+          : `归档 version=${input.archiveVersion} 基线 version=${input.baselineVersion}${versionChanged ? '（不同）' : '（相同）'}`,
   });
 
-  // ② 锚点仍唯一
+  // ② 锚点仍唯一（取自结构报告，是放行硬判据之一）
+  const anchor = input.structure.checks.find((c) => c.key === 'anchor');
+  const anchorUnique = anchor !== undefined && anchor.status !== 'FAIL';
   conditions.push({
     key: 'anchorUnique',
-    passed: input.anchorUnique,
-    detail: input.anchorUnique ? '注入锚点恰好 1 处' : '锚点消失或不唯一，补丁不适用',
+    passed: anchorUnique,
+    detail: anchor ? `${anchor.status}：${anchor.detail}` : '结构报告缺少锚点检查项，按不可用处理',
   });
 
-  // ③ 变更集合干净
+  // ③ 变更集合干净（取自结构报告，是放行硬判据之一）
+  const changeSet = input.structure.checks.find((c) => c.key === 'changeSet');
+  const changeSetClean = changeSet !== undefined && changeSet.status !== 'FAIL';
   conditions.push({
     key: 'changeSetClean',
-    passed: input.changeSetClean,
-    detail: input.changeSetClean ? 'css/图片条目不存在或为本工具产物' : '变更集合被第三方占用',
+    passed: changeSetClean,
+    detail: changeSet ? `${changeSet.status}：${changeSet.detail}` : '结构报告缺少变更集合检查项，按不可用处理',
   });
 
-  // ④ 差异规模达到「整体替换」量级
+  // ④ 差异规模（证据）
   const ratioHit = driftCount >= input.baselineCount * REBASELINE_DRIFT_RATIO;
   const packageJsonChanged = input.drift.changed.some((c) => c.path === 'package.json');
   const minCountHit = packageJsonChanged && driftCount >= REBASELINE_DRIFT_MIN_COUNT;
   conditions.push({
     key: 'driftScale',
     passed: ratioHit || minCountHit,
-    detail: `差异 ${driftCount}/${input.baselineCount} 条，阈值：≥${Math.ceil(input.baselineCount * REBASELINE_DRIFT_RATIO)} 条（50%）或 package.json 变化且 ≥${REBASELINE_DRIFT_MIN_COUNT} 条（package.json 变化=${packageJsonChanged}）`,
+    detail: `差异 ${driftCount}/${input.baselineCount} 条（整体替换量级阈值：≥${Math.ceil(input.baselineCount * REBASELINE_DRIFT_RATIO)} 条或 package.json 变化且 ≥${REBASELINE_DRIFT_MIN_COUNT} 条；不影响放行，仅作提示）`,
   });
 
-  // ⑤ unpacked 原生模块路径集合一致（数量与路径，内容不验——官方更新必换内容）
+  // ⑤ unpacked 原生模块路径集合（证据：官方更新会增减原生模块，不作为否决理由）
   const wantUnpacked = input.baselineUnpacked === null ? null : [...input.baselineUnpacked].sort();
   const nowUnpacked = [...input.currentUnpacked].sort();
-  const unpackedSet =
+  const unpackedSame =
     wantUnpacked !== null &&
     wantUnpacked.length === nowUnpacked.length &&
     wantUnpacked.every((p, i) => p === nowUnpacked[i]);
   conditions.push({
     key: 'unpackedSet',
-    passed: unpackedSet,
+    passed: unpackedSame,
     detail:
       input.baselineUnpacked === null
-        ? '基线无 unpacked 集合记录，无法核对原生模块结构'
-        : `当前 ${input.currentUnpacked.length} 个 vs 基线 ${input.baselineUnpacked.length} 个${unpackedSet ? '（一致）' : '（不一致）'}`,
+        ? '基线无 unpacked 集合记录（不影响放行，仅作提示）'
+        : `当前 ${input.currentUnpacked.length} 个 vs 基线 ${input.baselineUnpacked.length} 个${unpackedSame ? '（一致）' : '（不一致，不影响放行）'}`,
   });
 
-  const verdict: DriftVerdictKind = conditions.every((c) => c.passed)
-    ? 'official-update'
-    : 'suspicious';
+  // 放行判据与 discover structural 通道同源：结构无 FAIL 即可注入
+  const verdict: DriftVerdictKind = input.structure.compatible ? 'injectable' : 'suspicious';
   return { verdict, driftCount, conditions };
 }
 

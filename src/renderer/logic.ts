@@ -120,7 +120,7 @@ export type UiState =
   | { kind: 'confirming' }
   | { kind: 'applying'; phase: string; percent?: number }
   | { kind: 'success'; message: string }
-  | { kind: 'error'; message: string; hint: string; scope: ErrorScope }
+  | { kind: 'error'; message: string; hint: string; scope: ErrorScope; detail?: string }
   | { kind: 'needsRecovery'; message: string; hint: string };
 
 export function isBusy(state: UiState): boolean {

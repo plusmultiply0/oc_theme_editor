@@ -193,12 +193,16 @@ async function runApply(
   );
   if (!baselineGate.success) return baselineGate;
   if (baselineGate.data.rebaselined) {
-    // 放行对用户可见（B3）：进度事件里如实说明基线已随官方更新迁移
+    // 放行对用户可见（Y2）：沿用 structural 徽章口径——明示经结构验证放行、
+    // 不写「已验证」；未在白名单时如实说明（白名单版本则不必赘述）。
+    const nv = baselineGate.data.newVersion;
+    const whitelistNote =
+      nv && adapter.supportedVersions.includes(nv) ? '经结构验证放行' : '未在白名单，经结构验证放行';
     emit(
       'inspected',
-      baselineGate.data.newVersion
-        ? `检测到目标已更新至 ${baselineGate.data.newVersion}，已自动更新基线（旧基线归档留存）`
-        : '检测到目标已整体更新，已自动更新基线（旧基线归档留存）',
+      nv
+        ? `检测到目标已更新至 ${nv}（${whitelistNote}），已自动更新基线（旧基线归档留存）`
+        : '检测到目标已整体更新（经结构验证放行），已自动更新基线（旧基线归档留存）',
       5,
     );
   }
@@ -490,11 +494,12 @@ async function verifyTargetArchive(
  * - 基线文件不存在（首次接管）→ 以接手那一刻的归档为基线（它就是基准本身），
  *   调用方在首次接管快照落盘后把基线一起保存。
  * - 与基线完全一致 → 照常继续。
- * - 有差异时经 classifyDrift 五条件裁决（baseline-drift B1）：
- *   official-update（OpenCode 自动更新整体换归档）→ 以当前归档重建基线，
- *   旧基线由调用方按序号归档留存后继续应用；
- *   suspicious（局部篡改、锚点丢失、原生模块集合变化等）→ 照旧拒绝，
- *   硬门禁的防篡改职责不放宽——只是不再把官方更新也一并挡死。
+ * - 有差异时经 classifyDrift 裁决（drift-gate-r2 Y1）：放行判据与 discover 的
+ *   structural 通道**完全同源**——`verifyStructure(snapshot).compatible`（结构无 FAIL）。
+ *   injectable（目标更新/版本陌生/原生模块集合变化，但注入结构仍适用）→
+ *   以当前归档重建基线，旧基线由调用方按序号归档留存后继续应用；
+ *   suspicious（结构验证有 FAIL：锚点丢失、变更集合被第三方占用等）→ 照旧拒绝，
+ *   硬门禁的防篡改职责不放宽——只是不再把「版本陌生」「模块增减」本身当否决理由。
  */
 interface BaselineGateResult {
   baseline: Map<string, EntryBaseline>;
@@ -566,15 +571,12 @@ async function resolveBaselineGate(
     const baselineVersion = existing.data.meta?.version ?? legacy.version;
     const baselineUnpacked = existing.data.meta?.unpackedPaths ?? legacy.unpackedPaths;
     const structure = await verifyStructure(snapshot, adapter);
-    const anchorUnique = structure.checks.find((c) => c.key === 'anchor')?.status !== 'FAIL';
-    const changeSetClean = structure.checks.find((c) => c.key === 'changeSet')?.status !== 'FAIL';
     const verdict = classifyDrift({
       drift: cmp.data.drift,
       baselineCount: existing.data.entries.size,
       archiveVersion,
       baselineVersion,
-      anchorUnique,
-      changeSetClean,
+      structure,
       currentUnpacked: cmp.data.currentUnpacked,
       baselineUnpacked,
     });
@@ -584,23 +586,18 @@ async function resolveBaselineGate(
       const basis = verdict.conditions
         .map((c) => `${c.passed ? '✓' : '✗'} ${c.key}：${c.detail}`)
         .join('；');
-      // 文案分两类（B3）：有版本变化证据的按「疑似官方更新但未达自动放行条件」，
-      // 其余按「疑似第三方改动」。拒绝本身不变——只是把实话说到对应的那扇门上。
-      const looksOfficial =
-        verdict.conditions.find((c) => c.key === 'versionChanged')?.passed === true;
+      // Y2：拒绝只剩结构验证 FAIL 一种成因（版本陌生/量级/unpacked 差异已不再是闸门），
+      // 「疑似官方更新但未达自动放行条件」那扇门不复存在，只按结构实话实说。
+      // 明细进 error.detail，由渲染层在错误卡片下方展示（承诺的「下方明细」必须可查）。
       return fail(
         'ARCHIVE_CORRUPT',
-        looksOfficial
-          ? `目标疑似被官方更新（${problems.length} 条与接管基线不一致），但未满足自动放行条件，本次输入不可信`
-          : `目标与首次接管快照不一致（${problems.length} 条），疑似第三方改动，本次输入不可信`,
-        looksOfficial
-          ? '看起来是 OpenCode 更新过但没通过自动接管判据（下方明细列出未过项）：请优先把本工具升级到适配新版本后重试；仍不行再走恢复入口，别直接按旧快照降级。'
-          : '请先用恢复入口回到接管时的状态，再重新应用；若确认没装过别的改包工具，请把明细反馈给开发者。',
-        `${problems.slice(0, 10).join('；')}｜自动放行判定未通过：${basis}`,
+        `目标与首次接管快照不一致（${problems.length} 条），且结构验证未通过（${describeFailed(structure)}），本次输入不可信`,
+        '请先用恢复入口回到接管时的状态，再重新应用；若确认没装过别的改包工具，请把下方明细反馈给开发者。',
+        `${problems.slice(0, 10).join('；')}｜判据明细：${basis}`,
       );
     }
 
-    // official-update：以当前归档重建基线；落盘由调用方在旧基线序号归档后执行
+    // injectable（结构可行，版本陌生亦可）：以当前归档重建基线；落盘由调用方在旧基线序号归档后执行
     const rebuilt = await buildBaseline(archivePath, isAllowed);
     if (!rebuilt.success) return rebuilt;
     return ok({

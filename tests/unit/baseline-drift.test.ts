@@ -1,9 +1,10 @@
 /**
- * 基线门禁差异分类（baseline-drift B2）。
+ * 基线门禁差异分类（drift-gate-r2 Y1，基线 baseline-drift B2）。
  *
- * classifyDrift 是纯函数：五条件缺一不可（宁拒勿纵），这里把每条判据
- * 单独打穿（其余条件全给通过态），再加阈值边界 49%/51% 与常量固定。
- * 另覆盖基线文件 v2 信封 / 旧数组格式兼容与旧基线序号归档（永不覆盖删除）。
+ * classifyDrift 是纯函数：**放行判据与 discover 的 structural 通道完全同源** ——
+ * 只看 `structure.compatible`（结构验证无 FAIL）。版本号陌生、差异量级、
+ * unpacked 集合增减都只作证据留痕，不再是闸门（R2 之前它们参与否决，
+ * 与 S 轮「版本陌生不否决」冲突，累积出真机 1081 拒绝缺陷）。
  * 端到端放行链在 tests/integration/baseline-drift.test.ts。
  */
 import fs from 'node:fs';
@@ -24,6 +25,11 @@ import {
   type DriftConditionResult,
   type EntryBaseline,
 } from '../../src/core/patch/archive-verify';
+import type {
+  CompatCheck,
+  CompatReport,
+  CompatStatus,
+} from '../../src/core/patch/compat-check';
 import { testTmpRoot } from '../fixtures/test-tmp';
 
 const dirs: string[] = [];
@@ -46,15 +52,47 @@ function changedDrift(n: number, withPackageJson = false): BaselineDrift {
   return { changed, missing: [], added: [], kindChanged: [] };
 }
 
-/** 全通过态的底座：逐条测试只翻转自己要验证的那个条件 */
+/** 造一份结构验证报告：默认锚点/变更集合全 PASS（compatible=true） */
+function structureReport(
+  over: { anchor?: CompatStatus; changeSet?: CompatStatus } = {},
+): CompatReport {
+  const anchor = over.anchor ?? 'PASS';
+  const changeSet = over.changeSet ?? 'PASS';
+  const checks: CompatCheck[] = [
+    {
+      key: 'anchor',
+      name: '注入锚点',
+      status: anchor,
+      basis: '统计锚点出现次数',
+      detail: anchor === 'PASS' ? '恰好 1 次，注入位置唯一' : '0 次：HTML 结构已变，现行注入方案不适用',
+    },
+    {
+      key: 'changeSet',
+      name: '变更集合归属',
+      status: changeSet,
+      basis: '查 cssFile/imageFile + 归属识别',
+      detail: changeSet === 'PASS' ? '两文件均不存在（干净）' : '已存在且无法确认归属，按第三方占用处理',
+    },
+    {
+      key: 'unpacked',
+      name: 'unpacked 完整性（信息项）',
+      status: 'PASS',
+      basis: 'unpacked 目录存在性',
+      detail: '目录在位',
+    },
+  ];
+  const failedNames = checks.filter((c) => c.status === 'FAIL').map((c) => c.name);
+  return { compatible: failedNames.length === 0, checks, failedNames };
+}
+
+/** 全通过态的底座：逐条测试只翻转自己要验证的那个要素 */
 function passing(over: Partial<DriftClassifyInput> = {}): DriftClassifyInput {
   return {
     drift: changedDrift(200),
     baselineCount: 400,
     archiveVersion: '1.18.31',
     baselineVersion: '1.18.29',
-    anchorUnique: true,
-    changeSetClean: true,
+    structure: structureReport(),
     currentUnpacked: ['node_modules/native/index.node'],
     baselineUnpacked: ['node_modules/native/index.node'],
     ...over,
@@ -65,10 +103,10 @@ function cond(v: ReturnType<typeof classifyDrift>, key: DriftConditionResult['ke
   return v.conditions.find((c) => c.key === key);
 }
 
-describe('classifyDrift：五条件缺一不可', () => {
-  it('全部满足 → official-update，且五条件逐一留痕', () => {
+describe('classifyDrift：放行判据与 structural 通道同源（结构无 FAIL 即 injectable）', () => {
+  it('结构可行 → injectable，且各判据逐一留痕', () => {
     const v = classifyDrift(passing());
-    expect(v.verdict).toBe('official-update');
+    expect(v.verdict).toBe('injectable');
     expect(v.conditions.map((c) => c.key)).toEqual([
       'versionChanged',
       'anchorUnique',
@@ -76,52 +114,65 @@ describe('classifyDrift：五条件缺一不可', () => {
       'driftScale',
       'unpackedSet',
     ]);
-    expect(v.conditions.every((c) => c.passed)).toBe(true);
     expect(v.conditions.every((c) => c.detail.length > 0)).toBe(true);
   });
 
-  it('版本号相同（非更新）→ suspicious，仅 versionChanged 不过', () => {
+  it('版本号相同（非更新）→ 版本不再是闸门，结构可行仍放行', () => {
     const v = classifyDrift(passing({ baselineVersion: '1.18.31' }));
-    expect(v.verdict).toBe('suspicious');
+    expect(v.verdict).toBe('injectable');
+    // 版本证据仍如实记录为「相同」
     expect(cond(v, 'versionChanged')?.passed).toBe(false);
-    expect(v.conditions.filter((c) => !c.passed)).toHaveLength(1);
   });
 
-  it('当前归档读不到 version → 不可证明，按可疑拒绝', () => {
+  it('当前归档读不到 version → 不影响放行，仅作提示', () => {
     const v = classifyDrift(passing({ archiveVersion: null }));
-    expect(v.verdict).toBe('suspicious');
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'versionChanged')?.passed).toBe(false);
   });
 
-  it('旧基线无版本记录（legacy 且快照回推失败）→ 不可证明，按可疑拒绝', () => {
+  it('旧基线无版本记录（legacy 且快照回推失败）但结构可行 → 放行', () => {
     const v = classifyDrift(passing({ baselineVersion: null }));
-    expect(v.verdict).toBe('suspicious');
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'versionChanged')?.passed).toBe(false);
   });
 
-  it('锚点消失/变多 → 哪怕版本变了也拒绝', () => {
-    const v = classifyDrift(passing({ anchorUnique: false }));
+  it('锚点消失/变多（结构 FAIL）→ 拒绝', () => {
+    const v = classifyDrift(passing({ structure: structureReport({ anchor: 'FAIL' }) }));
     expect(v.verdict).toBe('suspicious');
     expect(cond(v, 'anchorUnique')?.passed).toBe(false);
   });
 
-  it('变更集合被第三方占用 → 拒绝', () => {
-    const v = classifyDrift(passing({ changeSetClean: false }));
+  it('变更集合被第三方占用（结构 FAIL）→ 拒绝', () => {
+    const v = classifyDrift(passing({ structure: structureReport({ changeSet: 'FAIL' }) }));
     expect(v.verdict).toBe('suspicious');
     expect(cond(v, 'changeSetClean')?.passed).toBe(false);
   });
 
-  it('unpacked 路径集合数量变化 → 拒绝（原生模块结构不稳）', () => {
+  it('真机 1081 场景钉子：未知版本 + unpacked 集合变化 + 锚点在 + 变更集合净 → 放行', () => {
+    const v = classifyDrift(
+      passing({
+        archiveVersion: '1.18.99',
+        baselineVersion: null,
+        currentUnpacked: [],
+      }),
+    );
+    expect(v.verdict).toBe('injectable');
+    // 证据如实留痕：版本不可比、unpacked 集合不同——但不否决
+    expect(cond(v, 'versionChanged')?.passed).toBe(false);
+    expect(cond(v, 'unpackedSet')?.passed).toBe(false);
+    expect(cond(v, 'anchorUnique')?.passed).toBe(true);
+    expect(cond(v, 'changeSetClean')?.passed).toBe(true);
+  });
+
+  it('unpacked 路径集合数量变化 → 证据为否，但不否决', () => {
     const v = classifyDrift(passing({ currentUnpacked: [] }));
-    expect(v.verdict).toBe('suspicious');
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'unpackedSet')?.passed).toBe(false);
   });
 
-  it('unpacked 集合路径不同但数量相同 → 仍拒绝', () => {
-    const v = classifyDrift(
-      passing({ currentUnpacked: ['node_modules/other/x.node'] }),
-    );
-    expect(v.verdict).toBe('suspicious');
+  it('unpacked 集合路径不同但数量相同 → 证据为否，但不否决', () => {
+    const v = classifyDrift(passing({ currentUnpacked: ['node_modules/other/x.node'] }));
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'unpackedSet')?.passed).toBe(false);
   });
 
@@ -135,48 +186,43 @@ describe('classifyDrift：五条件缺一不可', () => {
     expect(cond(v, 'unpackedSet')?.passed).toBe(true);
   });
 
-  it('基线无 unpacked 记录（null）→ 不可判定，拒绝', () => {
+  it('基线无 unpacked 记录（null）→ 不否决，仅作提示', () => {
     const v = classifyDrift(passing({ baselineUnpacked: null }));
-    expect(v.verdict).toBe('suspicious');
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'unpackedSet')?.passed).toBe(false);
   });
 });
 
-describe('classifyDrift：差异规模阈值（命名常量固定 + 边界两侧）', () => {
-  it('阈值常量固定：50% 与 100 条（改动必须先过评审）', () => {
+describe('classifyDrift：差异规模是证据不是闸门', () => {
+  it('阈值常量固定：50% 与 100 条（证据口径，改动必须先过评审）', () => {
     expect(REBASELINE_DRIFT_RATIO).toBe(0.5);
     expect(REBASELINE_DRIFT_MIN_COUNT).toBe(100);
   });
 
-  it('差异 49%（基线 100 条）→ 未达整体替换量级，拒绝', () => {
+  it('差异 49%（基线 100 条）→ 证据为否，但结构可行仍放行', () => {
     const v = classifyDrift(passing({ drift: changedDrift(49), baselineCount: 100 }));
-    expect(v.verdict).toBe('suspicious');
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'driftScale')?.passed).toBe(false);
   });
 
-  it('差异 51%（基线 100 条）→ 达量级，规模条件通过', () => {
+  it('差异 51%（基线 100 条）→ 证据为是', () => {
     const v = classifyDrift(passing({ drift: changedDrift(51), baselineCount: 100 }));
-    expect(v.verdict).toBe('official-update');
+    expect(v.verdict).toBe('injectable');
     expect(cond(v, 'driftScale')?.passed).toBe(true);
   });
 
-  it('package.json 内容变化且 ≥100 条（不足 50%）→ 第二条通道放行', () => {
-    const v = classifyDrift(
-      passing({ drift: changedDrift(100, true), baselineCount: 1000 }),
-    );
-    expect(v.verdict).toBe('official-update');
+  it('package.json 内容变化且 ≥100 条（不足 50%）→ 第二条通道证据为是', () => {
+    const v = classifyDrift(passing({ drift: changedDrift(100, true), baselineCount: 1000 }));
     expect(cond(v, 'driftScale')?.passed).toBe(true);
   });
 
-  it('≥100 条但 package.json 未变 → 两条通道都不过，拒绝', () => {
+  it('≥100 条但 package.json 未变 → 两条通道都不过，证据为否', () => {
     const v = classifyDrift(passing({ drift: changedDrift(100), baselineCount: 1000 }));
     expect(cond(v, 'driftScale')?.passed).toBe(false);
   });
 
-  it('package.json 变化但只有 99 条 → 第二条通道未达下限，拒绝', () => {
-    const v = classifyDrift(
-      passing({ drift: changedDrift(99, true), baselineCount: 1000 }),
-    );
+  it('package.json 变化但只有 99 条 → 第二条通道未达下限，证据为否', () => {
+    const v = classifyDrift(passing({ drift: changedDrift(99, true), baselineCount: 1000 }));
     expect(cond(v, 'driftScale')?.passed).toBe(false);
   });
 

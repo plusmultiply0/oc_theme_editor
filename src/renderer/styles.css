@@ -1232,6 +1232,19 @@ details.panel-collapse > .scan-details {
   color: var(--ui-warn);
 }
 
+/* 状态栏里的错误明细（Y2）：折叠占满一整行，长明细不挤压状态文字 */
+.status .error-detail {
+  flex-basis: 100%;
+  margin-top: 0.25rem;
+}
+
+.status .error-detail .mono {
+  display: block;
+  word-break: break-all;
+  font-size: 0.75rem;
+  color: var(--ui-muted);
+}
+
 /* 窄屏：三栏改为纵向堆叠，避免 150% 缩放下横向溢出 */
 @media (max-width: 72rem) {
   .layout {

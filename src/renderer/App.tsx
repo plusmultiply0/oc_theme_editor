@@ -162,7 +162,7 @@ export default function App() {
     setUi(
       error.code === 'NEEDS_RECOVERY'
         ? { kind: 'needsRecovery', message: error.message, hint: error.recoveryHint }
-        : { kind: 'error', message: error.message, hint: error.recoveryHint, scope },
+        : { kind: 'error', message: error.message, hint: error.recoveryHint, scope, ...(error.detail ? { detail: error.detail } : {}) },
     );
   }, []);
 
@@ -807,6 +807,12 @@ export default function App() {
             <strong>{ui.message}</strong>
             <span>{ui.hint}</span>
             <span>{scopeText(ui.scope)}</span>
+            {ui.detail ? (
+              <details className="scan-details error-detail">
+                <summary>判据明细（供排查与反馈）</summary>
+                <span className="mono">{ui.detail}</span>
+              </details>
+            ) : null}
           </>
         ) : null}
         {ui.kind === 'needsRecovery' ? (

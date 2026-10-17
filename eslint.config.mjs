@@ -14,6 +14,8 @@ export default tseslint.config(
       'handoff/**',
       'test-results/**',
       'playwright-report/**',
+      // 外来工具（CodeArts Doer 等）的会话临时目录，非本仓内容
+      '.codeartsdoer/**',
     ],
   },
   ...tseslint.configs.recommended,

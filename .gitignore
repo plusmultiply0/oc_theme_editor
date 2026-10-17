@@ -49,3 +49,6 @@ handoff/review-*/fixtures-*/
 
 # out 目录快照归档：构建产物压缩包，内容含本机绝对路径，不入库
 handoff/**/archive/*.tar.gz
+
+# 外来工具会话临时目录（CodeArts Doer 等），非本仓内容
+.codeartsdoer/

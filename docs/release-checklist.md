@@ -26,6 +26,14 @@ exeSha256: 3b6584b7ded9f932f9c42529c4e0de765f2086113f4ad5f6e2d32c4196ef08aa
 asarSha256: d367a90abb34c85814e68faf2ebff8b95073a220468f4c1d39f93378ca8eb004
 <!-- CURRENT-CANDIDATE:END -->
 
+> **2026-10-17 恢复说明**：仓库迁移至 `other/oc_theme_editor` 时，本候选目录被
+> 解压内容压平，原 `candidate-manifest.json` 与 `release-receipt` / `build-record`
+> 文件丢失（分发 zip 完好）。已按上方权威候选块重建 manifest，磁盘产物从 zip
+> 恢复，经 `doc-candidate-entry --check` 实算核对：zip / exe / asar 三个哈希与
+> 原登记值完全一致。receipt / record 文件未恢复，门禁事实以
+> `docs/alpha-acceptance.md` 归档记录为准（12 步全绿，`ALL_GREEN`）。
+> 该候选已发布为 GitHub Release `v1.0.0`。
+
 | 文件 | 大小 | 说明 |
 |---|---|---|
 | `candidate-20260925081334-0160900-e4b156.zip` | 127.2 MB | 分发以 zip 为准（82 条目，整目录压缩） |

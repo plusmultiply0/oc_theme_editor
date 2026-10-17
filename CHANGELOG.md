@@ -9,6 +9,29 @@
 
 ## 未发布（当前）
 
+### 缺陷修复：基线漂移判据重构（2026-10-17，drift-gate-r2，随 v1.0.1 生效）
+
+- **缺陷**：2026-10-17 真机报障——OpenCode 自动更新后重应用被拒：「目标疑似被官方更新
+  （1081 条与接管基线不一致），但未满足自动放行条件」。根因：B 轮给 drift 门加严的
+  「版本变化/差异量级/unpacked 集合」三条与 S 轮 discover structural 通道
+  「版本陌生不否决」两套口径冲突，真机 1081 场景（未知版本 + unpacked 变化 + 锚点在 +
+  变更集合净）踩中否决面。缺陷登记与计划见 `handoff/drift-gate-r2-plan-2026-10-17/PLAN.md`。
+- **修复（R2 Y1）**：`classifyDrift` 放行判据降维为与 discover 的 structural 通道完全
+  同源——只看 `verifyStructure(snapshot).compatible`；版本/量级/unpacked 三条件转
+  **证据留痕**（`conditions` 逐条记录、detail 明示「不影响放行，仅作提示」），不再参与
+  裁决。`DriftVerdictKind` 改为 `injectable | suspicious`。
+- **文案与可观测（R2 Y2）**：拒绝统一为「结构验证未通过」口径（附 `describeFailed`
+  明细），删除「疑似官方更新但未达自动放行条件」分类与「请优先把本工具升级」建议；
+  放行事件明示「（未在白名单，）经结构验证放行」；错误卡片新增 ✗/✓ 判据明细折叠区
+  （按使用者拍板仅渲染层落账，`UiState.error.detail` 透传，IPC 契约零改动）。
+- **边界**：`verifyStructure` 的 FAIL 判据一个不减；经结构放行的版本不进
+  `supportedVersions`（转正仍须 probe + 真机闭环）；恢复链路、备份语义零改动；
+  不加确认框（apply 入口 S2 写入前重验兜底）。
+- **验证**：typecheck 0 错、eslint 定向 0 错（全仓 eslint 与 vitest 因本机 esbuild
+  service 子进程挂死不可用，既有环境限制）；运行时验证经 tsc→CJS→node 绕行实跑：
+  单测 25/25（含真机 1081 场景钉子）、集成 7/7（放行钉子 3 + 拒绝 3 + noop 回归）
+  全绿。修复提交 `f82cb3d`；判据口径定论同步 `docs/compatibility.md`。
+
 ### 正式版发布轮（2026-09-25，转 1.0.0）
 
 - **版本号 `0.1.0-alpha.10` → `1.0.0`**：功能零改动（仅版本号与文档）。

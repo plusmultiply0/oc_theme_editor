@@ -937,4 +937,35 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   不阻塞本版本登记与发布。alpha.8/9/10 的 Release 补记维持按决定跳过（不随本次授权
   扩大范围）。
 
+### 9.15 缺陷修复轮 R2：drift 放行判据同源化（2026-10-17，v1.0.0 后第一个缺陷修复轮，随 v1.0.1 生效）
+
+- **缺陷登记**：2026-10-17 jc 真机报障——OpenCode 自动更新后重应用被拒「目标疑似被
+  官方更新（1081 条与接管基线不一致），但未满足自动放行条件」，重应用无路可走。
+  根因：B 轮 drift 门（五条件全过才放行）与 S 轮 discover structural 通道
+  （版本陌生不否决）两套口径冲突，真机 1081 场景（未知版本 + unpacked 集合变化 +
+  锚点在 + 变更集合净）踩中 ①版本 ④量级 ⑤unpacked 三条件的否决面。
+- **修复**（计划 `handoff/drift-gate-r2-plan-2026-10-17/PLAN.md`，修复提交 `f82cb3d`；
+  判据+文案+渲染+测试按使用者拍板合并一提交——apply.ts 与集成测试断言 hunk 级耦合，
+  先例 `c957272`）：
+  - **Y1 判据**：`classifyDrift` 放行判据降维为 `verifyStructure(snapshot).compatible`
+    （与 discover 的 structural 通道完全同源）；`DriftVerdictKind` 改
+    `injectable | suspicious`；版本/量级/unpacked 三条件转**证据留痕**不再参与裁决；
+  - **Y2 文案与可观测**：拒绝统一「结构验证未通过」口径（附 `describeFailed` 明细）、
+    删除「疑似官方更新但未达放行条件」分类与「请优先把本工具升级」建议；放行事件
+    明示「（未在白名单，）经结构验证放行」；错误卡片新增 ✗/✓ 判据明细折叠区
+    （使用者拍板仅渲染层落账，`UiState.error.detail` 透传，IPC 契约零改动）；
+  - **边界**：`verifyStructure` FAIL 判据一个不减；结构放行版本不进
+    `supportedVersions`（转正仍须 probe + 真机闭环）；恢复链路、备份语义零改动；
+    不加确认框（apply 入口 S2 写入前重验兜底）。
+- **验证口径（如实）**：typecheck 全量 0 错；eslint 定向 7 个改动文件 0 错。
+  **本机 vitest 因 esbuild service 子进程挂死不可用（既有环境限制），全量
+  test / integration / e2e 门禁未能按正式口径跑满**；运行时验证经
+  tsc→CJS→C 盘临时目录→node 绕行实跑：baseline-drift 单测 25/25（含真机 1081
+  场景钉子：未知版本+unpacked 变化+锚点在+变更集合净→放行）、集成 7/7（放行钉子 3 +
+  拒绝 3 + noop 回归，含打包 worker 真实 fork 链路）全绿。同样 import 受改文件的
+  其余测试（archive-verify/transaction/main-recovery 等）本机未能复跑——
+  **门禁缺口如实登记**，回归覆盖依赖后续可跑 vitest 的环境补跑（发布轮门禁）。
+- 真机复验（OpenCode 更新后重应用走通）随 v1.0.1 发布验收，需 jc 在场取证——
+  **登记前未闭合，如实保留**。
+
 

@@ -212,3 +212,30 @@ F1（alpha.7）删除「启动 OpenCode」按钮的原因是 `spawn` 直拉起�
   PowerShell `Start-Process` 本体同样可行，但经 node detached 包装后可复现地不执行，弃用；
 - 安全边界不变：renderer 只传 `targetId`，exe 路径由主进程按适配器声明解析并复验落在安装根内；
   启动动作不写任何文件，失败收敛为 `LAUNCH_FAILED`（归类「安装未被修改」）。
+## 更新（2026-10-17）：drift 门与 discover 门同源（drift-gate-r2，真机 1081 缺陷修复）
+
+上文两通道模型只覆盖了**识别**入口（inspect/discover）；**重应用**入口还有一道
+B 轮加严的 drift 门（基线比对五条件：版本变化/锚点唯一/变更集合干净/差异量级/
+unpacked 集合一致，全过才放行）。同一件事两扇门两套口径：真机事故（2026-10-17
+jc 报障）——OpenCode 自动更新后重应用，1081 条与接管基线不一致、锚点在、变更集合
+干净，却因「版本陌生 + unpacked 集合变化 + 量级不足」被 drift 门拒绝且无路可走。
+
+R2 修复后，两扇门一个判据——**注入可行性**，覆盖未知版本与官方更新两场景：
+
+| 入口 | 判据（单一来源 `verifyStructure`） | 结果 |
+|---|---|---|
+| 识别（inspect/discover） | 结构验证无 FAIL | `supported`（whitelist/structural 徽章） |
+| 重应用（drift 门） | 结构验证无 FAIL | `injectable` → 自动重新接管（重建基线、旧基线按序号归档、txlog 留证据） |
+| 任一门 FAIL | 锚点丢失/变更集合被第三方占用等 | 拒绝，安装字节不动 |
+
+- 版本陌生、差异量级、unpacked 集合增减在 drift 门里降为**证据留痕**
+  （`DriftVerdict.conditions` 逐条记录、拒绝文案附 `describeFailed` 明细、
+  渲染层错误卡片折叠展示 ✗/✓ 明细），不再参与放行裁决——与 S 轮
+  「白名单不是唯一放行依据」同一逻辑闭合。
+- 边界不变：`verifyStructure` 的 FAIL 判据一个不减；经结构放行的版本**不进**
+  `supportedVersions`（转正仍须 probe + 真机闭环）；恢复链路、备份语义、IPC 契约
+  零改动；不加确认框（apply 入口 S2 写入前重验兜底）。
+- 放行事件明示「检测到目标已更新至 X（未在白名单，经结构验证放行），已自动更新基线」；
+  拒绝只剩「结构验证未通过」一种成因口径，「疑似官方更新但未达自动放行条件」分类
+  与「请优先把本工具升级」建议（本轮后不再成立）均已删除。
+- 缺陷登记与计划：`handoff/drift-gate-r2-plan-2026-10-17/PLAN.md`；修复提交 `f82cb3d`。

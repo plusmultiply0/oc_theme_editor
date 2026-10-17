@@ -3,7 +3,10 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const {Readable}=require('node:stream');
-const projectRequire=require('node:module').createRequire('D:/zjcfile/weblearn/vibecoding/OpenCode_Theme_Switcher/package.json');
+// 2026-10-17 迁移修正：原硬编码旧仓库绝对路径（vibecoding/OpenCode_Theme_Switcher），
+// 仓库迁移至 other/oc_theme_editor 后模块解析落空。改为按脚本自身位置定位项目根，
+// 复现逻辑零改动（仅 require 锚点）。
+const projectRequire=require('node:module').createRequire(path.join(__dirname,'..','..','package.json'));
 const asar=projectRequire('@electron/asar');
 (async()=>{
   process.chdir(path.join(__dirname,'fixture-cwd'));

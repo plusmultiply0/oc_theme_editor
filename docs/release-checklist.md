@@ -395,6 +395,9 @@ Release 网页回执补记按使用者决定跳过（alpha.8/9/10 同此），�
 - 发布级只读终检 18 项 0 失败，`RELEASE_GREEN`、`publishable=true`；
   独立只读复核（`verify 20261018022200-1a35bc5-cb8c70`）同结论。
 - 产物：zip 127.2 MB（133,392,289 B），asar 968 条目 / unpacked 7。
+- **已发布**：GitHub Release [`v1.0.1`](https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.1)
+  （2026-10-18；tag 打在 `52cb0e3`，资产 = zip + `.zip.sha256.txt`，匿名核验通过；
+  回执见 `docs/alpha-acceptance.md` §9.16）。
 
 ### 3.2 历史候选（1.0.0 轮，buildId `20260925081334-0160900-e4b156`）
 

@@ -7,7 +7,11 @@
   不代表当前状态；当前候选包与门禁结果见 `docs/release-checklist.md`，
   当前 Alpha 验收见 `docs/alpha-acceptance.md`。
 
-## 未发布（当前）
+## v1.0.1（2026-10-18 已发布）
+
+> GitHub Release：<https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.1>
+> buildId `20261018022200-1a35bc5-cb8c70`（源提交 `1a35bc5`，tag 打在登记后的
+> 文档收口 `52cb0e3`）。以下四节即本版全部增量。
 
 ### 缺陷修复：NVIDIA 驱动与沙箱化 GPU 进程冲突（2026-10-18，随 v1.0.1 生效）
 

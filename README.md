@@ -250,8 +250,10 @@
   本地归档区（不入库，迁移定损见 `docs/release-checklist.md` §2.7）。
   **唯一可用于验证与分发的是当前候选**
   `candidate-20261018022200-1a35bc5-cb8c70/`（正式版缺陷修复版 `1.0.1`，buildId
-  `20261018022200-1a35bc5-cb8c70`，已登记待发布）；候选目录、zip 与哈希的唯一权威入口见
-  `docs/release-checklist.md` 第 1 节（该处由机器核对，不靠人工抄写）。
+  `20261018022200-1a35bc5-cb8c70`，已发布为 GitHub Release `v1.0.1`）；候选目录、zip
+  与哈希的唯一权威入口见 `docs/release-checklist.md` 第 1 节（该处由机器核对，
+  不靠人工抄写）。分发优先从 Release 页面下载
+  <https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.1>。
   上一个已发布正式版候选 `candidate-20260925081334-0160900-e4b156/`（`1.0.0`）
   归档保留，对应 GitHub Release `v1.0.0`。
 - 图片只支持 PNG / JPEG（.jpg/.jpeg/.jfif/.jpe）/ WebP，≤ 20 MiB，不支持 SVG。

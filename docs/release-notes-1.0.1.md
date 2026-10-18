@@ -1,6 +1,6 @@
 # OpenCodeThemeSwitcher 1.0.1（正式版缺陷修复）
 
-> **状态：已登记待发布（候选 20261018022200-1a35bc5-cb8c70；tag/Release 未创建）**。
+> **状态：已发布（2026-10-18，GitHub Release [`v1.0.1`](https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.1)）**。
 > 本版本是 1.0.0 后的**第一个缺陷修复版**：相对 `1.0.0` 的增量 = 基线漂移放行判据
 > 重构（drift-gate-r2）+ **NVIDIA 驱动与沙箱化 GPU 进程冲突规避**（应用任何启动
 > 方式闪退的真缺陷，`d59417c`，renderer 沙箱不动），判定/事务/备份/恢复逻辑与
@@ -24,8 +24,8 @@
 | zip SHA256 | `c208bfba18b7841b0ef927258f4f2a9d9c45efda211401b5aaa33f23d410b5d3` |
 | exe SHA256 | `b06856732af5d58eadc8265e2dd42f1c52fe06167aa49aa0d2c0d6a52b6375e3` |
 | app.asar SHA256 | `64e2991a7ed9094f074b875c9309a410e53a7c24e2df07d0439142f0d6e39885` |
-| Release 页面 | （待发布回填） |
-| zip 下载 | （待发布回填） |
+| Release 页面 | https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.1 |
+| zip 下载 | https://github.com/plusmultiply0/oc_theme_editor/releases/download/v1.0.1/candidate-20261018022200-1a35bc5-cb8c70.zip |
 
 > 验收口径（2026-10-18 登记轮）：12 步全绿（unit 400 / integration 192 / e2e 16 /
 > e2e:electron 38），发布级终检 18 项 0 失败，`RELEASE_GREEN`。

@@ -1,0 +1,24 @@
+v1.0.1 正式版（缺陷修复）
+
+buildId: 20261018022200-1a35bc5-cb8c70
+sourceCommit: 1a35bc57ba4937c57c0bb23adb9ec3ddb3791fbd
+packMethod: electron-builder（可重复构建）
+zip SHA256: c208bfba18b7841b0ef927258f4f2a9d9c45efda211401b5aaa33f23d410b5d3
+exe SHA256: b06856732af5d58eadc8265e2dd42f1c52fe06167aa49aa0d2c0d6a52b6375e3
+app.asar SHA256: 64e2991a7ed9094f074b875c9309a410e53a7c24e2df07d0439142f0d6e39885
+
+相对 v1.0.0：
+- 基线漂移放行判据重构（drift-gate-r2，f82cb3d）：重应用门与识别门同一判据，
+  结构验证通过即自动重新接管；版本号陌生、差异量级、原生模块集合变化不再否决
+- NVIDIA 驱动 32.0.15.8157 与沙箱化 GPU 进程冲突导致应用闪退，主进程追加
+  disable-gpu-sandbox 规避（d59417c；renderer 沙箱与 contextIsolation 不动）
+
+门禁：12 步全绿（unit 400 / integration 192 / e2e 16 / e2e:electron 38），
+发布级终检 18 项 0 失败 RELEASE_GREEN。smoke:gui 走 policy v2 环境受限替代证据：
+本机 Windows 25H2(26200.9711) 使 Playwright 默认配置（沙箱开）驱动 Electron 必崩，
+已取证与应用无关（上游 electron+夹具同崩、退安全软件/最小环境/双 Node 运行时均无效、
+仅 --no-sandbox 存活、手动 CDP 复刻存活）；替代证据 = 双击等价启动存活 + 降级冒烟
+READY，声明如实入 build-record.json（handoff/gpu-smoke-incident-2026-10-18/EVIDENCE.md）。
+
+未签名；本轮缺陷的真机复验（OpenCode 自动更新后重新应用走通）随发布验收。
+本 tag 打在候选登记 eb01fb2 之上的发布前文档收口提交。

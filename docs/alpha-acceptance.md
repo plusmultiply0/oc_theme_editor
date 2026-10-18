@@ -995,4 +995,33 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   由主进程 `disable-gpu-sandbox` 规避（renderer 沙箱不动）。
 - **登记**：`release-checklist.md` §1 权威入口块与 §3 换为本轮；README 候选指针
   同步（v1.0.0 候选转归档引用）；发布说明发布物表回填、状态转「已登记待发布」。
-  tag / Release 未创建（等 jc 拍板，沿用「真实安装门禁前显式授权」口径）。
+  发布由 jc 于同日显式授权（「打 v1.0.1 并走 Release」）。
+- **发布回执（2026-10-18，同日追加）**：
+  - **发布前文档收口** `52cb0e3`：§1 换版为 1.0.1（v1.0.0 候选转历史说明、文件表
+    与核对命令换新 buildId）、发布说明清除残留占位符
+    `candidate-<buildId 待登记回填>`；侧车
+    `candidate-20261018022200-1a35bc5-cb8c70.zip.sha256.txt`（exe/asar/zip 三行，
+    313 B）在**上传前**生成，三哈希与 §1 权威块逐字一致（按 `.gitignore`
+    `candidate-*.txt` 不入库，同先例）。
+  - **final gate 复核（如实）**：登记后重跑
+    `verify-release.cjs --require-release-eligibility` 得 **17/18**，唯一失败项为
+    「manifest.sourceCommit 须等于当前 HEAD」——登记提交 `eb01fb2` 与文档收口
+    `52cb0e3` 顺序在源提交 `1a35bc5` 之后，属登记后复核的**结构性必然**，非产物
+    缺陷；产物一致性由 `doc-candidate-entry --check` 三方实算（文档/manifest/磁盘）
+    独立证明 `DOC_ENTRY_OK`。登记时（HEAD==`1a35bc5`、工作树干净）的 18 项 0 失败
+    结论不变。
+  - **tag**：`v1.0.1`（annotated）打在发布前文档收口 `52cb0e3`，已推 `origin`
+    （`* [new tag]`）。注释含 buildId、三哈希、相对 v1.0.0 的两项修复、门禁口径、
+    smoke:gui 环境受限说明与「未签名」口径。
+  - **Release**：经 GitHub REST API 创建（本机无 gh CLI；token 走
+    `git credential fill` 内存内取用、不落盘不打印，同 §9.14 先例）：
+    https://github.com/plusmultiply0/oc_theme_editor/releases/tag/v1.0.1
+    （id `416216629`，非 draft、非 pre-release，正文 = `release-notes-1.0.1.md`
+    全文 + 分发物附注 5,739 字符）。资产两条，上传回执 size 与本地逐字节一致：
+    zip `133392289` B、侧车 `313` B；首次调用 `UPLOAD_ALL_OK`。
+  - **匿名核验（不带 token）**：release 页 200；zip Range 下载 206（首轮脚本未跟随
+    302 跳 CDN，补跳转后复验通过）；侧车整文件下载与本地**逐字节一致**。
+    `RELEASE_VERIFY_OK`。
+  - **遗留不变**：本轮 drift-gate-r2 的真机复验（OpenCode 自动更新后重新应用走通）
+    仍待 jc 在场取证；25H2 沙箱冲突消除后应回归默认 `smoke:gui` 并停用
+    `envLimitedGui` 通道。Release 正文与发布说明均已如实列出。

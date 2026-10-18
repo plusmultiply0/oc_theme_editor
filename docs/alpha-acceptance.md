@@ -969,3 +969,30 @@ e2e 16、e2e:electron 38 全绿（计划与验收口径见 `handoff/ui-restructu
   **登记前未闭合，如实保留**。
 
 
+### 9.16 正式版 1.0.1 候选登记（2026-10-18，渠道：GitHub Release——仓库公开，沿用先例）
+
+- **候选**：buildId `20261018022200-1a35bc5-cb8c70`，来源提交 `1a35bc5`
+  （GPU 沙箱规避 `d59417c` + drift-gate-r2 + policy v2 环境受限通道
+  `ae57197` + 登记修复 `1a35bc5`），`packMethod: electron-builder`，
+  可重复构建。zip SHA256 `c208bfba18b7841b0ef927258f4f2a9d9c45efda211401b5
+  aaa33f23d410b5d3`、exe SHA256 `b06856732af5d58eadc8265e2dd42f1c52fe06167aa49
+  aa0d2c0d6a52b6375e3`、app.asar SHA256 `64e2991a7ed9094f074b875c9309a410e53a7c
+  24e2df07d0439142f0d6e39885`（968 条目 / unpacked 7）。zip 127.2 MB。
+- **本机验收**：typecheck / lint / unit（22 文件 **400** 条）/ integration（16 文件
+  192 条）/ e2e（16 条）/ e2e:electron（38/38）/ audit / dist /
+  **smoke:gui-env-limited**（policy v2 替代通道）/ verify-package（30 项）全绿；
+  发布级只读终检 18 项 0 失败，`RELEASE_GREEN`、`publishable=true`，
+  独立只读复核同结论（`ALL_GREEN`）。
+- **smoke:gui 环境受限说明（如实登记）**：本机 Windows 25H2（26200.9711）使
+  Playwright 驱动默认配置（沙箱开）Electron 必崩，已取证与应用无关（上游
+  electron+夹具同崩；退管家/最小环境/双 Node 运行时无效；仅 --no-sandbox 存活；
+  手动完整 CDP 复刻存活）。排查全记录见 `handoff/gpu-smoke-incident-2026-10-18/
+  EVIDENCE.md`。发布事实由替代步骤承担：双击等价启动存活 6s + 降级冒烟 READY，
+  声明（失败事实 + 证据文件名 + 原因）如实入 `build-record.json`；
+  真实用户路径已实测健康。**真机默认配置冒烟证据在本机缺失，属环境限制而非
+  产品缺陷**；25H2 冲突修复后应回归默认 smoke:gui。
+- **GPU 缺陷修复**：NVIDIA 驱动 32.0.15.8157 与沙箱化 GPU 进程冲突（应用闪退）
+  由主进程 `disable-gpu-sandbox` 规避（renderer 沙箱不动）。
+- **登记**：`release-checklist.md` §1 权威入口块与 §3 换为本轮；README 候选指针
+  同步（v1.0.0 候选转归档引用）；发布说明发布物表回填、状态转「已登记待发布」。
+  tag / Release 未创建（等 jc 拍板，沿用「真实安装门禁前显式授权」口径）。

@@ -249,9 +249,11 @@
   同样不是候选。自 2026-09-23 起以上目录连同各历史 `candidate-*` 目录已移入 `ago/`
   本地归档区（不入库，迁移定损见 `docs/release-checklist.md` §2.7）。
   **唯一可用于验证与分发的是当前候选**
-  `candidate-20260925081334-0160900-e4b156/`（正式版 `1.0.0`，buildId
-  `20260925081334-0160900-e4b156`）；候选目录、zip 与哈希的唯一权威入口见
+  `candidate-20261018022200-1a35bc5-cb8c70/`（正式版缺陷修复版 `1.0.1`，buildId
+  `20261018022200-1a35bc5-cb8c70`，已登记待发布）；候选目录、zip 与哈希的唯一权威入口见
   `docs/release-checklist.md` 第 1 节（该处由机器核对，不靠人工抄写）。
+  上一个已发布正式版候选 `candidate-20260925081334-0160900-e4b156/`（`1.0.0`）
+  归档保留，对应 GitHub Release `v1.0.0`。
 - 图片只支持 PNG / JPEG（.jpg/.jpeg/.jfif/.jpe）/ WebP，≤ 20 MiB，不支持 SVG。
   GIF / AVIF / TIFF / BMP / HEIC 尚未开放（GIF、AVIF、TIFF 的解码器本机可用，属于第二批；
   见 `handoff/format-review-2026-09-12/NEXT_EXECUTION_PLAN.md`）。

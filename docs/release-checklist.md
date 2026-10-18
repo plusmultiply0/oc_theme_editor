@@ -14,16 +14,16 @@ Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件�
 manifest 加磁盘实算生成：
 
 <!-- CURRENT-CANDIDATE:BEGIN -->
-buildId: 20260925081334-0160900-e4b156
-sourceCommit: 0160900565c4b81df6f8da516a690a41410afe51
+buildId: 20261018022200-1a35bc5-cb8c70
+sourceCommit: 1a35bc57ba4937c57c0bb23adb9ec3ddb3791fbd
 schema: candidate-manifest/3
 packMethod: electron-builder
-manifest: candidate-20260925081334-0160900-e4b156/candidate-manifest.json
-candidateDir: candidate-20260925081334-0160900-e4b156/win-unpacked
-zip: candidate-20260925081334-0160900-e4b156.zip
-zipSha256: 7a812b3ea8b73b3bee2c77ede5c57c7d33e71fe851b70b161c1260da7facab91
-exeSha256: 3b6584b7ded9f932f9c42529c4e0de765f2086113f4ad5f6e2d32c4196ef08aa
-asarSha256: d367a90abb34c85814e68faf2ebff8b95073a220468f4c1d39f93378ca8eb004
+manifest: candidate-20261018022200-1a35bc5-cb8c70/candidate-manifest.json
+candidateDir: candidate-20261018022200-1a35bc5-cb8c70/win-unpacked
+zip: candidate-20261018022200-1a35bc5-cb8c70.zip
+zipSha256: c208bfba18b7841b0ef927258f4f2a9d9c45efda211401b5aaa33f23d410b5d3
+exeSha256: b06856732af5d58eadc8265e2dd42f1c52fe06167aa49aa0d2c0d6a52b6375e3
+asarSha256: 64e2991a7ed9094f074b875c9309a410e53a7c24e2df07d0439142f0d6e39885
 <!-- CURRENT-CANDIDATE:END -->
 
 > **2026-10-17 恢复说明**：仓库迁移至 `other/oc_theme_editor` 时，本候选目录被
@@ -375,10 +375,24 @@ Release 网页回执补记按使用者决定跳过（alpha.8/9/10 同此），�
 注：X3c 封面固定不透明与 `coverText` 拦停修复**都在 alpha.10 包内**；
 第 1 节的 `1.0.0` 相对它功能零改动（仅版本号与文档），无需从本包升级的用户动任何东西。
 
-## 3. 当前门禁结果（buildId `20260925081334-0160900-e4b156`）
+## 3. 门禁结果
 
-以下数字**只属于第 1 节那一个候选**，取自其 `build-record.json`；
+以下两表各自只属于对应候选，取自各自 `build-record.json`；
 包有改动必须重建并更新第 1 节哈希，旧数字不作数。
+
+### 3.1 当前候选（1.0.1 轮，buildId `20261018022200-1a35bc5-cb8c70`）
+
+- 源码提交 `1a35bc5`（GPU 沙箱规避 + drift-gate-r2 + policy v2 环境受限通道）。
+- 12 步全绿：typecheck / lint / unit（22 文件 **400** 条）/ build /
+  integration（16 文件 192 条）/ e2e（16 条）/ e2e:electron（38/38）/ audit /
+  dist / **smoke:gui-env-limited**（policy v2：smoke:gui 因本机 25H2 沙箱+CDP
+  冲突必崩，替代证据 = 双击等价启动存活 6s + 降级冒烟 READY，声明如实入册）/
+  verify-package（30 项 0 失败）/ zip。
+- 发布级只读终检 18 项 0 失败，`RELEASE_GREEN`、`publishable=true`；
+  独立只读复核（`verify 20261018022200-1a35bc5-cb8c70`）同结论。
+- 产物：zip 127.2 MB（133,392,289 B），asar 968 条目 / unpacked 7。
+
+### 3.2 历史候选（1.0.0 轮，buildId `20260925081334-0160900-e4b156`）
 
 | 命令 | 退出码 | 耗时 | 结果 |
 |---|---|---|---|

@@ -1,8 +1,10 @@
 # OpenCodeThemeSwitcher 1.0.1（正式版缺陷修复）
 
-> **状态：未发布（草案；发布物表待候选登记回填）**。本版本是 1.0.0 后的**第一个
-> 缺陷修复版**：相对 `1.0.0` 的增量 = 基线漂移放行判据重构（drift-gate-r2），
-> 判定/事务/备份/恢复逻辑与 IPC 契约除 drift 判据与文案外**零改动**。
+> **状态：已登记待发布（候选 20261018022200-1a35bc5-cb8c70；tag/Release 未创建）**。
+> 本版本是 1.0.0 后的**第一个缺陷修复版**：相对 `1.0.0` 的增量 = 基线漂移放行判据
+> 重构（drift-gate-r2）+ **NVIDIA 驱动与沙箱化 GPU 进程冲突规避**（应用任何启动
+> 方式闪退的真缺陷，`d59417c`，renderer 沙箱不动），判定/事务/备份/恢复逻辑与
+> IPC 契约除上述外零改动。
 >
 > **修复了什么**：2026-10-17 真机报障——OpenCode 自动更新后重新应用被拒
 > 「目标疑似被官方更新（1081 条与接管基线不一致），但未满足自动放行条件」，
@@ -17,13 +19,19 @@
 
 | 项 | 值 |
 |---|---|
-| buildId | （待候选登记回填） |
-| 分发 zip | （待候选登记回填） |
-| zip SHA256 | （待候选登记回填） |
-| exe SHA256 | （待候选登记回填） |
-| app.asar SHA256 | （待候选登记回填） |
+| buildId | `20261018022200-1a35bc5-cb8c70`（来源提交 `1a35bc5`，electron-builder 可重复构建） |
+| 分发 zip | `candidate-20261018022200-1a35bc5-cb8c70.zip`（127.2 MB，asar 968 条目 / unpacked 7） |
+| zip SHA256 | `c208bfba18b7841b0ef927258f4f2a9d9c45efda211401b5aaa33f23d410b5d3` |
+| exe SHA256 | `b06856732af5d58eadc8265e2dd42f1c52fe06167aa49aa0d2c0d6a52b6375e3` |
+| app.asar SHA256 | `64e2991a7ed9094f074b875c9309a410e53a7c24e2df07d0439142f0d6e39885` |
 | Release 页面 | （待发布回填） |
 | zip 下载 | （待发布回填） |
+
+> 验收口径（2026-10-18 登记轮）：12 步全绿（unit 400 / integration 192 / e2e 16 /
+> e2e:electron 38），发布级终检 18 项 0 失败，`RELEASE_GREEN`。
+> **smoke:gui 为环境受限替代证据**（policy v2）：本机 Windows 25H2 使 Playwright
+> 默认配置必崩且已取证与应用无关，发布事实由「双击等价启动存活 + 降级冒烟 READY」
+> 承担并如实入册（`handoff/gpu-smoke-incident-2026-10-18/EVIDENCE.md`）。
 
 哈希侧车 `candidate-<buildId>.zip.sha256.txt` 与 zip 一同分发，不在 zip 内，且**先于上传生成**。
 

@@ -60,7 +60,7 @@
 ## 五步使用
 
 0. **打开换肤助手**：拿到候选包解压后，双击相对路径
-   `candidate-<buildId 待登记回填>\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe`
+   `candidate-20261018022200-1a35bc5-cb8c70\builder-out\win-unpacked\OpenCodeThemeSwitcher.exe`
    即可进入使用（未签名便携包，Windows 可能弹安全提示，属已知情况）。
 1. **完全退出 OpenCode**：不是关窗口 —— 检查托盘区（时间旁边的小箭头）里有没有它的图标，
    有就右键退出。运行中工具会拒绝写入（这是保护，不是故障）。

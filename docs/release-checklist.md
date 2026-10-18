@@ -5,10 +5,13 @@ Alpha 候选版本用 `docs/alpha-acceptance.md` 记录逐项验收；本文件�
 
 ## 1. 当前候选（正式版）
 
-版本 **`1.0.0`**（Windows x64，首个正式版），由 `npm run release:build` 的正式发布链产出
-（`packMethod: electron-builder`，**可重复构建**，**首跑即一次跑满 12 步全绿、无拦停轮**）。
-功能与 `0.1.0-alpha.10` 零差异（本候选相对其仅版本号与文档）；版本号不沿用
-`0.1.0` 因其已被 Alpha 之前的首个标记版本占用（tag `v0.1.0`，提交 `8e6bd04`）。
+版本 **`1.0.1`**（Windows x64，1.0.0 后第一个缺陷修复版），由 `npm run release:build`
+的正式发布链产出（`packMethod: electron-builder`，**可重复构建**）。相对 `1.0.0` 的
+增量 = 基线漂移放行判据重构（drift-gate-r2，`f82cb3d`）+ NVIDIA 驱动与沙箱化 GPU
+进程冲突规避（`d59417c`）；判定/事务/备份/恢复逻辑与 IPC 契约除上述外零改动，详见
+`docs/release-notes-1.0.1.md`。本轮 12 步全绿，其中 `smoke:gui` 走 policy v2
+**环境受限替代通道**（本机 Windows 25H2 使 Playwright 默认配置必崩，已取证与应用
+无关；替代证据 = 双击等价启动存活 + 降级冒烟 READY，声明如实入 `build-record.json`）。
 
 下面这段是本文件的**唯一权威入口**，由 `tools/doc-candidate-entry.cjs` 从选中
 manifest 加磁盘实算生成：
@@ -26,24 +29,25 @@ exeSha256: b06856732af5d58eadc8265e2dd42f1c52fe06167aa49aa0d2c0d6a52b6375e3
 asarSha256: 64e2991a7ed9094f074b875c9309a410e53a7c24e2df07d0439142f0d6e39885
 <!-- CURRENT-CANDIDATE:END -->
 
-> **2026-10-17 恢复说明**：仓库迁移至 `other/oc_theme_editor` 时，本候选目录被
-> 解压内容压平，原 `candidate-manifest.json` 与 `release-receipt` / `build-record`
-> 文件丢失（分发 zip 完好）。已按上方权威候选块重建 manifest，磁盘产物从 zip
-> 恢复，经 `doc-candidate-entry --check` 实算核对：zip / exe / asar 三个哈希与
-> 原登记值完全一致。receipt / record 文件未恢复，门禁事实以
-> `docs/alpha-acceptance.md` 归档记录为准（12 步全绿，`ALL_GREEN`）。
-> 该候选已发布为 GitHub Release `v1.0.0`。
+> **v1.0.0 候选（已转历史）**：`candidate-20260925081334-0160900-e4b156`
+> （zip SHA256 `7a812b3ea8b73b3bee2c77ede5c57c7d33e71fe851b70b161c1260da7facab91`）
+> 已发布为 GitHub Release `v1.0.0`，门禁记录见 §3.2。2026-10-17 仓库迁移至
+> `other/oc_theme_editor` 时该候选目录被解压内容压平，manifest 与
+> receipt/record 丢失（分发 zip 完好）；已按原登记值重建 manifest 并从 zip 恢复
+> 产物，三方实算哈希与原登记完全一致。receipt/record 未恢复，其门禁事实以
+> `docs/alpha-acceptance.md` 归档记录为准。**该候选不再用于验证或分发。**
 
 | 文件 | 大小 | 说明 |
 |---|---|---|
-| `candidate-20260925081334-0160900-e4b156.zip` | 127.2 MB | 分发以 zip 为准（82 条目，整目录压缩） |
-| ├ `OpenCodeThemeSwitcher.exe` | 193.3 MB | 未签名 |
-| └ `resources/app.asar` | 17.8 MB | 1064 条目 / unpacked 7 |
+| `candidate-20261018022200-1a35bc5-cb8c70.zip` | 127.2 MB | 分发以 zip 为准（82 条目，整目录压缩） |
+| ├ `win-unpacked/OpenCodeThemeSwitcher.exe` | 193.3 MB | 未签名 |
+| └ `win-unpacked/resources/app.asar` | 17.8 MB | 968 条目 / unpacked 7 |
 
 候选身份由 `release-receipt/1` 与 `build-record/2` 绑定同一 buildId 与源码提交；
 `build-record` 的 12 项必检（`typecheck`、`lint`、`test:unit`、`test:integration`、
 `build`、`test:e2e`、`test:e2e:electron`、`audit`、`dist`、`smoke:gui`、
-`verify-package`、`zip`）全部 `passed`，`releaseEligible=true`。
+`verify-package`、`zip`）视为通过（`releaseEligible=true`；本轮 `smoke:gui` 的
+替代规则见下条例外）。
 例外（policy v2，2026-10-18 起）：环境使 Playwright 默认配置必崩且已取证时，记录可
 显式声明 `envLimitedGui`，以 `smoke:gui-env-limited` 替代 `smoke:gui`（替代证据 =
 双击等价启动存活 + 降级冒烟 READY，文件名固定 `smoke-env-limited-evidence.json`）；
@@ -53,7 +57,7 @@ asarSha256: 64e2991a7ed9094f074b875c9309a410e53a7c24e2df07d0439142f0d6e39885
 
 ```bash
 node tools/doc-candidate-entry.cjs \
-  --manifest candidate-20260925081334-0160900-e4b156/candidate-manifest.json --check
+  --manifest candidate-20261018022200-1a35bc5-cb8c70/candidate-manifest.json --check
 ```
 
 该命令把「文档块 / manifest 登记 / 磁盘实算哈希」三方对齐；任一不符即非 0 退出。

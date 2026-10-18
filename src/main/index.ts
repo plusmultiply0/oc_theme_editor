@@ -10,6 +10,17 @@ import { OperationEventBus } from './services/events';
 import { runtimeRoot as resolveRuntimeRoot } from '../core/patch/precheck';
 import { DIALOG_EXTENSIONS } from '../shared/image-formats';
 
+/*
+ * GPU 进程沙箱规避（2026-10-18 事故定性）：
+ * 本机 NVIDIA 驱动 32.0.15.8157（2025-10 更新）与 Chromium 沙箱化 GPU 进程
+ * 冲突——GPU 进程反复 0xC0000005，重试耗尽后 FATAL「GPU process isn't usable.
+ * Goodbye.」整个应用退出（任何启动方式、旧版 exe 同样崩，与代码无关）。
+ * 对照实证：--in-process-gpu / --no-sandbox / --disable-gpu-sandbox 均存活。
+ * 只放开 GPU 进程沙箱；renderer 沙箱、contextIsolation、webSecurity 不动。
+ * 须在 app ready 之前设置，故置于模块顶层。
+ */
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+
 /**
  * 窗口安全基线（T11）：
  * - contextIsolation 开启，renderer 与 Node 隔离

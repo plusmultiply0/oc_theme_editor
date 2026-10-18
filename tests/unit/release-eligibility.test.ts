@@ -407,6 +407,14 @@ describe('policy v2：smoke:gui 环境受限替代（envLimitedGui）', () => {
     }
   });
 
+  it('记录里残留 failed 的 smoke:gui 步骤 + 声明 → 拒绝（失败事实只进 failedStep，不进 steps）', () => {
+    const rec = envLimitedRecord() as { steps: Record<string, unknown>[] };
+    rec.steps = rec.steps.concat([{ step: 'smoke:gui', status: 'failed', exit: 1, seconds: 10 }]);
+    const r = checkReleaseEligibility(rec);
+    expect(r.ok).toBe(false);
+    expect(r.problems.join('；')).toMatch(/未 passed：smoke:gui/);
+  });
+
   it('effectiveRequiredSteps：无声明或替代未通过时仍是原始 12 项', () => {
     expect(effectiveRequiredSteps({ steps: [] })).toEqual(RELEASE_REQUIRED_STEPS);
     const rec = envLimitedRecord() as { steps: { step: string; status: string; exit: number }[] };

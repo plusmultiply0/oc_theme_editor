@@ -614,13 +614,14 @@ function runBuild(buildId, opts) {
   let envLimitedDecl = null;
   if (!opts.skipGui) {
     const smokeR = runStep('smoke:gui', nodeBin, [path.join(__dirname, 'smoke-packaged.cjs'), outDir]);
-    steps.push(smokeR);
     if (smokeR.code !== 0) {
       if (!opts.envLimitedGui) {
         console.error('STOPPED at smoke:gui（如因环境必崩需替代证据，显式加 --env-limited-gui）');
         process.exit(smokeR.code);
       }
       console.log('  smoke:gui 失败 → --env-limited-gui：改跑环境受限替代证据');
+      // 失败的 smoke:gui **不进 steps**（事实校验拒绝任何非 passed 记录）；
+      // 失败事实如实落在 envLimitedDecl.failedStep，与替代步骤一起入册。
       const envLimitedReason =
         '本机 Windows 25H2(build ' + require('node:os').release() +
         ') 使 Playwright 驱动默认配置（沙箱开）Electron 必崩；上游 electron+夹具同崩、退腾讯电脑管家/最小环境/双 Node 运行时均无效，仅 --no-sandbox 存活，应用本体健康（双击等价启动存活）。排查全记录见 handoff/gpu-smoke-incident-2026-10-18/';
@@ -638,6 +639,8 @@ function runBuild(buildId, opts) {
         failedStep: { step: 'smoke:gui', exit: smokeR.code },
       };
       console.log('  环境受限声明已记录：smoke:gui 的失败事实 + 替代证据（' + ENV_LIMITED_GUI_EVIDENCE + '）');
+    } else {
+      steps.push(smokeR);
     }
   }
 

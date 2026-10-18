@@ -26,6 +26,13 @@
  *   - steps 结构校验：唯一名称、合法状态、数字退出码；重复步骤拒绝
  *     （Map 的后项覆盖前项不再被容忍）。
  *
+ * policy v2 修订：smoke:gui 环境受限替代。当构建环境使「Playwright 驱动
+ * 默认配置（沙箱开）的 Electron」必然崩溃、且已取证与应用代码无关时
+ * （见 handoff/gpu-smoke-incident-2026-10-18/），构建可**显式声明**
+ * `envLimitedGui`（含失败事实/证据文件名/原因），以替代步骤
+ * `smoke:gui-env-limited` 换取 smoke:gui 的发布事实。仅显式声明生效——
+ * 不声明照旧要求 smoke:gui 本人通过，记录不能静默缩减审查。
+ *
  * 设计原则：**绝不乐观放行**——任何结构缺失都判为不可发布。
  */
 'use strict';
@@ -33,8 +40,12 @@
 /**
  * 发布必检策略版本。`build-record/2` 必须声明与之一致的 `policyVersion`；
  * 未知版本拒绝（策略升级时递增版本号并同步编排器/登记/核验/测试/RUNBOOK）。
+ *
+ * v2：新增 envLimitedGui 替代规则（见文件头）。v1 记录自此拒绝——
+ * 历史候选的登记事实不因此作废（manifest/receipt 已固定），但不得按 v1 策略
+ * 重新接受发布判定。
  */
-const RELEASE_POLICY_VERSION = 1;
+const RELEASE_POLICY_VERSION = 2;
 
 /**
  * build-record/2 必须记录的**登记前**步骤（12 项发布事实）。
@@ -58,6 +69,14 @@ const RELEASE_REQUIRED_STEPS = [
 
 /** 登记后步骤：其成功由 release-receipt/1 证明，不属于 build-record 内容。 */
 const POST_REGISTER_STEPS = ['register', 'verify:release'];
+
+/**
+ * smoke:gui 环境受限替代步骤（policy v2）及其证据文件名。
+ * 替代步骤由 tools/smoke-env-limited.cjs 产出证据（双击等价启动存活 +
+ * 降级配置冒烟 READY）；证据文件名固定，登记/核验端不猜路径。
+ */
+const ENV_LIMITED_GUI_STEP = 'smoke:gui-env-limited';
+const ENV_LIMITED_GUI_EVIDENCE = 'smoke-env-limited-evidence.json';
 
 /** 允许在步骤记录里出现的状态值（显式声明，不得以缺字段隐含 skipped） */
 const STEP_STATUSES = ['passed', 'failed', 'skipped', 'pending'];
@@ -145,8 +164,38 @@ function checkRecordFacts(record) {
     }
   }
 
-  // 5) 重算缺失清单（登记前步骤集合）
-  const missing = RELEASE_REQUIRED_STEPS.filter((n) => !byName.has(n));
+  // 4.5) smoke:gui 环境受限替代（policy v2）：仅显式声明生效，声明必须完整如实
+  const egl = rec.envLimitedGui;
+  let envLimitedOk = false;
+  if (egl !== undefined) {
+    const eglProblems = [];
+    if (!egl || typeof egl !== 'object' || Array.isArray(egl)) {
+      eglProblems.push('必须是对象');
+    } else {
+      if (typeof egl.reason !== 'string' || !egl.reason.trim()) eglProblems.push('reason 必须是非空字符串（受限原因要可追溯）');
+      if (egl.evidence !== ENV_LIMITED_GUI_EVIDENCE) {
+        eglProblems.push(`evidence 必须是 ${ENV_LIMITED_GUI_EVIDENCE}，实际=${JSON.stringify(egl.evidence)}`);
+      }
+      if (!egl.failedStep || egl.failedStep.step !== 'smoke:gui' || !Number.isInteger(egl.failedStep.exit) || egl.failedStep.exit === 0) {
+        eglProblems.push('failedStep 必须如实记录 smoke:gui 的非零失败事实');
+      }
+      if (byName.has('smoke:gui')) eglProblems.push('与已通过的 smoke:gui 冲突：两条路径只能走一条');
+      const sub = byName.get(ENV_LIMITED_GUI_STEP);
+      if (!sub) eglProblems.push(`缺少替代步骤 ${ENV_LIMITED_GUI_STEP}`);
+      else if (sub.status !== 'passed' || sub.exit !== 0) eglProblems.push(`替代步骤 ${ENV_LIMITED_GUI_STEP} 未通过（${sub.status}/${sub.exit}）`);
+    }
+    if (eglProblems.length) {
+      for (const p of eglProblems) problems.push(`envLimitedGui 声明无效：${p}`);
+    } else {
+      envLimitedOk = true;
+    }
+  }
+
+  // 5) 重算缺失清单（登记前步骤集合；v2：环境受限声明有效时按替代集合重算）
+  const effective = envLimitedOk
+    ? RELEASE_REQUIRED_STEPS.filter((n) => n !== 'smoke:gui').concat(ENV_LIMITED_GUI_STEP)
+    : [...RELEASE_REQUIRED_STEPS];
+  const missing = effective.filter((n) => !byName.has(n));
 
   // 6) 记录自报字段与重算结果一致性（R2：不信任自报，但声明了就必须对得上）
   if (rec.missingRequiredSteps !== undefined) {
@@ -191,6 +240,25 @@ module.exports = {
   POST_REGISTER_STEPS,
   STEP_STATUSES,
   RECORD_SCHEMA,
+  ENV_LIMITED_GUI_STEP,
+  ENV_LIMITED_GUI_EVIDENCE,
   checkRecordFacts,
   checkReleaseEligibility,
+  effectiveRequiredSteps,
 };
+
+/**
+ * 按记录声明求「本次有效必检集合」（编排器写记录时与核验端用同一把尺子）。
+ * 仅当 envLimitedGui 声明存在且替代步骤真实 passed/0 时才启用替代集合；
+ * 声明是否合法由 checkRecordFacts 严格判定（这里不重复、不放宽）。
+ * @param {object} record 已解析的 build-record（或含 steps/envLimitedGui 的等价结构）
+ * @returns {string[]} 有效必检步骤集合
+ */
+function effectiveRequiredSteps(record) {
+  const rec = record || {};
+  const sub = Array.isArray(rec.steps) ? rec.steps.find((s) => s && s.step === ENV_LIMITED_GUI_STEP) : null;
+  if (rec.envLimitedGui !== undefined && sub && sub.status === 'passed' && sub.exit === 0) {
+    return RELEASE_REQUIRED_STEPS.filter((n) => n !== 'smoke:gui').concat(ENV_LIMITED_GUI_STEP);
+  }
+  return [...RELEASE_REQUIRED_STEPS];
+}

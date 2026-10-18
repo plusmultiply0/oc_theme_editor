@@ -44,6 +44,10 @@ asarSha256: d367a90abb34c85814e68faf2ebff8b95073a220468f4c1d39f93378ca8eb004
 `build-record` 的 12 项必检（`typecheck`、`lint`、`test:unit`、`test:integration`、
 `build`、`test:e2e`、`test:e2e:electron`、`audit`、`dist`、`smoke:gui`、
 `verify-package`、`zip`）全部 `passed`，`releaseEligible=true`。
+例外（policy v2，2026-10-18 起）：环境使 Playwright 默认配置必崩且已取证时，记录可
+显式声明 `envLimitedGui`，以 `smoke:gui-env-limited` 替代 `smoke:gui`（替代证据 =
+双击等价启动存活 + 降级冒烟 READY，文件名固定 `smoke-env-limited-evidence.json`）；
+不声明照旧要求 `smoke:gui` 本人通过。
 
 **核对方式（不靠人眼比对）**：
 

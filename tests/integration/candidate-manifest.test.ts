@@ -167,7 +167,7 @@ async function makeFixture(prefix: string): Promise<{
   const record = {
     // R1：/2 = 登记前不可变事实（不含 register/verify:release）；策略版本必须与可信策略一致
     schema: 'build-record/2',
-    policyVersion: 1,
+    policyVersion: 2,
     buildId: 'fixture-build-1',
     version: '0.1.0-alpha.1',
     sourceCommit,

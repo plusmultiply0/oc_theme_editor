@@ -9,6 +9,29 @@
 
 ## 未发布（当前）
 
+### 缺陷修复：NVIDIA 驱动与沙箱化 GPU 进程冲突（2026-10-18，随 v1.0.1 生效）
+
+- **症状**：应用任何启动方式均闪退（GPU 进程反复 0xC0000005，重试耗尽后 FATAL
+  「GPU process isn't usable. Goodbye.」），旧版 exe 同样崩，重启不消除。
+- **根因**：NVIDIA 驱动 32.0.15.8157 与 Chromium 沙箱化 GPU 进程冲突（本机
+  Windows 25H2 build 26200）。
+- **修复**：主进程追加 `disable-gpu-sandbox` 开关（`d59417c`）；renderer 沙箱、
+  contextIsolation、webSecurity 不动。对照实证：裸启动/--no-sandbox/
+  --disable-gpu-sandbox 均存活。排查全记录见
+  `handoff/gpu-smoke-incident-2026-10-18/EVIDENCE.md`。
+
+### 发布链 policy v2：smoke:gui 环境受限替代（2026-10-18）
+
+- 本机 Windows 25H2 使「Playwright 驱动默认配置（沙箱开）Electron」必崩，已取证
+  与应用无关（上游 electron+夹具同崩；退管家/最小环境/双 Node 运行时无效；仅
+  --no-sandbox 存活；手动完整 CDP 复刻存活）。真实用户路径（双击等价）健康。
+- `RELEASE_POLICY_VERSION` 1→2：记录显式声明 `envLimitedGui`（失败事实 + 固定
+  证据文件名 + 原因）时，以替代步骤 `smoke:gui-env-limited` 承担 smoke:gui 发布
+  事实；不声明照旧，声明不完整/与通过记录冲突/替代步骤未过一律拒绝（契约测试
+  +10 项）。配套 `tools/smoke-env-limited.cjs` 双证据（双击等价启动存活 + 降级
+  冒烟 READY）与发布链 `--env-limited-gui` 显式放行路径。v1 记录自此不得重新
+  接受发布判定（历史候选的登记事实不因此作废）。
+
 ### 版本 bump 1.0.1 + 发布说明草案（2026-10-17，V-1）
 
 - **版本号 `1.0.0` → `1.0.1`**：正式版后第一个缺陷修复版。相对 1.0.0 的增量 =

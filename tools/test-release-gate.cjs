@@ -300,7 +300,7 @@ for (const name of FAIL_STEPS) {
   expect(rec.releaseEligible === false, '开发构建 releaseEligible=false', `实际 ${rec.releaseEligible}`);
   expect(Array.isArray(rec.missingRequiredSteps) && rec.missingRequiredSteps.includes('smoke:gui'),
     '缺失步骤显式列出 smoke:gui', JSON.stringify(rec.missingRequiredSteps));
-  expect(rec.schema === 'build-record/2' && rec.policyVersion === 1, '记录为 build-record/2 + policyVersion 1');
+  expect(rec.schema === 'build-record/2' && rec.policyVersion === 2, '记录为 build-record/2 + policyVersion 2');
   // R1：回执只绑定真实 manifest——桩登记未真实发生（manifest 不存在）时不写回执；
   // 真实生命周期正例（回执存在 + 绑定）在场景 5e 覆盖。
   expect(!fs.existsSync(path.join(root, 'candidate-b-green', 'release-receipt.json')),
@@ -422,7 +422,7 @@ for (const name of FAIL_STEPS) {
   const br = path.join(root, 'build-record.json');
   const REQ = require(path.join(ROOT, 'tools', 'release-build.cjs')).RELEASE_REQUIRED_STEPS;
   fs.writeFileSync(br, JSON.stringify({
-    schema: 'build-record/2', policyVersion: 1, buildId: 'b-ok', version: '0.1.0-alpha.1',
+    schema: 'build-record/2', policyVersion: 2, buildId: 'b-ok', version: '0.1.0-alpha.1',
     sourceCommit: 'a'.repeat(40), lockfileSha256: 'b'.repeat(64),
     out: { fileCount: 0, files: {} },
     steps: REQ.map((n) => ({ step: n, status: 'passed', exit: 0, seconds: 1 })),
@@ -452,7 +452,7 @@ for (const name of FAIL_STEPS) {
   const REQ = require(path.join(ROOT, 'tools', 'release-build.cjs')).RELEASE_REQUIRED_STEPS;
   const { checkReleaseEligibility } = require(path.join(ROOT, 'tools', 'release-eligibility.cjs'));
   const base = (mut) => Object.assign({
-    schema: 'build-record/2', policyVersion: 1, buildId: 'b', version: '0.1.0-alpha.1',
+    schema: 'build-record/2', policyVersion: 2, buildId: 'b', version: '0.1.0-alpha.1',
     sourceCommit: 'a'.repeat(40), lockfileSha256: 'b'.repeat(64),
     out: { fileCount: 0, files: {} },
     steps: REQ.map((n) => ({ step: n, status: 'passed', exit: 0, seconds: 1 })),
@@ -563,7 +563,7 @@ for (const name of FAIL_STEPS) {
     rb.RELEASE_REQUIRED_STEPS.map((name) => ({ name, code: 0, secs: 1 })));
   const recJson = fs.readFileSync(recordPath, 'utf8');
   const rec = JSON.parse(recJson);
-  expect(rec.schema === 'build-record/2' && rec.policyVersion === 1, '记录为 build-record/2 + policyVersion 1');
+  expect(rec.schema === 'build-record/2' && rec.policyVersion === 2, '记录为 build-record/2 + policyVersion 2');
   expect(!rec.steps.some((s) => ['register', 'verify:release'].includes(s.step)), '记录不含登记后步骤（R1 去自引用）');
   expect(rec.sourceCommit === gsha, '记录来源提交 = 夹具 HEAD');
   expect(rec.releaseEligible === true && rec.missingRequiredSteps.length === 0, '12 项齐全无注入 → 资格重算为 true');

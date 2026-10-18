@@ -8,7 +8,10 @@
  *   - 信任边界（R2）：policyVersion 未知拒绝、声明集合不得缩减、自报字段
  *     必须与重算一致、重复/畸形 steps 拒绝；
  *   - 缺字段不乐观放行、skipped/pending/failed 全被拒、退出码非 0 被拒、
- *     测试注入被拒、必需步骤缺失被拒。
+ *     测试注入被拒、必需步骤缺失被拒；
+ *   - policy v2：envLimitedGui 替代规则——仅显式声明生效，声明必须完整如实
+ *     （失败事实/证据文件名/原因），与通过的 smoke:gui 冲突、替代步骤未通过、
+ *     证据文件名不符、无声明静默缺 smoke:gui 等形态全部拒绝。
  */
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
@@ -20,6 +23,8 @@ const eligibility = requireCjs('../../tools/release-eligibility.cjs') as {
   POST_REGISTER_STEPS: string[];
   STEP_STATUSES: string[];
   RECORD_SCHEMA: string;
+  ENV_LIMITED_GUI_STEP: string;
+  ENV_LIMITED_GUI_EVIDENCE: string;
   checkRecordFacts: (rec: unknown) => {
     ok: boolean;
     problems: string[];
@@ -28,6 +33,7 @@ const eligibility = requireCjs('../../tools/release-eligibility.cjs') as {
     byName: Map<string, unknown>;
   };
   checkReleaseEligibility: (rec: unknown) => { ok: boolean; problems: string[]; required: string[] };
+  effectiveRequiredSteps: (rec: unknown) => string[];
 };
 
 const {
@@ -36,8 +42,11 @@ const {
   POST_REGISTER_STEPS,
   STEP_STATUSES,
   RECORD_SCHEMA,
+  ENV_LIMITED_GUI_STEP,
+  ENV_LIMITED_GUI_EVIDENCE,
   checkRecordFacts,
   checkReleaseEligibility,
+  effectiveRequiredSteps,
 } = eligibility;
 
 /** 构造一份「完全合格」的发布构建记录（build-record/2，R1/R2 契约）。 */
@@ -75,9 +84,9 @@ describe('build-record/2 契约常量（R1 去自引用）', () => {
     }
   });
 
-  it('版本化策略：schema=build-record/2、policyVersion=1、状态集合显式', () => {
+  it('版本化策略：schema=build-record/2、policyVersion=2、状态集合显式', () => {
     expect(RECORD_SCHEMA).toBe('build-record/2');
-    expect(RELEASE_POLICY_VERSION).toBe(1);
+    expect(RELEASE_POLICY_VERSION).toBe(2);
     expect(STEP_STATUSES).toEqual(['passed', 'failed', 'skipped', 'pending']);
   });
 });
@@ -122,7 +131,7 @@ describe('checkRecordFacts（R1 core 层）', () => {
   });
 
   it('policyVersion 未知/缺失 → 拒绝（记录不能按未知版本的策略接受判定）', () => {
-    for (const v of [0, 2, '1', undefined]) {
+    for (const v of [0, 1, 99, '2', undefined]) {
       const rec = goodRecord() as Record<string, unknown>;
       if (v === undefined) delete rec.policyVersion;
       else rec.policyVersion = v;
@@ -305,5 +314,107 @@ describe('checkReleaseEligibility（R1/R2 契约）', () => {
     expect(checkReleaseEligibility(null).ok).toBe(false);
     expect(checkReleaseEligibility({}).ok).toBe(false);
     expect(checkReleaseEligibility(undefined).ok).toBe(false);
+  });
+});
+
+describe('policy v2：smoke:gui 环境受限替代（envLimitedGui）', () => {
+  /** 合法的环境受限记录：smoke:gui 缺席，替代步骤 passed，声明完整如实。 */
+  function envLimitedRecord(): Record<string, unknown> {
+    const rec = goodRecord() as { steps: Record<string, unknown>[] } & Record<string, unknown>;
+    rec.steps = rec.steps
+      .filter((s) => s.step !== 'smoke:gui')
+      .concat([{ step: ENV_LIMITED_GUI_STEP, status: 'passed', exit: 0, seconds: 1 }]);
+    rec.envLimitedGui = {
+      reason: '本机环境使 Playwright 默认配置必崩（夹具取证，与应用无关）',
+      evidence: ENV_LIMITED_GUI_EVIDENCE,
+      failedStep: { step: 'smoke:gui', exit: 1 },
+    };
+    return rec;
+  }
+
+  it('合法声明 + 替代步骤通过 → 放行（smoke:gui 缺席不判缺）', () => {
+    const r = checkReleaseEligibility(envLimitedRecord());
+    expect(r.ok).toBe(true);
+    expect(r.problems).toEqual([]);
+    expect(effectiveRequiredSteps(envLimitedRecord())).toContain(ENV_LIMITED_GUI_STEP);
+    expect(effectiveRequiredSteps(envLimitedRecord())).not.toContain('smoke:gui');
+  });
+
+  it('静默缺 smoke:gui（无声明）→ 照旧拒绝', () => {
+    const rec = goodRecord() as { steps: { step: string }[] };
+    rec.steps = rec.steps.filter((s) => s.step !== 'smoke:gui');
+    const r = checkReleaseEligibility(rec);
+    expect(r.ok).toBe(false);
+    expect(r.problems.join('；')).toContain('smoke:gui');
+  });
+
+  it('声明存在但替代步骤缺失 → 拒绝', () => {
+    const rec = envLimitedRecord() as { steps: { step: string }[] };
+    rec.steps = rec.steps.filter((s) => s.step !== ENV_LIMITED_GUI_STEP);
+    const r = checkReleaseEligibility(rec);
+    expect(r.ok).toBe(false);
+    expect(r.problems.join('；')).toMatch(/缺少替代步骤/);
+  });
+
+  it('声明存在但替代步骤未通过 → 拒绝', () => {
+    const rec = envLimitedRecord() as { steps: { step: string; status: string; exit: number }[] };
+    const sub = rec.steps.find((s) => s.step === ENV_LIMITED_GUI_STEP);
+    if (sub) {
+      sub.status = 'failed';
+      sub.exit = 1;
+    }
+    expect(checkReleaseEligibility(rec).ok).toBe(false);
+  });
+
+  it('声明与已通过的 smoke:gui 冲突（两条路径都占）→ 拒绝', () => {
+    const rec = envLimitedRecord() as { steps: Record<string, unknown>[] };
+    rec.steps = rec.steps
+      .filter((s) => s.step !== ENV_LIMITED_GUI_STEP)
+      .concat([
+        { step: 'smoke:gui', status: 'passed', exit: 0, seconds: 1 },
+        { step: ENV_LIMITED_GUI_STEP, status: 'passed', exit: 0, seconds: 1 },
+      ]);
+    const r = checkReleaseEligibility(rec);
+    expect(r.ok).toBe(false);
+    expect(r.problems.join('；')).toMatch(/冲突/);
+  });
+
+  it('证据文件名不符 → 拒绝', () => {
+    const rec = envLimitedRecord() as { envLimitedGui: { evidence: string } };
+    rec.envLimitedGui.evidence = 'my-own-evidence.json';
+    const r = checkReleaseEligibility(rec);
+    expect(r.ok).toBe(false);
+    expect(r.problems.join('；')).toMatch(/evidence 必须是/);
+  });
+
+  it('reason 为空 / failedStep 未如实记录 smoke:gui 非零失败 → 拒绝', () => {
+    const noReason = envLimitedRecord() as { envLimitedGui: { reason: string } };
+    noReason.envLimitedGui.reason = '  ';
+    expect(checkReleaseEligibility(noReason).ok).toBe(false);
+
+    const noFail = envLimitedRecord() as { envLimitedGui: { failedStep: { step: string; exit: number } } };
+    noFail.envLimitedGui.failedStep = { step: 'lint', exit: 0 };
+    const r = checkReleaseEligibility(noFail);
+    expect(r.ok).toBe(false);
+    expect(r.problems.join('；')).toMatch(/failedStep/);
+  });
+
+  it('envLimitedGui 为非对象 / 数组 → 拒绝且不抛异常', () => {
+    for (const bad of ['x', 1, null, ['a']]) {
+      const rec = envLimitedRecord();
+      rec.envLimitedGui = bad;
+      expect(checkReleaseEligibility(rec).ok, String(bad)).toBe(false);
+    }
+  });
+
+  it('effectiveRequiredSteps：无声明或替代未通过时仍是原始 12 项', () => {
+    expect(effectiveRequiredSteps({ steps: [] })).toEqual(RELEASE_REQUIRED_STEPS);
+    const rec = envLimitedRecord() as { steps: { step: string; status: string; exit: number }[] };
+    const sub = rec.steps.find((s) => s.step === ENV_LIMITED_GUI_STEP);
+    if (sub) {
+      sub.status = 'failed';
+      sub.exit = 1;
+    }
+    expect(effectiveRequiredSteps(rec)).toEqual(RELEASE_REQUIRED_STEPS);
   });
 });

@@ -180,7 +180,10 @@ const {
   RELEASE_REQUIRED_STEPS,
   POST_REGISTER_STEPS,
   RECORD_SCHEMA,
+  ENV_LIMITED_GUI_STEP,
+  ENV_LIMITED_GUI_EVIDENCE,
   checkReleaseEligibility,
+  effectiveRequiredSteps,
 } = require('./release-eligibility.cjs');
 
 /** 生成并写入构建记录（build-record/2，登记后**不可变**），返回路径。
@@ -191,7 +194,7 @@ const {
  *  R2：releaseEligible / missingRequiredSteps 由可信策略重算后写入，
  *  校验端做一致性核对（不信任自报，只认一致）。
  *  @param {string} root 构建根（默认调用方传 ROOT；测试可传夹具根） */
-function writeBuildRecord(root, candidateDir, buildId, steps) {
+function writeBuildRecord(root, candidateDir, buildId, steps, envLimitedGui = null) {
   // 防御：登记后步骤不得混入记录（其完成回执属于 release-receipt/1）
   const intruders = steps.filter((s) => POST_REGISTER_STEPS.includes(s.name)).map((s) => s.name);
   if (intruders.length) {
@@ -215,9 +218,13 @@ function writeBuildRecord(root, candidateDir, buildId, steps) {
     seconds: s.secs,
   }));
 
-  // 缺哪些「发布必需步骤」：显式列出，而不是让读者从字段缺失去推断
+  // 缺哪些「发布必需步骤」：显式列出，而不是让读者从字段缺失去推断。
+  // policy v2：环境受限声明随记录入册后，按同一 effectiveRequiredSteps 求缺项
+  //（核验端重算缺项也用同一把尺子，自报与重算不一致会被拒绝）。
   const recorded = new Set(steps.map((s) => s.name));
-  const missingRequired = RELEASE_REQUIRED_STEPS.filter((n) => !recorded.has(n));
+  const stepRecordsStub = steps.map((s) => ({ step: s.name, status: s.code === 0 ? 'passed' : 'failed', exit: s.code }));
+  const effectiveReq = effectiveRequiredSteps({ steps: stepRecordsStub, envLimitedGui });
+  const missingRequired = effectiveReq.filter((n) => !recorded.has(n));
   // 测试注入环境（OTS_STEP_STUB/OTS_NODE_BIN）一律不可发布
   const testInjected = Boolean(process.env.OTS_STEP_STUB || process.env.OTS_NODE_BIN);
   const releaseEligible = missingRequired.length === 0 && !testInjected;
@@ -234,6 +241,7 @@ function writeBuildRecord(root, candidateDir, buildId, steps) {
     releaseEligible,
     releaseRequiredSteps: RELEASE_REQUIRED_STEPS,
     missingRequiredSteps: missingRequired,
+    ...(envLimitedGui ? { envLimitedGui } : {}),
     ...(testInjected ? { testInjectedEnvironment: true } : {}),
   };
   const recordPath = path.join(candidateDir, 'build-record.json');
@@ -317,7 +325,7 @@ function makeZip(candidateDir, zipPath) {
  * （mode / buildId）的位置保持不变。
  */
 const VALUE_OPTS = { '--root': 'root', '--manifest': 'manifest', '--candidate-dir': 'candidateDir', '--build-id': 'buildId' };
-const FLAG_OPTS = { '--skip-e2e': 'skipE2e', '--skip-gui': 'skipGui', '--strict': 'strict' };
+const FLAG_OPTS = { '--skip-e2e': 'skipE2e', '--skip-gui': 'skipGui', '--strict': 'strict', '--env-limited-gui': 'envLimitedGui' };
 
 function parseArgs(argv) {
   const opts = {};
@@ -408,6 +416,8 @@ function usage() {
   console.error('  buildId 省略时自动生成（时间-源码短SHA-随机后缀）。');
   console.error('  可选：--skip-e2e / --skip-gui（仅开发构建，发布链不得省略）');
   console.error('  可选：--strict（仅 build 模式：要求发布资格，不可发布则非 0 退出）');
+  console.error('  可选：--env-limited-gui（policy v2：smoke:gui 因环境必崩且已取证时，');
+  console.error('        以 smoke:gui-env-limited 替代证据登记；仅在受限环境发布用）');
   console.error('  可选：--manifest <路径> / --candidate-dir <路径>（仅 verify 模式：');
   console.error('        显式声明核验目标，必须与 buildId 推导结果一致，否则退出 2）');
   console.error('  未识别的参数或缺少参数值一律退出 2（不静默丢弃）。');
@@ -598,8 +608,37 @@ function runBuild(buildId, opts) {
   // 6) 打包 GUI 冒烟（Playwright 启动候选 exe，与真实双击同一机制）。
   //    脚本内已 delete ELECTRON_RUN_AS_NODE；不修改系统全局变量、不关 sandbox。
   //    任务 D：用 node 直接跑 CJS（**不再用 npx tsx** —— tsx 非声明依赖，会联网下载）。
+  //    policy v2：--env-limited-gui 下 smoke:gui 失败不立即拦停，改跑
+  //    smoke-env-limited 替代证据（双击等价启动存活 + 降级冒烟 READY），
+  //    证据真实通过才把失败事实 + 声明写入记录（显式声明，不静默缩减审查）。
+  let envLimitedDecl = null;
   if (!opts.skipGui) {
-    step('smoke:gui', nodeBin, [path.join(__dirname, 'smoke-packaged.cjs'), outDir]);
+    const smokeR = runStep('smoke:gui', nodeBin, [path.join(__dirname, 'smoke-packaged.cjs'), outDir]);
+    steps.push(smokeR);
+    if (smokeR.code !== 0) {
+      if (!opts.envLimitedGui) {
+        console.error('STOPPED at smoke:gui（如因环境必崩需替代证据，显式加 --env-limited-gui）');
+        process.exit(smokeR.code);
+      }
+      console.log('  smoke:gui 失败 → --env-limited-gui：改跑环境受限替代证据');
+      const envLimitedReason =
+        '本机 Windows 25H2(build ' + require('node:os').release() +
+        ') 使 Playwright 驱动默认配置（沙箱开）Electron 必崩；上游 electron+夹具同崩、退腾讯电脑管家/最小环境/双 Node 运行时均无效，仅 --no-sandbox 存活，应用本体健康（双击等价启动存活）。排查全记录见 handoff/gpu-smoke-incident-2026-10-18/';
+      const el = runStep(ENV_LIMITED_GUI_STEP, nodeBin, [
+        path.join(__dirname, 'smoke-env-limited.cjs'), outDir, '--reason', envLimitedReason,
+      ]);
+      steps.push(el);
+      if (el.code !== 0) {
+        console.error(`STOPPED at ${ENV_LIMITED_GUI_STEP}（替代证据未通过，不得放行）`);
+        process.exit(el.code);
+      }
+      envLimitedDecl = {
+        reason: envLimitedReason,
+        evidence: ENV_LIMITED_GUI_EVIDENCE,
+        failedStep: { step: 'smoke:gui', exit: smokeR.code },
+      };
+      console.log('  环境受限声明已记录：smoke:gui 的失败事实 + 替代证据（' + ENV_LIMITED_GUI_EVIDENCE + '）');
+    }
   }
 
   // 7) 包结构/依赖可用性（verify-package 的包可用性检查，早于登记）
@@ -618,7 +657,7 @@ function runBuild(buildId, opts) {
   if (zipStub !== null && zipStub !== 0) { console.error('STOPPED at zip'); process.exit(zipStub); }
 
   // 9) 登记（绑定构建记录 + out 清单 + 锁文件；显式传 --root 保证登记查的是本次构建根）
-  const record = writeBuildRecord(ROOT, candRoot, buildId, steps);
+  const record = writeBuildRecord(ROOT, candRoot, buildId, steps, envLimitedDecl);
   const manifest = path.join(candRoot, 'candidate-manifest.json');
   step('register', nodeBin, [
     CANDIDATE_MANIFEST, 'register',
@@ -697,10 +736,14 @@ function runBuild(buildId, opts) {
       process.exit(code);
     }
     console.log(`\nALL_GREEN buildId=${buildId}`);
+    if (envLimitedDecl) {
+      console.log(`  环境受限登记：smoke:gui 未通过，发布事实来自替代步骤 ${ENV_LIMITED_GUI_STEP}（${ENV_LIMITED_GUI_EVIDENCE}）`);
+    }
   } else {
     // 开发构建：明确区别于发布 ALL_GREEN，且标注不可发布
     console.log(`\nDEV_BUILD_COMPLETE buildId=${buildId}（不可发布，releaseEligible=false）`);
     if (skipped.length) console.log(`  本次跳过（开发构建允许）：${skipped.join('、')}`);
+    if (envLimitedDecl) console.log(`  注意：smoke:gui 以环境受限替代证据登记（${ENV_LIMITED_GUI_EVIDENCE}）`);
     for (const p of problems) console.log(`  原因：${p}`);
     if (opts.strict) {
       console.error('[FAIL] --strict 模式下要求发布资格，但本次构建不可发布');
